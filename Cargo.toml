@@ -1,0 +1,14 @@
+[package]
+name = "interlude"
+version = "0.1.0"
+authors = ["S.Percentage <Syn.Tri.Naga@gmail.com>"]
+
+[dependencies]
+libc = "0.2.16"
+log = "0.3.6"
+xcb = "0.7.5"
+freetype-sys = "0.4.0"
+unicode-normalization = "0.1.2"
+nalgebra = "0.10.1"
+ansi_term = "0.9.0"
+epoll = "0.6.0"
