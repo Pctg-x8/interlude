@@ -1,4 +1,0 @@
-cargo:rerun-if-changed=/home/pctgx8/.cargo/registry/src/github.com-1ecc6299db9ec823/xcb-0.7.5/build.rs
-cargo:rerun-if-changed=/home/pctgx8/.cargo/registry/src/github.com-1ecc6299db9ec823/xcb-0.7.5/rs_client.py
-cargo:rerun-if-changed=/home/pctgx8/.cargo/registry/src/github.com-1ecc6299db9ec823/xcb-0.7.5/xml
-cargo:rerun-if-changed=/home/pctgx8/.cargo/registry/src/github.com-1ecc6299db9ec823/xcb-0.7.5/xcbgen
