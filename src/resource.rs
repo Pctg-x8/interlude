@@ -585,7 +585,7 @@ impl <'a> std::ops::Drop for MemoryMappedRange<'a>
 	fn drop(&mut self) { if !self.ptr.is_null() { self.parent.unmap(); } }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Filter
 {
 	Nearest, Linear
