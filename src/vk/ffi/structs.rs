@@ -704,6 +704,15 @@ pub struct VkPresentInfoKHR
 
 use std;
 // Structure Conversions
+// Convert Extent2D to Viewport with normalized depth
+impl std::convert::From<VkExtent2D> for VkViewport
+{
+	fn from(v: VkExtent2D) -> Self { VkViewport(0.0, 0.0, v.0 as f32, v.1 as f32, 0.0, 1.0) }
+}
+impl std::convert::From<VkExtent2D> for VkExtent3D
+{
+	fn from(v: VkExtent2D) -> Self { VkExtent3D(v.0, v.1, 1) }
+}
 impl std::convert::From<VkExtent3D> for VkExtent2D
 {
 	fn from(v: VkExtent3D) -> Self { VkExtent2D(v.0, v.1) }

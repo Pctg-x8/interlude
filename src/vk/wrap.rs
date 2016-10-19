@@ -30,6 +30,7 @@ pub struct Instance
 	create_debug_report_callback: Option<PFN_vkCreateDebugReportCallbackEXT>,
 	destroy_debug_report_callback: Option<PFN_vkDestroyDebugReportCallbackEXT>
 }
+impl std::fmt::Debug for Instance { fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result { write!(fmt, "{:?}", self.obj) } }
 impl std::ops::Drop for Instance { fn drop(&mut self) { unsafe { vkDestroyInstance(self.obj, std::ptr::null()) }; } }
 impl Instance
 {
@@ -119,6 +120,7 @@ impl DebugReportCallback
 			.map(move || DebugReportCallback { obj: callback, parent: instance.clone() })
 	}
 }
+#[derive(Debug)]
 pub struct PhysicalDevice { obj: VkPhysicalDevice, #[allow(dead_code)] parent: Rc<Instance> }
 impl PhysicalDevice
 {
@@ -184,6 +186,7 @@ impl PhysicalDevice
 		modes
 	}
 }
+#[derive(Debug)]
 pub struct Device { obj: VkDevice, #[allow(dead_code)] parent: Rc<PhysicalDevice> }
 impl std::ops::Drop for Device { fn drop(&mut self) { self.wait_for_idle().unwrap(); unsafe { vkDestroyDevice(self.obj, std::ptr::null()) }; } }
 impl NativeOwner<VkDevice> for Device { fn get(&self) -> VkDevice { self.obj } }
@@ -289,6 +292,7 @@ impl Buffer
 		unsafe { vkCreateBuffer(device.obj, info, std::ptr::null(), &mut buffer) }.map(move || Buffer { obj: buffer, parent: device.clone() })
 	}
 }
+#[derive(Debug)]
 pub struct Image { #[allow(dead_code)] parent: Rc<Device>, obj: VkImage }
 impl std::ops::Drop for Image { fn drop(&mut self) { unsafe { vkDestroyImage(self.parent.obj, self.obj, std::ptr::null()) }; } }
 impl NativeOwner<VkImage> for Image { fn get(&self) -> VkImage { self.obj } }
@@ -300,6 +304,7 @@ impl Image
 		unsafe { vkCreateImage(device.obj, info, std::ptr::null(), &mut image) }.map(move || Image { obj: image, parent: device.clone() })
 	}
 }
+#[derive(Debug)]
 pub struct ImageView { #[allow(dead_code)] parent: Rc<Device>, obj: VkImageView }
 impl std::ops::Drop for ImageView { fn drop(&mut self) { unsafe { vkDestroyImageView(self.parent.obj, self.obj, std::ptr::null()) }; } }
 impl NativeOwner<VkImageView> for ImageView { fn get(&self) -> VkImageView { self.obj } }

@@ -234,19 +234,19 @@ pub trait InternalWindow where Self: std::marker::Sized
 }
 pub trait RenderWindow: std::marker::Send
 {
-	fn get_back_images(&self) -> Vec<&EntireImage>;
+	fn get_back_images(&self) -> Vec<&WindowRenderTarget>;
 	fn get_format(&self) -> VkFormat;
 	fn get_extent(&self) -> VkExtent2D;
 	fn acquire_next_backbuffer_index(&self, wait_semaphore: &QueueFence) -> Result<u32, EngineError>;
 	fn present(&self, gqueue: &vk::Queue, index: u32) -> Result<(), EngineError>;
 }
-pub struct EntireImage { pub resource: VkImage, pub view: vk::ImageView }
-impl ImageResource for EntireImage { fn get_resource(&self) -> VkImage { self.resource } }
-impl ImageView for EntireImage { fn get_native(&self) -> VkImageView { self.view.get() } }
+pub struct WindowRenderTarget { pub resource: VkImage, pub view: vk::ImageView }
+impl ImageResource for WindowRenderTarget { fn get_resource(&self) -> VkImage { self.resource } }
+impl ImageView for WindowRenderTarget { fn get_native(&self) -> VkImageView { self.view.get() } }
 pub struct Window
 {
 	#[allow(dead_code)] server: Arc<WindowServer>, #[allow(dead_code)] native: Box<NativeWindow>,
-	#[allow(dead_code)] device_obj: Rc<vk::Surface>, swapchain: Rc<vk::Swapchain>, render_targets: Vec<EntireImage>,
+	#[allow(dead_code)] device_obj: Rc<vk::Surface>, swapchain: Rc<vk::Swapchain>, render_targets: Vec<WindowRenderTarget>,
 	format: VkFormat, extent: VkExtent2D, has_vsync: bool,
 	backbuffer_available_signal: QueueFence, transfer_complete_signal: QueueFence
 }
@@ -308,7 +308,7 @@ impl Window
 				image: res, subresourceRange: vk::ImageSubresourceRange::default_color(),
 				format: format.format, viewType: VkImageViewType::Dim2,
 				components: VkComponentMapping::default()
-			}).map(|v| EntireImage { resource: res, view: v })
+			}).map(|v| WindowRenderTarget { resource: res, view: v })
 		}).collect::<Result<Vec<_>, _>>());
 		
 		engine.create_queue_fence().and_then(|backbuffer_available_signal|
@@ -323,7 +323,7 @@ impl Window
 }
 impl RenderWindow for Window
 {
-	fn get_back_images(&self) -> Vec<&EntireImage> { self.render_targets.iter().collect() }
+	fn get_back_images(&self) -> Vec<&WindowRenderTarget> { self.render_targets.iter().collect() }
 	fn get_format(&self) -> VkFormat { self.format }
 	fn get_extent(&self) -> VkExtent2D { self.extent }
 	fn present(&self, gqueue: &vk::Queue, index: u32) -> Result<(), EngineError>

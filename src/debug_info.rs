@@ -392,8 +392,7 @@ impl <'a> DebugInfo<'a>
 			recorder
 				.pipeline_barrier(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false,
 					&[], &buffer_memory_barriers, &image_memory_barriers)
-				.copy_image(istage.dim2(0), &**idev.dim2(0), VkImageLayout::TransferSrcOptimal, VkImageLayout::TransferDestOptimal,
-					&[ImageCopyRegion(ImageSubresourceLayers::base_color(), VkOffset3D(0, 0, 0), ImageSubresourceLayers::base_color(), VkOffset3D(0, 0, 0), VkExtent3D(TEXTURE_SIZE, TEXTURE_SIZE, 1))])
+				.copy_image(istage.dim2(0), &**idev.dim2(0), &[ImageCopyRegion::entire_colorbits(VkExtent3D(TEXTURE_SIZE, TEXTURE_SIZE, 1))])
 				.copy_buffer(&bstage, &bdev, &[BufferCopyRegion(update_start_offs, update_start_offs, (update_end_offs - update_start_offs) as usize)])
 				.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, false,
 					&[], &buffer_memory_barriers_ret, &image_memory_barriers_ret)
@@ -428,8 +427,7 @@ impl <'a> DebugInfo<'a>
 				recorder
 					.pipeline_barrier(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false,
 						&[], &buffer_memory_barriers, &image_memory_barriers)
-					.copy_image(istage.dim2(0), &**idev.dim2(0), VkImageLayout::TransferSrcOptimal, VkImageLayout::TransferDestOptimal,
-						&[ImageCopyRegion(ImageSubresourceLayers::base_color(), VkOffset3D(0, 0, 0), ImageSubresourceLayers::base_color(), VkOffset3D(0, 0, 0), VkExtent3D(TEXTURE_SIZE, TEXTURE_SIZE, 1))])
+					.copy_image(istage.dim2(0), &**idev.dim2(0), &[ImageCopyRegion::entire_colorbits(VkExtent3D(TEXTURE_SIZE, TEXTURE_SIZE, 1))])
 					.copy_buffer(&bstage, &bdev, &[BufferCopyRegion(0, 0, rendering_params_prealloc.total_size() as usize)])
 					.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, false,
 						&[], &buffer_memory_barriers_ret, &image_memory_barriers_ret)

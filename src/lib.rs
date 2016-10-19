@@ -57,13 +57,12 @@ pub use self::data::*;
 pub use self::window::ApplicationState;
 pub use self::vk::ffi;
 
-pub mod traits
-{
-	pub use super::engine::CommandSubmitter;
-	pub use super::command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
-	pub use super::resource::{ImageDescriptor, ImageView, BufferResource, ImageResource};
-	pub use super::resource::{ImageViewFactory};
-}
+// traits
+pub use self::engine::CommandSubmitter;
+pub use self::command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
+pub use self::resource::{ImageDescriptor, ImageView, BufferResource, ImageResource};
+pub use self::resource::{ImageViewFactory};
+pub use self::window::RenderWindow;
 // exported objects
 pub use self::engine::Engine;
 pub use self::synchronize::{QueueFence, Fence, FenceRef};
@@ -72,11 +71,12 @@ pub use self::command::{GraphicsCommandBuffers, BundledCommandBuffers, TransferC
 pub use self::resource::{
 	Buffer, Image1D, Image2D, Image3D, LinearImage2D, DeviceBuffer, StagingBuffer,
 	DeviceImage, StagingImage, MemoryMappedRange, ImageView1D, ImageView2D, ImageView3D,
-	Sampler
+	Sampler, BufferPreallocator
 };
 pub use self::shading::{ShaderProgram, PipelineLayout, GraphicsPipeline};
 pub use self::descriptor::{DescriptorSetLayout, DescriptorSets};
 pub use self::debug_info::DebugInfo;
+pub use self::window::{Window, WindowRenderTarget};
 
 // For internal exports //
 mod internals
@@ -105,4 +105,15 @@ macro_rules! Unrecoverable
 		Err(e) => $crate::crash(e),
 		Ok(o) => o
 	}}
+}
+pub trait UnrecoverableExt<T>
+{
+	fn or_crash(self) -> T;
+}
+impl<T> UnrecoverableExt<T> for Result<T, EngineError>
+{
+	fn or_crash(self) -> T
+	{
+		match self { Err(e) => self::crash(e), Ok(o) => o }
+	}
 }

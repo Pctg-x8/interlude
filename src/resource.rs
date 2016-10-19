@@ -25,6 +25,7 @@ pub trait LinearImage2DInternals : std::marker::Sized
 pub struct Buffer { internal: vk::Buffer, size: VkDeviceSize }
 impl Resource for Buffer { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
 impl BufferResource for Buffer { fn get_resource(&self) -> VkBuffer { self.internal.get() } }
+#[derive(Debug)]
 pub struct Image1D { internal: vk::Image, size: u32 }
 pub struct Image2D { internal: vk::Image, size: VkExtent2D }
 pub struct LinearImage2D { internal: vk::Image, size: VkExtent2D }
@@ -724,6 +725,7 @@ impl std::convert::Into<VkComponentMapping> for ComponentMapping
 		}
 	}
 }
+#[derive(Debug)]
 pub struct ImageView1D { parent: Rc<Image1D>, internal: vk::ImageView }
 pub struct ImageView2D { parent: Rc<Image2D>, internal: vk::ImageView }
 pub struct ImageView3D { parent: Rc<Image3D>, internal: vk::ImageView }
