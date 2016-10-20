@@ -93,7 +93,7 @@ pub struct Engine
 	memory_type_index_for_device_local: u32, memory_type_index_for_host_visible: u32,
 	optimized_debug_render: bool,
 	// CommonResources //
-	pub postprocess_vsh: ShaderProgram
+	pub postprocess_vsh: ShaderProgram, pub postprocess_vsh_nouv: ShaderProgram
 }
 unsafe impl Send for Engine {}
 impl std::ops::Drop for Engine
@@ -162,7 +162,7 @@ impl Engine
 		info!(target: "Prelude", "MemoryType[Host Visible] Index = {}: {:?}", mt_index_for_host_visible, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_host_visible as usize].0));
 
 		let asset_base = asset_base.map(|b| b.as_ref().to_path_buf()).unwrap_or(std::env::current_exe().unwrap().parent().unwrap().to_path_buf()).join("assets");
-		let ppvsh = try!(Self::init_common_resources(&device, &asset_base));
+		let (ppvsh, ppvsh_nouv) = try!(Self::init_common_resources(&device, &asset_base));
 		Ok(Box::new(Engine
 		{
 			window_system: window_server, instance: instance, debug_callback: dbg_callback, device: device, pools: pools,
@@ -171,21 +171,26 @@ impl Engine
 			memory_type_index_for_device_local: mt_index_for_device_local,
 			memory_type_index_for_host_visible: mt_index_for_host_visible,
 			optimized_debug_render: odr,
-			postprocess_vsh: ppvsh
+			postprocess_vsh: ppvsh, postprocess_vsh_nouv: ppvsh_nouv
 		}))
 	}
-	fn init_common_resources(device: &Rc<vk::Device>, asset_base: &PathBuf) -> Result<ShaderProgram, EngineError>
+	fn init_common_resources(device: &Rc<vk::Device>, asset_base: &PathBuf) -> Result<(ShaderProgram, ShaderProgram), EngineError>
 	{
-		let ppvs_path = Self::_parse_asset(asset_base, "engine.shaders.PostProcessVertex", "spv");
 		info!(target: "Interlude::CommonResource", "Loading Vertex Shader for PostProcessing...");
-		let ppvsh = std::fs::File::open(ppvs_path).map_err(EngineError::from).and_then(|mut fp|
+
+		std::fs::File::open(Self::_parse_asset(asset_base, "engine.shaders.PostProcessVertex", "spv")).map_err(EngineError::from).and_then(|mut fp|
 		{
 			let mut bin = Vec::new();
 			fp.read_to_end(&mut bin).map(move |_| bin).map_err(EngineError::from)
-		}).and_then(|b| vk::ShaderModule::new(device, &b).map_err(EngineError::from))
-		.map(|m| ShaderProgram::new_vertex(m, "main", &[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]));
-
-		ppvsh
+		}).and_then(|b| vk::ShaderModule::new(device, &b).map_err(EngineError::from)).map(|m|
+			ShaderProgram::new_vertex(m, "main", &[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)])
+		).and_then(|ppvsh| std::fs::File::open(Self::_parse_asset(asset_base, "engine.shaders.PostProcessVertexNoUV", "spv")).map_err(EngineError::from).and_then(|mut fp|
+			{
+				let mut bin = Vec::new();
+				fp.read_to_end(&mut bin).map(move |_| bin).map_err(EngineError::from)
+			}).and_then(|b| vk::ShaderModule::new(device, &b).map_err(EngineError::from))
+			.map(move |m| (ppvsh, ShaderProgram::new_vertex(m, "main", &[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)])))
+		)
 	}
 
 	pub fn window_system_ref(&self) -> &Arc<WindowServer> { &self.window_system }
@@ -344,12 +349,13 @@ impl Engine
 	pub fn preallocate_all_descriptor_sets(&self, layouts: &[&DescriptorSetLayout]) -> Result<DescriptorSets, EngineError>
 	{
 		let set_count = layouts.len();
-		let (uniform_total, combined_sampler_total) = layouts.iter().map(|x| x.descriptors().into_iter().fold((0, 0), |(u, cs), desc| match desc
+		let (uniform_total, combined_sampler_total, ia_total) = layouts.iter().map(|x| x.descriptors().into_iter().fold((0, 0, 0), |(u, cs, ia), desc| match desc
 		{
-			&Descriptor::Uniform(n, _) => (u + n, cs),
-			&Descriptor::CombinedSampler(n, _) => (u, cs + n)
-		})).fold((0, 0), |(u, cs), (u2, cs2)| (u + u2, cs + cs2));
-		let pool_sizes = [Descriptor::Uniform(uniform_total, vec![]), Descriptor::CombinedSampler(combined_sampler_total, vec![])]
+			&Descriptor::Uniform(n, _) => (u + n, cs, ia),
+			&Descriptor::CombinedSampler(n, _) => (u, cs + n, ia),
+			&Descriptor::InputAttachment(n, _) => (u, cs, ia + n)
+		})).fold((0, 0, 0), |(u, cs, ia), (u2, cs2, ia2)| (u + u2, cs + cs2, ia + ia2));
+		let pool_sizes = [Descriptor::Uniform(uniform_total, vec![]), Descriptor::CombinedSampler(combined_sampler_total, vec![]), Descriptor::InputAttachment(ia_total, vec![])]
 			.into_iter().filter(|&desc| desc.count() != 0).map(|desc| desc.into_pool_size()).collect::<Vec<_>>();
 
 		vk::DescriptorPool::new(self.device.get_internal(), set_count as u32, &pool_sizes).and_then(|pool|

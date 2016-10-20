@@ -27,7 +27,8 @@ impl std::convert::Into<VkShaderStageFlags> for ShaderStage
 pub enum Descriptor
 {
 	Uniform(u32, Vec<ShaderStage>),
-	CombinedSampler(u32, Vec<ShaderStage>)
+	CombinedSampler(u32, Vec<ShaderStage>),
+	InputAttachment(u32, Vec<ShaderStage>)
 }
 pub trait DescriptorInternals
 {
@@ -42,7 +43,8 @@ impl Descriptor
 		match self
 		{
 			&Descriptor::Uniform(_, _) => VkDescriptorType::UniformBuffer,
-			&Descriptor::CombinedSampler(_, _) => VkDescriptorType::CombinedImageSampler
+			&Descriptor::CombinedSampler(_, _) => VkDescriptorType::CombinedImageSampler,
+			&Descriptor::InputAttachment(_, _) => VkDescriptorType::InputAttachment
 		}
 	}
 	fn stage_mask(&self) -> VkShaderStageFlags
@@ -50,7 +52,8 @@ impl Descriptor
 		match self
 		{
 			&Descriptor::Uniform(_, ref s) => s,
-			&Descriptor::CombinedSampler(_, ref s) => s
+			&Descriptor::CombinedSampler(_, ref s) => s,
+			&Descriptor::InputAttachment(_, ref s) => s
 		}.iter().fold(0, |flag, f| flag | Into::<VkShaderStageFlags>::into(*f))
 	}
 }
@@ -61,7 +64,8 @@ impl DescriptorInternals for Descriptor
 		match self
 		{
 			&Descriptor::Uniform(n, _) => n,
-			&Descriptor::CombinedSampler(n, _) => n
+			&Descriptor::CombinedSampler(n, _) => n,
+			&Descriptor::InputAttachment(n, _) => n
 		}
 	}
 	fn into_binding(&self, index: u32) -> VkDescriptorSetLayoutBinding
