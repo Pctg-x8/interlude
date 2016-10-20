@@ -151,7 +151,8 @@ impl <'a> std::convert::Into<VkDescriptorImageInfo> for &'a ImageInfo<'a>
 pub enum DescriptorSetWriteInfo<'a>
 {
 	UniformBuffer(VkDescriptorSet, u32, Vec<BufferInfo<'a>>),
-	CombinedImageSampler(VkDescriptorSet, u32, Vec<ImageInfo<'a>>)
+	CombinedImageSampler(VkDescriptorSet, u32, Vec<ImageInfo<'a>>),
+	InputAttachment(VkDescriptorSet, u32, Vec<ImageInfo<'a>>)
 }
 pub enum IntoWriteDescriptorSetNativeStruct
 {
@@ -181,6 +182,11 @@ impl <'a> std::convert::Into<IntoWriteDescriptorSetNativeStruct> for &'a Descrip
 			{
 				target: target, binding: binding, images: imgs.iter().map(|x| x.into()).collect(),
 				dtype: VkDescriptorType::CombinedImageSampler
+			},
+			&DescriptorSetWriteInfo::InputAttachment(target, binding, ref imgs) => IntoWriteDescriptorSetNativeStruct::Images
+			{
+				target: target, binding: binding, images: imgs.iter().map(|x| x.into()).collect(),
+				dtype: VkDescriptorType::InputAttachment
 			}
 		}
 	}
