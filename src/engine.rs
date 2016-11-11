@@ -75,18 +75,70 @@ impl DeviceFeatures
 	}
 }
 
-pub trait EngineExports
+pub trait EngineExports<WS: WindowServer>
 {
-	fn get_window_server(&self) -> &Arc<WindowServer>;
+	fn get_window_server(&self) -> &Arc<WS>;
+}
+pub trait EngineCoreExports
+{
 	fn get_instance(&self) -> &Rc<vk::Instance>;
 	fn get_device(&self) -> &DeviceExports;
 	fn get_memory_type_index_for_device_local(&self) -> u32;
 	fn get_memory_type_index_for_host_visible(&self) -> u32;
 	fn is_optimized_debug_render_support(&self) -> bool;
+	fn get_postprocess_vsh(&self) -> &ShaderProgram;
 }
-pub struct Engine
+// Core Functions in Engine
+pub trait EngineCore : EngineCoreExports + CommandSubmitter
 {
-	window_system: Arc<WindowServer>, instance: Rc<vk::Instance>, #[allow(dead_code)] debug_callback: vk::DebugReportCallback,
+	// Factory Methods //
+	fn create_fence(&self) -> Result<Fence, EngineError>;
+	fn create_queue_fence(&self) -> Result<QueueFence, EngineError>;
+	fn create_render_pass(&self, attachments: &[AttachmentDesc], passes: &[PassDesc], deps: &[PassDependency]) -> Result<RenderPass, EngineError>;
+	fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: VkExtent3D) -> Result<Framebuffer, EngineError>;
+	fn create_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str, vertex_bindings: &[VertexBinding], vertex_attributes: &[VertexAttribute])
+		-> Result<ShaderProgram, EngineError>;
+	fn create_geometry_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>;
+	fn create_fragment_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>;
+	fn create_pipeline_layout(&self, descriptor_sets: &[&DescriptorSetLayout], push_constants: &[PushConstantDesc]) -> Result<PipelineLayout, EngineError>;
+	fn create_graphics_pipelines(&self, builders: &[&GraphicsPipelineBuilder]) -> Result<Vec<GraphicsPipeline>, EngineError>;
+	fn create_double_buffer(&self, prealloc: &BufferPreallocator) -> Result<(DeviceBuffer, StagingBuffer), EngineError>;
+	fn create_double_image(&self, prealloc: &ImagePreallocator) -> Result<(DeviceImage, Option<StagingImage>), EngineError>;
+	fn create_descriptor_set_layout(&self, bindings: &[Descriptor]) -> Result<DescriptorSetLayout, EngineError>;
+	fn create_sampler(&self, state: &SamplerState) -> Result<Sampler, EngineError>;
+	fn create_image_view_1d(&self, res: &Rc<Image1D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange)
+		-> Result<ImageView1D, EngineError>;
+	fn create_image_view_2d(&self, res: &Rc<Image2D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange)
+		-> Result<ImageView2D, EngineError>;
+	fn create_image_view_3d(&self, res: &Rc<Image3D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange)
+		-> Result<ImageView3D, EngineError>;
+	fn create_postprocess_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>;
+
+	// Allocation Methods //
+	fn allocate_graphics_command_buffers(&self, count: u32) -> Result<GraphicsCommandBuffers, EngineError>;
+	fn allocate_bundled_command_buffers(&self, count: u32) -> Result<BundledCommandBuffers, EngineError>;
+	fn allocate_transfer_command_buffers(&self, count: u32) -> Result<TransferCommandBuffers, EngineError>;
+	fn allocate_transient_transfer_command_buffers(&self, count: u32) -> Result<TransientTransferCommandBuffers, EngineError>;
+	fn allocate_transient_graphics_command_buffers(&self, count: u32) -> Result<TransientGraphicsCommandBuffers, EngineError>;
+	fn preallocate_all_descriptor_sets(&self, layouts: &[&DescriptorSetLayout]) -> Result<DescriptorSets, EngineError>;
+	fn buffer_preallocate(&self, structure_sizes: &[(usize, BufferDataType)]) -> BufferPreallocator;
+
+	// Asset Path //
+	fn parse_asset(&self, asset_path: &str, extension: &str) -> std::ffi::OsString;
+	fn _parse_asset(asset_base: &PathBuf, asset_path: &str, extension: &str) -> std::ffi::OsString;
+
+	// Device Configurations/Operations //
+	fn update_descriptors(&self, write_infos: &[DescriptorSetWriteInfo]);
+	fn wait_device(&self) -> Result<(), EngineError>;
+	fn submit_transient_commands(&self, tt: Option<TransientTransferCommandBuffers>, gt: Option<TransientGraphicsCommandBuffers>) -> Result<(), EngineError>;
+
+	// Detached Functions //
+	fn new_command_sender(&self) -> CommandSender;
+	fn graphics_queue_ref(&self) -> &vk::Queue;
+}
+pub struct Engine<WS: WindowServer>
+{
+	window_system: Arc<WS>, instance: Rc<vk::Instance>, #[allow(dead_code)] debug_callback: vk::DebugReportCallback,
 	device: Device, pools: CommandPool, pipeline_cache: Rc<vk::PipelineCache>,
 	asset_dir: std::path::PathBuf,
 	physical_device_limits: VkPhysicalDeviceLimits,
@@ -95,21 +147,26 @@ pub struct Engine
 	// CommonResources //
 	pub postprocess_vsh: ShaderProgram, pub postprocess_vsh_nouv: ShaderProgram
 }
-unsafe impl Send for Engine {}
-impl std::ops::Drop for Engine
+unsafe impl<WS: WindowServer> Send for Engine<WS> {}
+impl<WS: WindowServer> std::ops::Drop for Engine<WS>
 {
 	fn drop(&mut self) { self.device.wait_for_idle().unwrap(); }
 }
-impl EngineExports for Engine
+impl<WS: WindowServer> EngineExports<WS> for Engine<WS>
 {
-	fn get_window_server(&self) -> &Arc<WindowServer> { &self.window_system }
+	fn get_window_server(&self) -> &Arc<WS> { &self.window_system }
+}
+impl<WS: WindowServer> EngineCoreExports for Engine<WS>
+{
 	fn get_instance(&self) -> &Rc<vk::Instance> { &self.instance }
 	fn get_device(&self) -> &DeviceExports { &self.device }
 	fn get_memory_type_index_for_device_local(&self) -> u32 { self.memory_type_index_for_device_local }
 	fn get_memory_type_index_for_host_visible(&self) -> u32 { self.memory_type_index_for_host_visible }
 	fn is_optimized_debug_render_support(&self) -> bool { self.optimized_debug_render }
+	fn get_postprocess_vsh(&self) -> &ShaderProgram { &self.postprocess_vsh }
 }
-impl Engine
+// For XServer
+#[cfg(unix)] impl Engine<Self::linux::window::XServer>
 {
 	pub fn new<StrT: AsRef<Path>>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures) -> Result<Box<Self>, EngineError>
 	{
@@ -117,7 +174,7 @@ impl Engine
 		log::set_logger(|max_log_level| { max_log_level.set(log::LogLevelFilter::Info); Box::new(EngineLogger) }).unwrap();
 		info!(target: "Prelude", "Initializing Engine...");
 
-		let window_server = try!(connect_to_window_server());
+		let window_server = try!(Self::linux::window::connect_xserver());
 
 		let instance = try!(vk::Instance::new(app_name, app_version, "Prelude Computer-Graphics Engine", VK_MAKE_VERSION!(0, 0, 1),
 			&["VK_LAYER_LUNARG_standard_validation"], &["VK_KHR_surface", "VK_KHR_xcb_surface", "VK_EXT_debug_report"]).map(|x| Rc::new(x)));
@@ -161,8 +218,8 @@ impl Engine
 		info!(target: "Prelude", "MemoryType[Device Local] Index = {}: {:?}", mt_index_for_device_local, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_device_local as usize].0));
 		info!(target: "Prelude", "MemoryType[Host Visible] Index = {}: {:?}", mt_index_for_host_visible, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_host_visible as usize].0));
 
-		let asset_base = asset_base.map(|b| b.as_ref().to_path_buf()).unwrap_or(std::env::current_exe().unwrap().parent().unwrap().to_path_buf()).join("assets");
-		let (ppvsh, ppvsh_nouv) = try!(Self::init_common_resources(&device, &asset_base));
+		let asset_base = asset_base.map(|b| b.as_ref().to_path_buf()).unwrap_or(std::env::current_exe().map(|x| x.parent()).unwrap().to_path_buf()).join("assets");
+		let (ppvsh, ppvsh_nouv) = try!(Engine::init_common_resources(&device, &asset_base));
 		Ok(Box::new(Engine
 		{
 			window_system: window_server, instance: instance, debug_callback: dbg_callback, device: device, pools: pools,
@@ -173,6 +230,45 @@ impl Engine
 			optimized_debug_render: odr,
 			postprocess_vsh: ppvsh, postprocess_vsh_nouv: ppvsh_nouv
 		}))
+	}
+}
+// For any WindowSystems
+impl<WS: WindowServer> Engine<WS>
+{
+	pub fn window_system_ref(&self) -> &Arc<WS> { &self.window_system }
+
+	pub fn process_messages(&self) -> bool
+	{
+		self.window_system.process_events() == ApplicationState::Continue
+	}
+	pub fn create_render_window(&self, size: VkExtent2D, title: &str) -> Result<Box<RenderWindow>, EngineError>
+	{
+		info!(target: "Prelude", "Creating Render Window \"{}\" ({}x{})", title, size.0, size.1);
+		Window::<WS::NativeWindowT>::create_unresizable(self, size, title).map(|x| x as Box<RenderWindow>)
+	}
+
+	fn diagnose_adapter(server_con: &WS, adapter: &vk::PhysicalDevice, queue_index: u32)
+	{
+		// Feature Check //
+		let features = adapter.get_features();
+		info!(target: "Prelude::DiagAdapter", "adapter features");
+		info!(target: "Prelude::DiagAdapter", "-- independentBlend: {}", bool_to_str(features.independentBlend));
+		info!(target: "Prelude::DiagAdapter", "-- geometryShader: {}", bool_to_str(features.geometryShader));
+		info!(target: "Prelude::DiagAdapter", "-- multiDrawIndirect: {}", bool_to_str(features.multiDrawIndirect));
+		info!(target: "Prelude::DiagAdapter", "-- drawIndirectFirstInstance: {}", bool_to_str(features.drawIndirectFirstInstance));
+		info!(target: "Prelude::DiagAdapter", "-- shaderTessellationAndGeometryPointSize: {}", bool_to_str(features.shaderTessellationAndGeometryPointSize));
+		info!(target: "Prelude::DiagAdapter", "-- depthClamp: {}", bool_to_str(features.depthClamp));
+		info!(target: "Prelude::DiagAdapter", "-- depthBiasClamp: {}", bool_to_str(features.depthBiasClamp));
+		info!(target: "Prelude::DiagAdapter", "-- wideLines: {}", bool_to_str(features.wideLines));
+		info!(target: "Prelude::DiagAdapter", "-- alphaToOne: {}", bool_to_str(features.alphaToOne));
+		info!(target: "Prelude::DiagAdapter", "-- multiViewport: {}", bool_to_str(features.multiViewport));
+		info!(target: "Prelude::DiagAdapter", "-- shaderCullDistance: {}", bool_to_str(features.shaderCullDistance));
+		info!(target: "Prelude::DiagAdapter", "-- shaderClipDistance: {}", bool_to_str(features.shaderClipDistance));
+		info!(target: "Prelude::DiagAdapter", "-- shaderResourceResidency: {}", bool_to_str(features.shaderResourceResidency));
+		// if features.depthClamp == false as VkBool32 { panic!("DepthClamp Feature is required in device"); }
+
+		// Vulkan and XCB Integration Check //
+		if !server_con.is_vk_presentation_support(adapter, queue_index) { panic!("Vulkan Presentation is not supported by window system"); }
 	}
 	fn init_common_resources(device: &Rc<vk::Device>, asset_base: &PathBuf) -> Result<(ShaderProgram, ShaderProgram), EngineError>
 	{
@@ -192,29 +288,19 @@ impl Engine
 			.map(move |m| (ppvsh, ShaderProgram::new_vertex(m, "main", &[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)])))
 		)
 	}
-
-	pub fn window_system_ref(&self) -> &Arc<WindowServer> { &self.window_system }
-
-	pub fn process_messages(&self) -> bool
-	{
-		self.window_system.process_events() == ApplicationState::Continued
-	}
-	pub fn create_render_window(&self, size: VkExtent2D, title: &str) -> Result<Box<RenderWindow>, EngineError>
-	{
-		info!(target: "Prelude", "Creating Render Window \"{}\" ({}x{})", title, size.0, size.1);
-		Window::create_unresizable(self, size, title).map(|x| x as Box<RenderWindow>)
-	}
-
-	pub fn create_fence(&self) -> Result<Fence, EngineError>
+}
+// For WindowServer independent parts
+impl<WS: WindowServer> EngineCore for Engine<WS>
+{
+	fn create_fence(&self) -> Result<Fence, EngineError>
 	{
 		vk::Fence::new(&self.device).map(Fence::new).map_err(EngineError::from)
 	}
-	pub fn create_queue_fence(&self) -> Result<QueueFence, EngineError>
+	fn create_queue_fence(&self) -> Result<QueueFence, EngineError>
 	{
 		vk::Semaphore::new(&self.device).map(QueueFence::new).map_err(EngineError::from)
 	}
-	pub fn create_render_pass(&self, attachments: &[AttachmentDesc], passes: &[PassDesc], deps: &[PassDependency])
-		-> Result<RenderPass, EngineError>
+	fn create_render_pass(&self, attachments: &[AttachmentDesc], passes: &[PassDesc], deps: &[PassDependency]) -> Result<RenderPass, EngineError>
 	{
 		let attachments_native = attachments.into_iter().map(|x| x.into()).collect::<Vec<_>>();
 		let subpasses_native = passes.into_iter().map(|x| x.into()).collect::<Vec<_>>();
@@ -228,7 +314,7 @@ impl Engine
 		};
 		vk::RenderPass::new(&self.device, &rp_info).map(RenderPass::new).map_err(EngineError::from)
 	}
-	pub fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: VkExtent3D) -> Result<Framebuffer, EngineError>
+	fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: VkExtent3D) -> Result<Framebuffer, EngineError>
 	{
 		let attachments_native = attachments.into_iter().map(|x| x.get_native()).collect::<Vec<_>>();
 		let VkExtent3D(width, height, layers) = form;
@@ -241,33 +327,33 @@ impl Engine
 		};
 		vk::Framebuffer::new(&self.device, &info).map(|f| Framebuffer::new(f, mold.get_internal(), VkExtent2D(width, height))).map_err(EngineError::from)
 	}
-	pub fn allocate_graphics_command_buffers(&self, count: u32) -> Result<GraphicsCommandBuffers, EngineError>
+	fn allocate_graphics_command_buffers(&self, count: u32) -> Result<GraphicsCommandBuffers, EngineError>
 	{
 		self.pools.for_graphics().allocate_buffers(&self.device, VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
 			.map(|v| GraphicsCommandBuffers::new(self.pools.for_graphics(), v))
 	}
-	pub fn allocate_bundled_command_buffers(&self, count: u32) -> Result<BundledCommandBuffers, EngineError>
+	fn allocate_bundled_command_buffers(&self, count: u32) -> Result<BundledCommandBuffers, EngineError>
 	{
 		self.pools.for_graphics().allocate_buffers(&self.device, VkCommandBufferLevel::Secondary, count).map_err(EngineError::from)
 			.map(|v| BundledCommandBuffers::new(self.pools.for_graphics(), v))
 	}
-	pub fn allocate_transfer_command_buffers(&self, count: u32) -> Result<TransferCommandBuffers, EngineError>
+	fn allocate_transfer_command_buffers(&self, count: u32) -> Result<TransferCommandBuffers, EngineError>
 	{
 		self.pools.for_transfer().allocate_buffers(&self.device, VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
 			.map(|v| TransferCommandBuffers::new(self.pools.for_transfer(), v))
 	}
-	pub fn allocate_transient_transfer_command_buffers(&self, count: u32) -> Result<TransientTransferCommandBuffers, EngineError>
+	fn allocate_transient_transfer_command_buffers(&self, count: u32) -> Result<TransientTransferCommandBuffers, EngineError>
 	{
 		self.pools.for_transient().allocate_buffers(&self.device, VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
 			.map(|v| TransientTransferCommandBuffers::new(self.pools.for_transient(), self.device.get_transfer_queue(), v))
 	}
-	pub fn allocate_transient_graphics_command_buffers(&self, count: u32) -> Result<TransientGraphicsCommandBuffers, EngineError>
+	fn allocate_transient_graphics_command_buffers(&self, count: u32) -> Result<TransientGraphicsCommandBuffers, EngineError>
 	{
 		self.pools.for_transient_graphics().allocate_buffers(&self.device, VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
 			.map(|v| TransientGraphicsCommandBuffers::new(self.pools.for_transient_graphics(), self.device.get_graphics_queue(), v))
 	}
-	pub fn create_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str,
-		vertex_bindings: &[VertexBinding], vertex_attributes: &[VertexAttribute]) -> Result<ShaderProgram, EngineError>
+	fn create_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str, vertex_bindings: &[VertexBinding], vertex_attributes: &[VertexAttribute])
+		-> Result<ShaderProgram, EngineError>
 	{
 		let entity_path = self.parse_asset(asset_path, "spv");
 		info!(target: "Prelude", "Loading Vertex Shader {:?}", entity_path);
@@ -278,7 +364,7 @@ impl Engine
 		}).and_then(|b| vk::ShaderModule::new(self.device.get_internal(), &b).map_err(EngineError::from))
 		.map(|m| ShaderProgram::new_vertex(m, entry_point, vertex_bindings, vertex_attributes))
 	}
-	pub fn create_geometry_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>
+	fn create_geometry_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>
 	{
 		let entity_path = self.parse_asset(asset_path, "spv");
 		info!(target: "Prelude", "Loading Geometry Shader {:?}", entity_path);
@@ -289,7 +375,7 @@ impl Engine
 		}).and_then(|b| vk::ShaderModule::new(self.device.get_internal(), &b).map_err(EngineError::from))
 		.map(|m| ShaderProgram::new_geometry(m, entry_point))
 	}
-	pub fn create_fragment_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>
+	fn create_fragment_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>
 	{
 		let entity_path = self.parse_asset(asset_path, "spv");
 		info!(target: "Prelude", "Loading Fragment Shader {:?}", entity_path);
@@ -300,26 +386,25 @@ impl Engine
 		}).and_then(|b| vk::ShaderModule::new(self.device.get_internal(), &b).map_err(EngineError::from))
 		.map(|m| ShaderProgram::new_fragment(m, entry_point))
 	}
-	pub fn create_pipeline_layout(&self, descriptor_sets: &[&DescriptorSetLayout], push_constants: &[PushConstantDesc])
-		-> Result<PipelineLayout, EngineError>
+	fn create_pipeline_layout(&self, descriptor_sets: &[&DescriptorSetLayout], push_constants: &[PushConstantDesc]) -> Result<PipelineLayout, EngineError>
 	{
 		vk::PipelineLayout::new(self.device.get_internal(),
 			&descriptor_sets.into_iter().map(|x| x.get_internal().get()).collect::<Vec<_>>(),
 			&push_constants.into_iter().map(|x| x.into()).collect::<Vec<_>>()).map(PipelineLayout::new).map_err(EngineError::from)
 	}
-	pub fn create_graphics_pipelines(&self, builders: &[&GraphicsPipelineBuilder]) -> Result<Vec<GraphicsPipeline>, EngineError>
+	fn create_graphics_pipelines(&self, builders: &[&GraphicsPipelineBuilder]) -> Result<Vec<GraphicsPipeline>, EngineError>
 	{
 		let builder_into_natives = builders.into_iter().map(|&x| x.into()).collect::<Vec<IntoNativeGraphicsPipelineCreateInfoStruct>>();
 		vk::Pipeline::new(self.device.get_internal(), &self.pipeline_cache,
 			&builder_into_natives.iter().map(|x| x.into()).collect::<Vec<_>>())
 			.map(|v| v.into_iter().map(GraphicsPipeline::new).collect::<Vec<_>>()).map_err(EngineError::from)
 	}
-	pub fn create_double_buffer(&self, prealloc: &BufferPreallocator) -> Result<(DeviceBuffer, StagingBuffer), EngineError>
+	fn create_double_buffer(&self, prealloc: &BufferPreallocator) -> Result<(DeviceBuffer, StagingBuffer), EngineError>
 	{
 		DeviceBuffer::new(self, prealloc.total_size() as VkDeviceSize, prealloc.get_usage()).and_then(|dev|
 		StagingBuffer::new(self, prealloc.total_size() as VkDeviceSize).map(move |stg| (dev, stg)))
 	}
-	pub fn create_double_image(&self, prealloc: &ImagePreallocator) -> Result<(DeviceImage, Option<StagingImage>), EngineError>
+	fn create_double_image(&self, prealloc: &ImagePreallocator) -> Result<(DeviceImage, Option<StagingImage>), EngineError>
 	{
 		let image1 = try!(prealloc.dim1_images().iter().map(|desc| Image1D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>());
 		let image2 = try!(prealloc.dim2_images().iter().map(|desc| Image2D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>());
@@ -340,13 +425,13 @@ impl Engine
 			Ok((dev, None))
 		})
 	}
-	pub fn create_descriptor_set_layout(&self, bindings: &[Descriptor]) -> Result<DescriptorSetLayout, EngineError>
+	fn create_descriptor_set_layout(&self, bindings: &[Descriptor]) -> Result<DescriptorSetLayout, EngineError>
 	{
 		let native = bindings.into_iter().enumerate().map(|(i, x)| x.into_binding(i as u32)).collect::<Vec<_>>();
 		vk::DescriptorSetLayout::new(self.device.get_internal(), &native)
 			.map(|d| DescriptorSetLayout::new(d, bindings)).map_err(EngineError::from)
 	}
-	pub fn preallocate_all_descriptor_sets(&self, layouts: &[&DescriptorSetLayout]) -> Result<DescriptorSets, EngineError>
+	fn preallocate_all_descriptor_sets(&self, layouts: &[&DescriptorSetLayout]) -> Result<DescriptorSets, EngineError>
 	{
 		let set_count = layouts.len();
 		let (uniform_total, combined_sampler_total, ia_total) = layouts.iter().map(|x| x.descriptors().into_iter().fold((0, 0, 0), |(u, cs, ia), desc| match desc
@@ -362,31 +447,31 @@ impl Engine
 		pool.allocate_sets(self.device.get_internal(), &layouts.into_iter().map(|x| x.get_internal().get()).collect::<Vec<_>>())
 			.map(|sets| DescriptorSets::new(pool, sets))).map_err(EngineError::from)
 	}
-	pub fn create_sampler(&self, state: &SamplerState) -> Result<Sampler, EngineError>
+	fn create_sampler(&self, state: &SamplerState) -> Result<Sampler, EngineError>
 	{
 		Sampler::new(self, &state.into())
 	}
-	pub fn create_image_view_1d(&self, res: &Rc<Image1D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange) -> Result<ImageView1D, EngineError>
+	fn create_image_view_1d(&self, res: &Rc<Image1D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange) -> Result<ImageView1D, EngineError>
 	{
 		ImageView1D::new(self, res, format, c_map, subres)
 	}
-	pub fn create_image_view_2d(&self, res: &Rc<Image2D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange) -> Result<ImageView2D, EngineError>
+	fn create_image_view_2d(&self, res: &Rc<Image2D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange) -> Result<ImageView2D, EngineError>
 	{
 		ImageView2D::new(self, res, format, c_map, subres)
 	}
-	pub fn create_image_view_3d(&self, res: &Rc<Image3D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange) -> Result<ImageView3D, EngineError>
+	fn create_image_view_3d(&self, res: &Rc<Image3D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange) -> Result<ImageView3D, EngineError>
 	{
 		ImageView3D::new(self, res, format, c_map, subres)
 	}
-	pub fn wait_device(&self) -> Result<(), EngineError> { self.device.get_internal().wait_for_idle().map_err(EngineError::from) }
+	fn wait_device(&self) -> Result<(), EngineError> { self.device.get_internal().wait_for_idle().map_err(EngineError::from) }
 
-	pub fn create_postprocess_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>
+	fn create_postprocess_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>
 	{
 		self.create_vertex_shader_from_asset(asset_path, entry_point,
 			&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)])
 	}
 
-	pub fn parse_asset(&self, asset_path: &str, extension: &str) -> std::ffi::OsString
+	fn parse_asset(&self, asset_path: &str, extension: &str) -> std::ffi::OsString
 	{
 		Self::_parse_asset(&self.asset_dir, asset_path, extension)
 	}
@@ -395,7 +480,7 @@ impl Engine
 		asset_base.join(asset_path.replace(".", "/")).with_extension(extension).into()
 	}
 
-	pub fn buffer_preallocate(&self, structure_sizes: &[(usize, BufferDataType)]) -> BufferPreallocator
+	fn buffer_preallocate(&self, structure_sizes: &[(usize, BufferDataType)]) -> BufferPreallocator
 	{
 		let uniform_alignment = self.physical_device_limits.minUniformBufferOffsetAlignment as usize;
 		let usage_flags = structure_sizes.iter().fold(0, |flags_accum, &(_, data_type)| match data_type
@@ -422,7 +507,7 @@ impl Engine
 
 		BufferPreallocator::new(usage_flags, offsets)
 	}
-	pub fn update_descriptors(&self, write_infos: &[DescriptorSetWriteInfo])
+	fn update_descriptors(&self, write_infos: &[DescriptorSetWriteInfo])
 	{
 		let write_infos_native_interp = write_infos.into_iter().map(|x| Into::<IntoWriteDescriptorSetNativeStruct>::into(x)).collect::<Vec<_>>();
 		let write_infos_native = write_infos_native_interp.iter().map(|x| Into::<VkWriteDescriptorSet>::into(x)).collect::<Vec<_>>();
@@ -430,7 +515,7 @@ impl Engine
 			0, std::ptr::null()) };
 	}
 
-	pub fn submit_transient_commands(&self, tt: Option<TransientTransferCommandBuffers>, gt: Option<TransientGraphicsCommandBuffers>) -> Result<(), EngineError>
+	fn submit_transient_commands(&self, tt: Option<TransientTransferCommandBuffers>, gt: Option<TransientGraphicsCommandBuffers>) -> Result<(), EngineError>
 	{
 		if let &Some(ref t) = &tt { try!(self.device.get_transfer_queue().submit_commands(t.get_internal(), &[], &[], &[], None)); }
 		if let &Some(ref g) = &gt { try!(self.device.get_graphics_queue().submit_commands(g.get_internal(), &[], &[], &[], None)); }
@@ -439,40 +524,10 @@ impl Engine
 		Ok(())
 	}
 
-	pub fn new_command_sender(&self) -> CommandSender
-	{
-		CommandSender { device: &self.device }
-	}
-	pub fn graphics_queue_ref(&self) -> &vk::Queue
-	{
-		self.device.get_graphics_queue()
-	}
-
-	fn diagnose_adapter(server_con: &WindowServer, adapter: &vk::PhysicalDevice, queue_index: u32)
-	{
-		// Feature Check //
-		let features = adapter.get_features();
-		info!(target: "Prelude::DiagAdapter", "adapter features");
-		info!(target: "Prelude::DiagAdapter", "-- independentBlend: {}", bool_to_str(features.independentBlend));
-		info!(target: "Prelude::DiagAdapter", "-- geometryShader: {}", bool_to_str(features.geometryShader));
-		info!(target: "Prelude::DiagAdapter", "-- multiDrawIndirect: {}", bool_to_str(features.multiDrawIndirect));
-		info!(target: "Prelude::DiagAdapter", "-- drawIndirectFirstInstance: {}", bool_to_str(features.drawIndirectFirstInstance));
-		info!(target: "Prelude::DiagAdapter", "-- shaderTessellationAndGeometryPointSize: {}", bool_to_str(features.shaderTessellationAndGeometryPointSize));
-		info!(target: "Prelude::DiagAdapter", "-- depthClamp: {}", bool_to_str(features.depthClamp));
-		info!(target: "Prelude::DiagAdapter", "-- depthBiasClamp: {}", bool_to_str(features.depthBiasClamp));
-		info!(target: "Prelude::DiagAdapter", "-- wideLines: {}", bool_to_str(features.wideLines));
-		info!(target: "Prelude::DiagAdapter", "-- alphaToOne: {}", bool_to_str(features.alphaToOne));
-		info!(target: "Prelude::DiagAdapter", "-- multiViewport: {}", bool_to_str(features.multiViewport));
-		info!(target: "Prelude::DiagAdapter", "-- shaderCullDistance: {}", bool_to_str(features.shaderCullDistance));
-		info!(target: "Prelude::DiagAdapter", "-- shaderClipDistance: {}", bool_to_str(features.shaderClipDistance));
-		info!(target: "Prelude::DiagAdapter", "-- shaderResourceResidency: {}", bool_to_str(features.shaderResourceResidency));
-		// if features.depthClamp == false as VkBool32 { panic!("DepthClamp Feature is required in device"); }
-
-		// Vulkan and XCB Integration Check //
-		if !server_con.is_vk_presentation_support(adapter, queue_index) { panic!("Vulkan Presentation is not supported by window system"); }
-	}
+	fn new_command_sender(&self) -> CommandSender { CommandSender { device: &self.device } }
+	fn graphics_queue_ref(&self) -> &vk::Queue { self.device.get_graphics_queue() }
 }
-impl CommandSubmitter for Engine
+impl<WS: WindowServer> CommandSubmitter for Engine<WS>
 {
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>

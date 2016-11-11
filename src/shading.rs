@@ -332,13 +332,13 @@ impl <'a> GraphicsPipelineBuilder<'a>
 			use_alpha_to_coverage: base.use_alpha_to_coverage, attachment_blend_states: base.attachment_blend_states.clone()
 		}
 	}
-	pub fn for_postprocess(engine: &'a Engine, layout: &'a PipelineLayout, render_pass: &'a RenderPass, subpass_index: u32,
+	pub fn for_postprocess<Engine: EngineCore>(engine: &'a Engine, layout: &'a PipelineLayout, render_pass: &'a RenderPass, subpass_index: u32,
 		fragment_shader: PipelineShaderProgram<'a>, processing_viewport: VkViewport) -> Self
 	{
 		GraphicsPipelineBuilder
 		{
 			layout: layout, render_pass: render_pass, subpass_index: subpass_index,
-			vertex_shader: Some(PipelineShaderProgram::unspecialized(&engine.postprocess_vsh)), geometry_shader: None, fragment_shader: Some(fragment_shader),
+			vertex_shader: Some(PipelineShaderProgram::unspecialized(&engine.get_postprocess_vsh())), geometry_shader: None, fragment_shader: Some(fragment_shader),
 			primitive_topology: PrimitiveTopology::TriangleStrip(false),
 			vp_sc: vec![ViewportWithScissorRect::default_scissor(processing_viewport)],
 			rasterizer_state: RasterizerState { wired_render: false, cull_side: None },

@@ -4,10 +4,11 @@ use super::ffi::*;
 use super::traits::*;
 use std;
 use std::ffi::*;
-use std::os::raw::*;
-use libc::size_t;
+#[cfg(unix)] use std::os::raw::*;
+#[cfg(unix)] use libc::size_t;
 use std::rc::Rc;
-use xcb;
+#[cfg(unix)] use xcb;
+#[cfg(windows)] use winapi::*;
 
 fn empty_handle<T>() -> *mut T { std::ptr::null_mut() }
 
@@ -152,9 +153,15 @@ impl PhysicalDevice
 		properties
 	}
 
+	#[cfg(unix)]
 	pub fn is_xcb_presentation_support(&self, queue_family_index: u32, con: *mut xcb::ffi::xcb_connection_t, vis: xcb::ffi::xcb_visualid_t) -> bool
 	{
 		unsafe { vkGetPhysicalDeviceXcbPresentationSupportKHR(self.obj, queue_family_index, con, vis) == 1 }
+	}
+	#[cfg(windows)]
+	pub fn is_win32_presentation_support(&self, queue_family_index: u32) -> bool
+	{
+		unsafe { vkGetPhysicalDeviceWin32PresentationSupportKHR(self.obj, queue_family_index) == 1 }
 	}
 	pub fn is_surface_support(&self, queue_family_index: u32, surface: &Surface) -> bool
 	{
@@ -527,10 +534,17 @@ impl std::ops::Drop for Surface { fn drop(&mut self) { unsafe { vkDestroySurface
 impl NativeOwner<VkSurfaceKHR> for Surface { fn get(&self) -> VkSurfaceKHR { self.obj } }
 impl Surface
 {
-	pub fn new_xcb(instance: &Rc<Instance>, info: &VkXcbSurfaceCreateInfoKHR) -> Result<Surface, VkResult>
+	#[cfg(unix)]
+	pub fn new_xcb(instance: &Rc<Instance>, info: &VkXcbSurfaceCreateInfoKHR) -> Result<Self, VkResult>
 	{
 		let mut surf: VkSurfaceKHR = empty_handle();
 		unsafe { vkCreateXcbSurfaceKHR(instance.obj, info, std::ptr::null(), &mut surf) }.map(move || Surface { obj: surf, parent: instance.clone() })
+	}
+	#[cfg(windows)]
+	pub fn new_win32(instance: &Rc<Instance>, info: &VkWin32SurfaceCreateInfoKHR) -> Result<Self, VkResult>
+	{
+		let mut surf: VkSurfaceKHR = empty_handle();
+		unsafe { vkCreateWin32SurfaceKHR(instance.obj, info, std::ptr::null(), &mut surf) }.map(move || Surface { obj: surf, parent: instance.clone() })
 	}
 }
 pub struct Swapchain { parent: Rc<Device>, #[allow(dead_code)] base: Rc<Surface>, obj: VkSwapchainKHR }

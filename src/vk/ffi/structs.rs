@@ -4,10 +4,11 @@
 
 // Vulkan C to Rust FFI Structs and Handles
 
-use std::os::raw::*;
-use libc::size_t;
+#[cfg(unix)] use std::os::raw::*;
+#[cfg(unix)] use libc::size_t;
 use super::*;
-use xcb;
+#[cfg(windows)] use winapi::*;		// c_*** and size_t types imported here
+#[cfg(unix)] use xcb;
 
 // Basic Types(Copyable) //
 #[repr(C)] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] pub struct VkOffset2D(pub i32, pub i32);
@@ -633,10 +634,16 @@ impl VkComponentMapping
 #[repr(C)] pub struct VkDrawIndexedIndirectCommand(pub u32, pub u32, pub u32, pub i32, pub u32);	// idxcount, icount, firstIdx, voffs, firstI
 
 // Surface/Swapchain Extensions //
-#[repr(C)]
+#[repr(C)] #[cfg(windows)]
+pub struct VkWin32SurfaceCreateInfoKHR
+{
+	pub sType: VkStructureType, pub pNext: *const c_void, pub flags: VkWin32SurfaceCreateFlagsKHR,
+	pub hinstance: HINSTANCE, pub hwnd: HWND
+}
+#[repr(C)] #[cfg(unix)]
 pub struct VkXcbSurfaceCreateInfoKHR
 {
-	pub sType: VkStructureType, pub pNext: *const c_void, pub flags: VkXlibSurfaceCreateFlagsKHR,
+	pub sType: VkStructureType, pub pNext: *const c_void, pub flags: VkXcbSurfaceCreateFlagsKHR,
 	pub connection: *mut xcb::ffi::xcb_connection_t, pub window: xcb::ffi::xcb_window_t
 }
 #[repr(C)]

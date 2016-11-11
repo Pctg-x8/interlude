@@ -1,14 +1,15 @@
 // Interlude: Input System
 
-use {std, epoll};
+#[cfg(unix)] use epoll;
 use super::internals::*;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use super::linux::evdev::*;
-use super::linux::udev::*;
-use std::os::unix::io::{RawFd, AsRawFd};
+#[cfg(unix)] use super::linux::evdev::*;
+#[cfg(unix)] use super::linux::udev::*;
+#[cfg(unix)] use std::os::unix::io::{RawFd, AsRawFd};
 use std::hash::Hash;
 use std::fmt::Debug;
+use std::ops::Index;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputKeys
@@ -31,7 +32,8 @@ pub enum InputAxis
 {
 	X, Y, Z, RX, RY, RZ, Hat0x, Hat0y, Hat1x, Hat1y, Unhandled
 }
-impl std::convert::From<KeyEvents> for InputKeys
+// Conversion Method from evdev keys to InputKeys
+#[cfg(unix)] impl std::convert::From<KeyEvents> for InputKeys
 {
 	fn from(x: KeyEvents) -> Self
 	{
@@ -162,7 +164,8 @@ impl std::convert::From<KeyEvents> for InputKeys
 		}
 	}
 }
-impl std::convert::From<AbsoluteAxisEvents> for InputAxis
+// Conversion Method from evdev axis events to InputAxis
+#[cfg(unix)] impl std::convert::From<AbsoluteAxisEvents> for InputAxis
 {
 	fn from(x: AbsoluteAxisEvents) -> Self
 	{
@@ -200,13 +203,13 @@ impl InputType
 		}
 	}
 }
-pub struct InputDevice
+#[cfg(unix)] pub struct InputDevice
 {
 	dev: EventDevice,
 	key_states: HashMap<InputKeys, bool>,
 	axis_prev_values: HashMap<InputAxis, f32>
 }
-impl InputDevice
+#[cfg(unix)] impl InputDevice
 {
 	pub fn new(node_path: &str) -> Result<InputDevice, EngineError>
 	{
@@ -262,7 +265,7 @@ impl InputDevice
 		}
 	}
 }
-impl AsRawFd for InputDevice
+#[cfg(unix)] impl AsRawFd for InputDevice
 {
 	fn as_raw_fd(&self) -> RawFd { self.dev.as_raw_fd() }
 }
@@ -273,7 +276,8 @@ pub struct InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug>
 	aggregate_axis_states: AsyncExclusiveHashMap<InputAxis, f32>,
 	input_states: HashMap<InputNames, f32>
 }
-impl <InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> InputSystem<InputNames>
+// Platform-dependent code
+#[cfg(unix)] impl<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> InputSystem<InputNames>
 {
 	fn search_device_name(device: &UserspaceDevice) -> String
 	{
@@ -400,12 +404,12 @@ impl <InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> InputSystem<Inpu
 		}
 	}
 }
-impl <InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> std::ops::Index<InputNames> for InputSystem<InputNames>
+impl<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> Index<InputNames> for InputSystem<InputNames>
 {
 	type Output = f32;
 	fn index(&self, name: InputNames) -> &f32
 	{
-		static DEFAULT_F32: f32 = 0.0f32;
+		const DEFAULT_F32: f32 = 0.0f32;
 		self.input_states.get(&name).unwrap_or(&DEFAULT_F32)
 	}
 }

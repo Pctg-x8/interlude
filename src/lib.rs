@@ -3,12 +3,13 @@
 // External Crates
 extern crate libc;
 #[macro_use] extern crate log;
-extern crate xcb;
+#[cfg(windows)] extern crate winapi;
 extern crate nalgebra;
 extern crate freetype_sys;
 extern crate unicode_normalization;
 extern crate ansi_term;
-extern crate epoll;
+#[cfg(unix)] extern crate xcb;
+#[cfg(unix)] extern crate epoll;
 
 // LowLevel APIs
 #[macro_use] mod vk;
@@ -22,21 +23,21 @@ mod resource;
 mod framebuffer;
 mod synchronize;
 mod shading;
-mod window;
+mod window_common;
 mod descriptor;
 mod input;
 mod data;
 mod internal_traits;
 
 // platform dependents
-mod linux;
+#[cfg(unix)] mod linux;
 
 // Extra Objects
 mod debug_info;
 
 // --- Exported APIs --- //
 pub use self::error::*;
-pub use self::engine::DeviceFeatures;
+pub use self::engine::{DeviceFeatures, EngineCore};
 pub use self::framebuffer::{AttachmentDesc, AttachmentRef, PassDesc, PassDependency, AttachmentClearValue};
 pub use self::command::{MemoryBarrier, BufferMemoryBarrier, ImageMemoryBarrier, IndirectCallParameter, BufferCopyRegion, ImageCopyRegion, ImageBlitRegion};
 pub use self::resource::{
@@ -54,7 +55,7 @@ pub use self::descriptor::{ShaderStage, Descriptor, BufferInfo, ImageInfo, Descr
 pub use self::debug_info::DebugLine;
 pub use self::input::*;
 pub use self::data::*;
-pub use self::window::ApplicationState;
+pub use self::window_common::ApplicationState;
 pub use self::vk::ffi;
 
 // traits
@@ -62,7 +63,7 @@ pub use self::engine::CommandSubmitter;
 pub use self::command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
 pub use self::resource::{ImageDescriptor, ImageView, BufferResource, ImageResource};
 pub use self::resource::{ImageViewFactory};
-pub use self::window::RenderWindow;
+pub use self::window_common::RenderWindow;
 // exported objects
 pub use self::engine::Engine;
 pub use self::synchronize::{QueueFence, Fence, FenceRef};
@@ -76,14 +77,14 @@ pub use self::resource::{
 pub use self::shading::{ShaderProgram, PipelineLayout, GraphicsPipeline};
 pub use self::descriptor::{DescriptorSetLayout, DescriptorSets};
 pub use self::debug_info::DebugInfo;
-pub use self::window::{Window, WindowRenderTarget};
+pub use self::window_common::{Window, WindowRenderTarget};
 
 // For internal exports //
 mod internals
 {
 	pub use super::internal_traits::*;
 	pub use super::engine::*;
-	pub use super::window::*;
+	pub use super::window_common::*;
 	pub use super::error::*;
 	pub use super::device::*;
 	pub use super::command::*;

@@ -41,7 +41,7 @@ pub struct TypefaceProvider
 }
 impl TypefaceProvider
 {
-	fn new(engine: &Engine) -> Result<Self, EngineError>
+	fn new<Engine: EngineCore>(engine: &Engine) -> Result<Self, EngineError>
 	{
 		let ftl = unsafe { let mut ptr: FT_Library = std::mem::uninitialized(); try!(FT_Init_FreeType(&mut ptr).map(|| ptr)) };
 		let face = unsafe
@@ -192,7 +192,7 @@ impl <'a> std::ops::Drop for DebugInfo<'a>
 }
 impl <'a> DebugInfo<'a>
 {
-	pub fn new(engine: &Engine, lines: &[DebugLine<'a>],
+	pub fn new<Engine: EngineCore>(engine: &Engine, lines: &[DebugLine<'a>],
 		rendered_pass: &RenderPass, subindex: u32, framebuffer_size: VkViewport) -> Result<Box<Self>, EngineError>
 	{
 		info!(target: "Interlude::DebugInfo", "Starting Visual Debugger...");

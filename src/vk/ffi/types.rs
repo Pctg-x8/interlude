@@ -59,6 +59,8 @@ pub type VkSamplerCreateFlags = VkFlags;
 pub type VkShaderStageFlagBits = VkFlags;
 
 pub type VkXlibSurfaceCreateFlagsKHR = VkFlags;
+pub type VkXcbSurfaceCreateFlagsKHR = VkFlags;
+pub type VkWin32SurfaceCreateFlagsKHR = VkFlags;
 pub type VkSurfaceTransformFlagsKHR = VkFlags;
 pub type VkCompositeAlphaFlagsKHR = VkFlags;
 pub type VkSwapchainCreateFlagsKHR = VkFlags;
