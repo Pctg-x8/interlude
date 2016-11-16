@@ -1,6 +1,7 @@
 // Interlude: Input System
 
 #[cfg(unix)] use epoll;
+use std;
 use super::internals::*;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -409,7 +410,7 @@ impl<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> Index<InputNames>
 	type Output = f32;
 	fn index(&self, name: InputNames) -> &f32
 	{
-		const DEFAULT_F32: f32 = 0.0f32;
+		static DEFAULT_F32: f32 = 0.0f32;
 		self.input_states.get(&name).unwrap_or(&DEFAULT_F32)
 	}
 }

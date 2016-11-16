@@ -1,5 +1,5 @@
 // Intelude::linux module
 
-pub mod windows;
+pub mod window;
 pub mod evdev;
 pub mod udev;

@@ -338,7 +338,7 @@ impl <'a> GraphicsPipelineBuilder<'a>
 		GraphicsPipelineBuilder
 		{
 			layout: layout, render_pass: render_pass, subpass_index: subpass_index,
-			vertex_shader: Some(PipelineShaderProgram::unspecialized(&engine.get_postprocess_vsh())), geometry_shader: None, fragment_shader: Some(fragment_shader),
+			vertex_shader: Some(PipelineShaderProgram::unspecialized(&engine.get_postprocess_vsh(true))), geometry_shader: None, fragment_shader: Some(fragment_shader),
 			primitive_topology: PrimitiveTopology::TriangleStrip(false),
 			vp_sc: vec![ViewportWithScissorRect::default_scissor(processing_viewport)],
 			rasterizer_state: RasterizerState { wired_render: false, cull_side: None },

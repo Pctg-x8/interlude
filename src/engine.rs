@@ -86,7 +86,6 @@ pub trait EngineCoreExports
 	fn get_memory_type_index_for_device_local(&self) -> u32;
 	fn get_memory_type_index_for_host_visible(&self) -> u32;
 	fn is_optimized_debug_render_support(&self) -> bool;
-	fn get_postprocess_vsh(&self) -> &ShaderProgram;
 }
 // Core Functions in Engine
 pub trait EngineCore : EngineCoreExports + CommandSubmitter
@@ -126,6 +125,7 @@ pub trait EngineCore : EngineCoreExports + CommandSubmitter
 	// Asset Path //
 	fn parse_asset(&self, asset_path: &str, extension: &str) -> std::ffi::OsString;
 	fn _parse_asset(asset_base: &PathBuf, asset_path: &str, extension: &str) -> std::ffi::OsString;
+	fn get_postprocess_vsh(&self, require_uv: bool) -> &ShaderProgram;
 
 	// Device Configurations/Operations //
 	fn update_descriptors(&self, write_infos: &[DescriptorSetWriteInfo]);
@@ -163,10 +163,9 @@ impl<WS: WindowServer> EngineCoreExports for Engine<WS>
 	fn get_memory_type_index_for_device_local(&self) -> u32 { self.memory_type_index_for_device_local }
 	fn get_memory_type_index_for_host_visible(&self) -> u32 { self.memory_type_index_for_host_visible }
 	fn is_optimized_debug_render_support(&self) -> bool { self.optimized_debug_render }
-	fn get_postprocess_vsh(&self) -> &ShaderProgram { &self.postprocess_vsh }
 }
 // For XServer
-#[cfg(unix)] impl Engine<Self::linux::window::XServer>
+#[cfg(unix)] impl Engine<super::linux::window::XServer>
 {
 	pub fn new<StrT: AsRef<Path>>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures) -> Result<Box<Self>, EngineError>
 	{
@@ -174,7 +173,7 @@ impl<WS: WindowServer> EngineCoreExports for Engine<WS>
 		log::set_logger(|max_log_level| { max_log_level.set(log::LogLevelFilter::Info); Box::new(EngineLogger) }).unwrap();
 		info!(target: "Prelude", "Initializing Engine...");
 
-		let window_server = try!(Self::linux::window::connect_xserver());
+		let window_server = try!(super::linux::window::connect_xserver());
 
 		let instance = try!(vk::Instance::new(app_name, app_version, "Prelude Computer-Graphics Engine", VK_MAKE_VERSION!(0, 0, 1),
 			&["VK_LAYER_LUNARG_standard_validation"], &["VK_KHR_surface", "VK_KHR_xcb_surface", "VK_EXT_debug_report"]).map(|x| Rc::new(x)));
@@ -218,8 +217,9 @@ impl<WS: WindowServer> EngineCoreExports for Engine<WS>
 		info!(target: "Prelude", "MemoryType[Device Local] Index = {}: {:?}", mt_index_for_device_local, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_device_local as usize].0));
 		info!(target: "Prelude", "MemoryType[Host Visible] Index = {}: {:?}", mt_index_for_host_visible, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_host_visible as usize].0));
 
-		let asset_base = asset_base.map(|b| b.as_ref().to_path_buf()).unwrap_or(std::env::current_exe().map(|x| x.parent()).unwrap().to_path_buf()).join("assets");
-		let (ppvsh, ppvsh_nouv) = try!(Engine::init_common_resources(&device, &asset_base));
+		let asset_base = asset_base.map(|b| b.as_ref().to_path_buf())
+			.unwrap_or(std::env::current_exe().unwrap().parent().map(|x| x.to_path_buf()).unwrap()).join("assets");
+		let (ppvsh, ppvsh_nouv) = try!(Engine::<super::linux::window::XServer>::init_common_resources(&device, &asset_base));
 		Ok(Box::new(Engine
 		{
 			window_system: window_server, instance: instance, debug_callback: dbg_callback, device: device, pools: pools,
@@ -526,6 +526,8 @@ impl<WS: WindowServer> EngineCore for Engine<WS>
 
 	fn new_command_sender(&self) -> CommandSender { CommandSender { device: &self.device } }
 	fn graphics_queue_ref(&self) -> &vk::Queue { self.device.get_graphics_queue() }
+
+	fn get_postprocess_vsh(&self, require_uv: bool) -> &ShaderProgram { if require_uv { &self.postprocess_vsh } else { &self.postprocess_vsh_nouv } }
 }
 impl<WS: WindowServer> CommandSubmitter for Engine<WS>
 {

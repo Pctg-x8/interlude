@@ -63,7 +63,7 @@ pub use self::engine::CommandSubmitter;
 pub use self::command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
 pub use self::resource::{ImageDescriptor, ImageView, BufferResource, ImageResource};
 pub use self::resource::{ImageViewFactory};
-pub use self::window_common::RenderWindow;
+pub use self::window_common::{WindowServer, RenderWindow};
 // exported objects
 pub use self::engine::Engine;
 pub use self::synchronize::{QueueFence, Fence, FenceRef};

@@ -8,17 +8,15 @@ use std::rc::Rc;
 use std::sync::Arc;
 use vk::ffi::*;
 use vk::traits::*;
-#[cfg(unix)] use xcb::ffi::*;
-use std::os::raw::*;
 
 /// Application State(has exited?)
 #[derive(PartialEq)]
 pub enum ApplicationState { Continue, Exited }
 
 /// Indicates Native Window
-pub trait NativeWindow
+pub trait NativeWindow : std::marker::Sized + 'static
 {
-	type NativeWindowServerT : WindowServer;
+	type NativeWindowServerT : WindowServer<NativeWindowT = Self>;
 	type SurfaceCreateInfoKHR;
 
 	fn native_show(&self, server: &Self::NativeWindowServerT);
@@ -27,7 +25,7 @@ pub trait NativeWindow
 /// Indicates that provides window and processes messages
 pub trait WindowServer: std::marker::Sync + std::marker::Send + std::marker::Sized
 {
-	type NativeWindowT : NativeWindow<NativeWindowServerT = Self>;
+	type NativeWindowT : NativeWindow<NativeWindowServerT = Self> + 'static;
 
 	fn create_unresizable_window(&self, size: VkExtent2D, title: &str) -> Result<Self::NativeWindowT, EngineError>;
 	fn show_window(&self, target: &Self::NativeWindowT);

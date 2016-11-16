@@ -2,7 +2,11 @@
 
 use {std, vk};
 use xcb::ffi::*;
-use super::window_common::*;
+use super::super::ffi::*;
+#[cfg(unix)] use std::os::raw::*;
+use super::super::internals::*;
+use std::sync::Arc;
+use std::rc::Rc;
 
 // Global Shared atomic value
 pub enum XInternAtom<'a>
@@ -60,7 +64,7 @@ impl InternalExports<*mut xcb_connection_t> for XServer
 }
 impl XServer
 {
-	pub fn connect() -> Result<Arc<WindowServer>, EngineError>
+	pub fn connect() -> Result<Arc<Self>, EngineError>
 	{
 		let mut screen_num = 0i32;
 		let con_ptr = unsafe { xcb_connect(std::ptr::null(), &mut screen_num) };
@@ -113,7 +117,7 @@ impl WindowServer for XServer
 	}
 	fn show_window(&self, target: &Self::NativeWindowT)
 	{
-		target.xcb_show(self.internal);
+		target.native_show(self);
 	}
 	fn flush(&self)
 	{
@@ -177,7 +181,7 @@ impl WindowServer for XServer
 	}
 	fn make_vk_surface(&self, target: &Self::NativeWindowT, instance: &Rc<vk::Instance>) -> Result<vk::Surface, EngineError>
 	{
-		vk::Surface::new_xcb(instance, &target.xcb_surface_create_info(self.internal)).map_err(EngineError::from)
+		vk::Surface::new_xcb(instance, &target.native_surface_create_info(self)).map_err(EngineError::from)
 	}
 }
 impl std::ops::Drop for XServer
