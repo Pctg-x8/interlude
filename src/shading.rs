@@ -252,9 +252,9 @@ impl<'a> std::convert::Into<IntoNativeShaderStageCreateInfoStruct> for &'a Pipel
 			{
 				let size = match v
 				{
-					&ConstantEntry::Float(_) | &ConstantEntry::Uint(_) => 4
+					&ConstantEntry::Float(_) | &ConstantEntry::Uint(_) => 4usize
 				};
-				let rval = VkSpecializationMapEntry(*id as u32, *acc as u32, size);
+				let rval = VkSpecializationMapEntry(*id as u32, *acc as u32, size as VkDeviceSize);
 				*acc += size;
 				Some(rval)
 			}).collect::<Vec<_>>();
@@ -285,7 +285,7 @@ impl<'a> std::convert::Into<IntoNativeShaderStageCreateInfoStruct> for &'a Pipel
 			specialization_structure: if map_entries.is_empty() { None } else { Some(VkSpecializationInfo
 			{
 				mapEntryCount: map_entries.len() as u32, pMapEntries: map_entries.as_ptr(),
-				dataSize: const_values.len(), pData: const_values.as_ptr() as *const std::os::raw::c_void
+				dataSize: const_values.len() as VkDeviceSize, pData: const_values.as_ptr() as *const std::os::raw::c_void
 			})},
 			specialization_entry: map_entries, specialization_values: const_values
 		}

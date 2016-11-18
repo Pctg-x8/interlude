@@ -21,6 +21,7 @@ pub trait NativeWindow : std::marker::Sized + 'static
 
 	fn native_show(&self, server: &Self::NativeWindowServerT);
 	fn native_surface_create_info(&self, server: &Self::NativeWindowServerT) -> Self::SurfaceCreateInfoKHR;
+	fn destroy(&self);
 }
 /// Indicates that provides window and processes messages
 pub trait WindowServer: std::marker::Sync + std::marker::Send + std::marker::Sized
