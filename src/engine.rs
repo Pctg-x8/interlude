@@ -8,7 +8,7 @@ use vk::ffi::*;
 use vk::traits::*;
 use ansi_term::*;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use libc::size_t;
 use std::os::raw::*;
 use std::ffi::CStr;
@@ -85,6 +85,7 @@ pub trait EngineCoreExports
 	fn get_device(&self) -> &DeviceExports;
 	fn get_memory_type_index_for_device_local(&self) -> u32;
 	fn get_memory_type_index_for_host_visible(&self) -> u32;
+	fn get_compatible_memory_type_index(&self, bits: u32) -> Result<u32, EngineError>;
 	fn is_optimized_debug_render_support(&self) -> bool;
 }
 // Core Functions in Engine
@@ -136,174 +137,70 @@ pub trait EngineCore : EngineCoreExports + CommandSubmitter
 	fn new_command_sender(&self) -> CommandSender;
 	fn graphics_queue_ref(&self) -> &vk::Queue;
 }
-pub struct Engine<WS: WindowServer>
+pub struct Engine<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
 {
-	window_system: Arc<WS>, instance: Rc<vk::Instance>, #[allow(dead_code)] debug_callback: vk::DebugReportCallback,
+	window_system: Arc<WS>, input_system: Arc<RwLock<IS>>,
+	instance: Rc<vk::Instance>, #[allow(dead_code)] debug_callback: vk::DebugReportCallback,
+	memory_types: VkPhysicalDeviceMemoryProperties,
 	device: Device, pools: CommandPool, pipeline_cache: Rc<vk::PipelineCache>,
 	asset_dir: std::path::PathBuf,
 	physical_device_limits: VkPhysicalDeviceLimits,
 	memory_type_index_for_device_local: u32, memory_type_index_for_host_visible: u32,
 	optimized_debug_render: bool,
 	// CommonResources //
-	pub postprocess_vsh: ShaderProgram, pub postprocess_vsh_nouv: ShaderProgram
+	pub postprocess_vsh: ShaderProgram, pub postprocess_vsh_nouv: ShaderProgram,
+	// Phantom Data //
+	ph: std::marker::PhantomData<InputNames>
 }
-unsafe impl<WS: WindowServer> Send for Engine<WS> {}
-impl<WS: WindowServer> std::ops::Drop for Engine<WS>
+unsafe impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+	Send for Engine<WS, IS, InputNames> {}
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+	Drop for Engine<WS, IS, InputNames>
 {
 	fn drop(&mut self) { self.device.wait_for_idle().unwrap(); }
 }
-impl<WS: WindowServer> EngineExports<WS> for Engine<WS>
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+	EngineExports<WS> for Engine<WS, IS, InputNames>
 {
 	fn get_window_server(&self) -> &Arc<WS> { &self.window_system }
 }
-impl<WS: WindowServer> EngineCoreExports for Engine<WS>
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+	EngineCoreExports for Engine<WS, IS, InputNames>
 {
 	fn get_instance(&self) -> &Rc<vk::Instance> { &self.instance }
 	fn get_device(&self) -> &DeviceExports { &self.device }
 	fn get_memory_type_index_for_device_local(&self) -> u32 { self.memory_type_index_for_device_local }
 	fn get_memory_type_index_for_host_visible(&self) -> u32 { self.memory_type_index_for_host_visible }
+	fn get_compatible_memory_type_index(&self, bits: u32) -> Result<u32, EngineError>
+	{
+		let least_index = bits.trailing_zeros();
+		if least_index >= self.memory_types.memoryTypeCount { Err(EngineError::GenericError("Argument does not contain any bits")) }
+		else { Ok(least_index as u32) }
+	}
 	fn is_optimized_debug_render_support(&self) -> bool { self.optimized_debug_render }
 }
 // For XServer
-#[cfg(unix)] impl Engine<super::linux::XServer>
+#[cfg(unix)] impl<InputNames> Engine<super::linux::XServer, super::input::UnixInputSystem<InputNames>, InputNames>
 {
-	pub fn new<StrT: AsRef<Path>>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures) -> Result<Box<Self>, EngineError>
+	pub fn new<StrT: AsRef<Path>>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures) -> Result<Self, EngineError>
 	{
-		// Setup Engine Logger //
-		log::set_logger(|max_log_level| { max_log_level.set(log::LogLevelFilter::Info); Box::new(EngineLogger) }).unwrap();
-		info!(target: "Prelude", "Initializing Engine...");
-
-		let window_server = try!(super::linux::window::connect_xserver());
-
-		let instance = try!(vk::Instance::new(app_name, app_version, "Prelude Computer-Graphics Engine", VK_MAKE_VERSION!(0, 0, 1),
-			&["VK_LAYER_LUNARG_standard_validation"], &["VK_KHR_surface", "VK_KHR_xcb_surface", "VK_EXT_debug_report"]).map(|x| Rc::new(x)));
-		let dbg_callback = try!(vk::DebugReportCallback::new(&instance, device_report_callback));
-		let adapter = try!(instance.enumerate_adapters().map_err(|e| EngineError::from(e))
-			.and_then(|aa| aa.into_iter().next().ok_or(EngineError::GenericError("PhysicalDevices are not found")))
-			.map(|a| Rc::new(vk::PhysicalDevice::from(a, &instance))));
-		let features = adapter.get_features();
-		let (odr, extra_features) = if features.multiDrawIndirect != 0 && features.drawIndirectFirstInstance != 0
-		{
-			// Required for optimized debug rendering
-			(true, extra_features.enable_multidraw_indirect().enable_draw_indirect_first_instance())
-		}
-		else
-		{
-			info!(target: "Prelude::DiagAdapter", "MultiDrawIndirect or DrawIndirectFirstInstance features are not available.");
-			(false, extra_features)
-		};
-		let device =
-		{
-			let queue_family_properties = adapter.enumerate_queue_family_properties();
-			let graphics_qf = try!(queue_family_properties.iter().enumerate().find(|&(_, fp)| (fp.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
-				.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Unable to find Graphics Queue")));
-			let transfer_qf = queue_family_properties.iter().enumerate().filter(|&(i, _)| i as u32 != graphics_qf)
-				.find(|&(_, fp)| (fp.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0).map(|(i, _)| i as u32);
-			Self::diagnose_adapter(&*window_server, &adapter, graphics_qf);
-			let device_features = extra_features.0;
-			try!(Device::new(&adapter, &device_features, graphics_qf, transfer_qf, &queue_family_properties[graphics_qf as usize]))
-		};
-		let pools = try!(CommandPool::new(&device));
-		let pipeline_cache = Rc::new(try!(vk::PipelineCache::new_empty(&device)));
-
-		let memory_types = adapter.get_memory_properties();
-		let mt_index_for_device_local = try!(memory_types.memoryTypes[..memory_types.memoryTypeCount as usize].iter()
-			.enumerate().find(|&(_, &VkMemoryType(flags, _))| (flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0)
-			.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Device Local Memory is not found")));
-		let mt_index_for_host_visible = try!(memory_types.memoryTypes[..memory_types.memoryTypeCount as usize].iter()
-			.enumerate().find(|&(_, &VkMemoryType(flags, _))| (flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0)
-			.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Host Visible Memory is not found")));
-
-		info!(target: "Prelude", "MemoryType[Device Local] Index = {}: {:?}", mt_index_for_device_local, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_device_local as usize].0));
-		info!(target: "Prelude", "MemoryType[Host Visible] Index = {}: {:?}", mt_index_for_host_visible, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_host_visible as usize].0));
-
-		let asset_base = asset_base.map(|b| b.as_ref().to_path_buf())
-			.unwrap_or(std::env::current_exe().unwrap().parent().map(|x| x.to_path_buf()).unwrap()).join("assets");
-		let (ppvsh, ppvsh_nouv) = try!(Engine::<super::linux::window::XServer>::init_common_resources(&device, &asset_base));
-		Ok(Box::new(Engine
-		{
-			window_system: window_server, instance: instance, debug_callback: dbg_callback, device: device, pools: pools,
-			pipeline_cache: pipeline_cache, asset_dir: asset_base,
-			physical_device_limits: adapter.get_properties().limits,
-			memory_type_index_for_device_local: mt_index_for_device_local,
-			memory_type_index_for_host_visible: mt_index_for_host_visible,
-			optimized_debug_render: odr,
-			postprocess_vsh: ppvsh, postprocess_vsh_nouv: ppvsh_nouv
-		}))
+		Engine::new_with_window_system(app_name, app_version, asset_base, extra_features, "VK_KHR_xcb_surface", super::linux::connect_xserver)
 	}
 }
 // For Win32Server
-#[cfg(windows)] impl Engine<super::win32::Win32Server>
+#[cfg(windows)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+	Engine<super::win32::Win32Server, super::input::Win32InputSystem<InputNames>, InputNames>
 {
-	pub fn new<StrT: AsRef<Path>>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures) -> Result<Box<Self>, EngineError>
+	pub fn new<StrT: AsRef<Path>>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures) -> Result<Self, EngineError>
 	{
-		// Setup Engine Logger //
-		log::set_logger(|max_log_level| { max_log_level.set(log::LogLevelFilter::Info); Box::new(EngineLogger) }).unwrap();
-		info!(target: "Prelude", "Initializing Engine...");
-
-		let window_server = try!(super::win32::connect_win32_server());
-
-		let instance = try!(vk::Instance::new(app_name, app_version, "Prelude Computer-Graphics Engine", VK_MAKE_VERSION!(0, 0, 1),
-			&["VK_LAYER_LUNARG_standard_validation"], &["VK_KHR_surface", "VK_KHR_xcb_surface", "VK_EXT_debug_report"]).map(|x| Rc::new(x)));
-		let dbg_callback = try!(vk::DebugReportCallback::new(&instance, device_report_callback));
-		let adapter = try!(instance.enumerate_adapters().map_err(|e| EngineError::from(e))
-			.and_then(|aa| aa.into_iter().next().ok_or(EngineError::GenericError("PhysicalDevices are not found")))
-			.map(|a| Rc::new(vk::PhysicalDevice::from(a, &instance))));
-		let features = adapter.get_features();
-		let (odr, extra_features) = if features.multiDrawIndirect != 0 && features.drawIndirectFirstInstance != 0
-		{
-			// Required for optimized debug rendering
-			(true, extra_features.enable_multidraw_indirect().enable_draw_indirect_first_instance())
-		}
-		else
-		{
-			info!(target: "Prelude::DiagAdapter", "MultiDrawIndirect or DrawIndirectFirstInstance features are not available.");
-			(false, extra_features)
-		};
-		let device =
-		{
-			let queue_family_properties = adapter.enumerate_queue_family_properties();
-			let graphics_qf = try!(queue_family_properties.iter().enumerate().find(|&(_, fp)| (fp.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
-				.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Unable to find Graphics Queue")));
-			let transfer_qf = queue_family_properties.iter().enumerate().filter(|&(i, _)| i as u32 != graphics_qf)
-				.find(|&(_, fp)| (fp.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0).map(|(i, _)| i as u32);
-			Self::diagnose_adapter(&*window_server, &adapter, graphics_qf);
-			let device_features = extra_features.0;
-			try!(Device::new(&adapter, &device_features, graphics_qf, transfer_qf, &queue_family_properties[graphics_qf as usize]))
-		};
-		let pools = try!(CommandPool::new(&device));
-		let pipeline_cache = Rc::new(try!(vk::PipelineCache::new_empty(&device)));
-
-		let memory_types = adapter.get_memory_properties();
-		let mt_index_for_device_local = try!(memory_types.memoryTypes[..memory_types.memoryTypeCount as usize].iter()
-			.enumerate().find(|&(_, &VkMemoryType(flags, _))| (flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0)
-			.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Device Local Memory is not found")));
-		let mt_index_for_host_visible = try!(memory_types.memoryTypes[..memory_types.memoryTypeCount as usize].iter()
-			.enumerate().find(|&(_, &VkMemoryType(flags, _))| (flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0)
-			.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Host Visible Memory is not found")));
-
-		info!(target: "Prelude", "MemoryType[Device Local] Index = {}: {:?}", mt_index_for_device_local, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_device_local as usize].0));
-		info!(target: "Prelude", "MemoryType[Host Visible] Index = {}: {:?}", mt_index_for_host_visible, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_host_visible as usize].0));
-
-		let asset_base = asset_base.map(|b| b.as_ref().to_path_buf())
-			.unwrap_or(std::env::current_exe().unwrap().parent().map(|x| x.to_path_buf()).unwrap()).join("assets");
-		let (ppvsh, ppvsh_nouv) = try!(Engine::<super::win32::Win32Server>::init_common_resources(&device, &asset_base));
-		Ok(Box::new(Engine
-		{
-			window_system: window_server, instance: instance, debug_callback: dbg_callback, device: device, pools: pools,
-			pipeline_cache: pipeline_cache, asset_dir: asset_base,
-			physical_device_limits: adapter.get_properties().limits,
-			memory_type_index_for_device_local: mt_index_for_device_local,
-			memory_type_index_for_host_visible: mt_index_for_host_visible,
-			optimized_debug_render: odr,
-			postprocess_vsh: ppvsh, postprocess_vsh_nouv: ppvsh_nouv
-		}))
+		Engine::new_with_window_system(app_name, app_version, asset_base, extra_features, "VK_KHR_win32_surface", super::win32::connect_win32_server)
 	}
 }
 // For any WindowSystems
-impl<WS: WindowServer> Engine<WS>
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug> Engine<WS, IS, InputNames>
 {
 	pub fn window_system_ref(&self) -> &Arc<WS> { &self.window_system }
+	pub fn input_system_ref(&self) -> &Arc<RwLock<IS>> { &self.input_system }
 
 	pub fn process_messages(&self) -> bool
 	{
@@ -338,6 +235,74 @@ impl<WS: WindowServer> Engine<WS>
 		// Vulkan and XCB Integration Check //
 		if !server_con.is_vk_presentation_support(adapter, queue_index) { panic!("Vulkan Presentation is not supported by window system"); }
 	}
+	fn new_with_window_system<ConF, StrT>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures,
+		surface_ex_name: &str, connect_f: ConF) -> Result<Self, EngineError> where ConF: FnOnce() -> Result<Arc<WS>, EngineError>, StrT: AsRef<Path>
+	{
+		// Setup Engine Logger //
+		log::set_logger(|max_log_level| { max_log_level.set(log::LogLevelFilter::Info); Box::new(EngineLogger) }).unwrap();
+		info!(target: "Prelude", "Initializing Engine...");
+
+		let window_server = try!(connect_f());
+
+		let instance = try!(vk::Instance::new(app_name, app_version, "Prelude Computer-Graphics Engine", VK_MAKE_VERSION!(0, 0, 1),
+			&["VK_LAYER_LUNARG_standard_validation"], &["VK_KHR_surface", surface_ex_name, "VK_EXT_debug_report"]).map(|x| Rc::new(x)));
+		let dbg_callback = try!(vk::DebugReportCallback::new(&instance, device_report_callback));
+		let adapter = try!(instance.enumerate_adapters().map_err(|e| EngineError::from(e))
+			.and_then(|aa| aa.into_iter().next().ok_or(EngineError::GenericError("PhysicalDevices are not found")))
+			.map(|a| Rc::new(vk::PhysicalDevice::from(a, &instance))));
+		let features = adapter.get_features();
+		let (odr, extra_features) = if features.multiDrawIndirect != 0 && features.drawIndirectFirstInstance != 0
+		{
+			// Required for optimized debug rendering
+			(true, extra_features.enable_multidraw_indirect().enable_draw_indirect_first_instance())
+		}
+		else
+		{
+			info!(target: "Prelude::DiagAdapter", "MultiDrawIndirect or DrawIndirectFirstInstance features are not available.");
+			(false, extra_features)
+		};
+		let device =
+		{
+			let queue_family_properties = adapter.enumerate_queue_family_properties();
+			let graphics_qf = try!(queue_family_properties.iter().enumerate().find(|&(_, fp)| (fp.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
+				.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Unable to find Graphics Queue")));
+			let transfer_qf = queue_family_properties.iter().enumerate().filter(|&(i, _)| i as u32 != graphics_qf)
+				.find(|&(_, fp)| (fp.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0).map(|(i, _)| i as u32);
+			Self::diagnose_adapter(&*window_server, &adapter, graphics_qf);
+			let device_features = extra_features.0;
+			try!(Device::new(&adapter, &device_features, graphics_qf, transfer_qf, &queue_family_properties[graphics_qf as usize]))
+		};
+		let pools = try!(CommandPool::new(&device));
+		let pipeline_cache = Rc::new(try!(vk::PipelineCache::new_empty(&device)));
+
+		let memory_types = adapter.get_memory_properties();
+		let mt_index_for_device_local = try!(memory_types.memoryTypes[..memory_types.memoryTypeCount as usize].iter()
+			.enumerate().find(|&(_, &VkMemoryType(flags, _))| (flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0)
+			.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Device Local Memory is not found")));
+		let mt_index_for_host_visible = try!(memory_types.memoryTypes[..memory_types.memoryTypeCount as usize].iter()
+			.enumerate().find(|&(_, &VkMemoryType(flags, _))| (flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0)
+			.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Host Visible Memory is not found")));
+
+		info!(target: "Prelude", "MemoryType[Device Local] Index = {}: {:?}", mt_index_for_device_local, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_device_local as usize].0));
+		info!(target: "Prelude", "MemoryType[Host Visible] Index = {}: {:?}", mt_index_for_host_visible, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_host_visible as usize].0));
+
+		let asset_base = asset_base.map(|b| b.as_ref().to_path_buf())
+			.unwrap_or(std::env::current_exe().unwrap().parent().map(|x| x.to_path_buf()).unwrap()).join("assets");
+		let (ppvsh, ppvsh_nouv) = try!(Self::init_common_resources(&device, &asset_base));
+		Ok(Engine
+		{
+			window_system: window_server, input_system: Arc::new(RwLock::new(try!(IS::new()))),
+			instance: instance, debug_callback: dbg_callback, device: device, pools: pools,
+			memory_types: memory_types,
+			pipeline_cache: pipeline_cache, asset_dir: asset_base,
+			physical_device_limits: adapter.get_properties().limits,
+			memory_type_index_for_device_local: mt_index_for_device_local,
+			memory_type_index_for_host_visible: mt_index_for_host_visible,
+			optimized_debug_render: odr,
+			postprocess_vsh: ppvsh, postprocess_vsh_nouv: ppvsh_nouv,
+			ph: std::marker::PhantomData
+		})
+	}
 	fn init_common_resources(device: &Rc<vk::Device>, asset_base: &PathBuf) -> Result<(ShaderProgram, ShaderProgram), EngineError>
 	{
 		info!(target: "Interlude::CommonResource", "Loading Vertex Shader for PostProcessing...");
@@ -358,7 +323,8 @@ impl<WS: WindowServer> Engine<WS>
 	}
 }
 // For WindowServer independent parts
-impl<WS: WindowServer> EngineCore for Engine<WS>
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+	EngineCore for Engine<WS, IS, InputNames>
 {
 	fn create_fence(&self) -> Result<Fence, EngineError>
 	{
@@ -597,7 +563,8 @@ impl<WS: WindowServer> EngineCore for Engine<WS>
 
 	fn get_postprocess_vsh(&self, require_uv: bool) -> &ShaderProgram { if require_uv { &self.postprocess_vsh } else { &self.postprocess_vsh_nouv } }
 }
-impl<WS: WindowServer> CommandSubmitter for Engine<WS>
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+	CommandSubmitter for Engine<WS, IS, InputNames>
 {
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>

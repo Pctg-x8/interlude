@@ -197,6 +197,7 @@ impl PhysicalDevice
 pub struct Device { obj: VkDevice, #[allow(dead_code)] parent: Rc<PhysicalDevice> }
 impl std::ops::Drop for Device { fn drop(&mut self) { self.wait_for_idle().unwrap(); unsafe { vkDestroyDevice(self.obj, std::ptr::null()) }; } }
 impl NativeOwner<VkDevice> for Device { fn get(&self) -> VkDevice { self.obj } }
+impl HasParent for Device { type ParentRefType = PhysicalDevice; fn parent(&self) -> &PhysicalDevice { &self.parent } }
 impl Device
 {
 	pub fn new(adapter: &Rc<PhysicalDevice>, queue: &[VkDeviceQueueCreateInfo],

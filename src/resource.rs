@@ -3,9 +3,9 @@
 #![allow(dead_code)]
 
 use super::internals::*;
-use {std, vk};
 use vk::ffi::*;
 use vk::traits::*;
+use {std, vk};
 use std::os::raw::c_void;
 use std::rc::Rc;
 
@@ -423,27 +423,30 @@ impl DeviceImageInternals for DeviceImage
 			let d3_image_requirements = d3_images.iter().map(|b| b.get_memory_requirements());
 			
 			d1_image_requirements.chain(d2_image_requirements).chain(d3_image_requirements)
-				.chain([VkMemoryRequirements { size: 0, alignment: 1, memoryTypeBits: 0 }].into_iter().map(|&x| x)).scan(0, |offs, req|
+				.chain([VkMemoryRequirements { size: 0, alignment: 1, memoryTypeBits: 0 }].into_iter().map(|&x| x)).scan((0, 0), |tup, req|
 				{
-					let current_offs = ((*offs as f64 / req.alignment as f64).ceil() as VkDeviceSize) * req.alignment;
-					*offs = current_offs + req.size;
-					Some(current_offs)
+					let compatible_bits = tup.1 | (req.memoryTypeBits & 0xff);
+					let current_offs = ((tup.0 as f64 / req.alignment as f64).ceil() as VkDeviceSize) * req.alignment;
+					let offs = current_offs + req.size;
+					*tup = (offs, compatible_bits);
+					Some((current_offs, compatible_bits))
 				}).collect::<Vec<_>>()
 		};
-		let memory_size = try!(image_offsets.last().map(|&x| x).ok_or(EngineError::AllocateMemoryWithEmptyResources));
-		info!(target: "Prelude::Resource", "Going to allocate buffer for device {} bytes", memory_size);
+		let memory_size = try!(image_offsets.last().map(|&(x, _)| x).ok_or(EngineError::AllocateMemoryWithEmptyResources));
+		let compatible_bits = image_offsets.last().map(|&(_, x)| x).unwrap();
+		info!(target: "Prelude::Resource", "Going to allocate image for device {} bytes", memory_size);
 
 		vk::DeviceMemory::alloc(engine.get_device().get_internal(), &VkMemoryAllocateInfo
 		{
 			sType: VkStructureType::MemoryAllocateInfo, pNext: std::ptr::null(),
-			allocationSize: memory_size, memoryTypeIndex: engine.get_memory_type_index_for_device_local()
+			allocationSize: memory_size, memoryTypeIndex: try!(engine.get_compatible_memory_type_index(compatible_bits))
 		}).and_then(|memory|
 		{
 			let image_resources = d1_images.iter().map(|i| i as &InternalExports<vk::Image>)
 				.chain(d2_images.iter().map(|i| i as &InternalExports<vk::Image>))
 				.chain(d3_images.iter().map(|i| i as &InternalExports<vk::Image>));
 			
-			for (&offs, res) in image_offsets.iter().zip(image_resources)
+			for (&(offs, _), res) in image_offsets.iter().zip(image_resources)
 			{
 				try!(memory.bind_image(res.get_internal(), offs));
 			}

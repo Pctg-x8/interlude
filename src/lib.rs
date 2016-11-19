@@ -99,6 +99,7 @@ mod internals
 	pub use super::descriptor::*;
 	pub use super::debug_info::*;
 	pub use super::data::*;
+	pub use super::input::*;
 }
 
 // Result<_, EngineError> as Unrecoverable(Crashes immediately)

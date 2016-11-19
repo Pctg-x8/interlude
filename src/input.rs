@@ -270,7 +270,13 @@ impl InputType
 {
 	fn as_raw_fd(&self) -> RawFd { self.dev.as_raw_fd() }
 }
-pub struct InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug>
+pub trait InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> : Sized + Index<InputNames, Output = f32>
+{
+	fn new() -> Result<Self, EngineError>;
+	fn add_input(&mut self, to: InputNames, from: InputType);
+	fn update(&mut self);
+}
+#[cfg(unix)] pub struct UnixInputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug>
 {
 	keymap: HashMap<InputNames, Vec<InputType>>,
 	aggregate_key_states: AsyncExclusiveHashMap<InputKeys, u32>,
@@ -278,7 +284,7 @@ pub struct InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug>
 	input_states: HashMap<InputNames, f32>
 }
 // Platform-dependent code
-#[cfg(unix)] impl<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> InputSystem<InputNames>
+#[cfg(unix)] impl<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> UnixInputSystem<InputNames>
 {
 	fn search_device_name(device: &UserspaceDevice) -> String
 	{
@@ -304,7 +310,10 @@ pub struct InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug>
 			input_devices.insert(node_number, idev);
 		}
 	}
-	pub fn new() -> Result<Self, EngineError>
+}
+#[cfg(unix)] impl<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> InputSystem<InputNames> for UnixInputSystem<InputNames>
+{
+	fn new() -> Result<Self, EngineError>
 	{
 		let aks = Arc::new(Mutex::new(HashMap::new()));
 		let aas = Arc::new(Mutex::new(HashMap::new()));
@@ -371,20 +380,19 @@ pub struct InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug>
 			}
 		}));
 
-		Ok(InputSystem
+		Ok(UnixInputSystem
 		{
 			keymap: HashMap::new(), input_states: HashMap::new(),
 			aggregate_key_states: aks, aggregate_axis_states: aas
 		})
 	}
-	pub fn add_input(mut self, to: InputNames, from: InputType) -> Self
+	fn add_input(&mut self, to: InputNames, from: InputType)
 	{
 		from.assert_unhandled();
 		self.keymap.entry(to).or_insert(Vec::new()).push(from);
 		self.input_states.insert(to, 0.0f32);
-		self
 	}
-	pub fn update(&mut self)
+	fn update(&mut self)
 	{
 		let (mut key_states, mut axis_states) = (self.aggregate_key_states.lock().unwrap(), self.aggregate_axis_states.lock().unwrap());
 		for (t, v) in &self.keymap
@@ -405,12 +413,50 @@ pub struct InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug>
 		}
 	}
 }
-impl<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> Index<InputNames> for InputSystem<InputNames>
+#[cfg(unix)] impl<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> Index<InputNames> for UnixInputSystem<InputNames>
 {
 	type Output = f32;
 	fn index(&self, name: InputNames) -> &f32
 	{
 		static DEFAULT_F32: f32 = 0.0f32;
+		self.input_states.get(&name).unwrap_or(&DEFAULT_F32)
+	}
+}
+
+#[cfg(windows)] pub struct Win32InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug>
+{
+	keymap: HashMap<InputNames, Vec<InputType>>,
+	aggregate_key_states: HashMap<InputKeys, u32>,
+	aggregate_axis_states: HashMap<InputAxis, f32>,
+	input_states: HashMap<InputNames, f32>
+}
+#[cfg(windows)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug> InputSystem<InputNames> for Win32InputSystem<InputNames>
+{
+	fn new() -> Result<Self, EngineError>
+	{
+		Ok(Win32InputSystem
+		{
+			keymap: HashMap::new(), input_states: HashMap::new(),
+			aggregate_key_states: HashMap::new(), aggregate_axis_states: HashMap::new()
+		})
+	}
+	fn add_input(&mut self, to: InputNames, from: InputType)
+	{
+		from.assert_unhandled();
+		self.keymap.entry(to).or_insert(Vec::new()).push(from);
+		self.input_states.insert(to, 0.0f32);
+	}
+	fn update(&mut self)
+	{
+
+	}
+}
+#[cfg(windows)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug> Index<InputNames> for Win32InputSystem<InputNames>
+{
+	type Output = f32;
+	fn index(&self, name: InputNames) -> &f32
+	{
+		static DEFAULT_F32: f32 = 0.0;
 		self.input_states.get(&name).unwrap_or(&DEFAULT_F32)
 	}
 }

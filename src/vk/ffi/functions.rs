@@ -10,7 +10,8 @@ use libc::size_t;
 
 pub type PFN_vkVoidFunction = unsafe extern "system" fn();
 
-#[link(name = "vulkan")]
+#[cfg_attr(unix, link(name = "vulkan"))]
+#[cfg_attr(windows, link(name = "C:\\VulkanSDK\\1.0.17.0\\Bin\\vulkan-1"))]
 extern "system"
 {
 	// Creation
