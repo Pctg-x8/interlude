@@ -1,0 +1,119 @@
+// Win32 Window Server(dummy) and NativeWindow Implementation
+
+use {std, vk};
+use super::super::ffi::*;
+use super::super::internals::*;
+use std::sync::Arc;
+use std::rc::Rc;
+use std::cell::RefCell;
+use winapi::*; use kernel32::*; use user32::*;
+use widestring;
+
+unsafe extern "system" fn common_wndproc(hwnd: HWND, msg: UINT, wp: WPARAM, lp: LPARAM) -> LRESULT
+{
+	match msg
+	{
+		WM_DESTROY => { hwnd.destroy(); DefWindowProcW(hwnd, msg, wp, lp) },
+		_ => DefWindowProcW(hwnd, msg, wp, lp)
+	}
+}
+
+// HWND as NativeWindow
+impl NativeWindow for HWND
+{
+	type NativeWindowServerT = Win32Server;
+	type SurfaceCreateInfoKHR = VkWin32SurfaceCreateInfoKHR;
+
+	fn native_show(&self, _: &Self::NativeWindowServerT) { unsafe { ShowWindow(*self, SW_SHOWNORMAL); } }
+	fn native_surface_create_info(&self, server: &Self::NativeWindowServerT) -> Self::SurfaceCreateInfoKHR
+	{
+		VkWin32SurfaceCreateInfoKHR
+		{
+			sType: VkStructureType::Win32SurfaceCreateInfoKHR, pNext: std::ptr::null(), flags: 0,
+			hinstance: server.appinstance, hwnd: *self
+		}
+	}
+	fn destroy(&self) { unsafe { PostQuitMessage(0); } }
+}
+
+// Win32 Window Server(dummy object)
+pub struct Win32Server
+{
+	appinstance: HINSTANCE, common_class: ATOM, windows: RefCell<Vec<HWND>>
+}
+unsafe impl Sync for Win32Server {}
+unsafe impl Send for Win32Server {}
+impl Win32Server
+{
+	pub fn connect() -> Result<Arc<Self>, EngineError>
+	{
+		let appinstance = unsafe { GetModuleHandleW(std::ptr::null()) } as HINSTANCE;
+		let classname = widestring::WideCString::from_str("InterludeDefaultWnd").unwrap();
+		let wce = WNDCLASSEXW
+		{
+			cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
+			cbClsExtra: 0, cbWndExtra: 0,
+			hInstance: appinstance,
+			hCursor: unsafe { LoadCursorW(std::ptr::null_mut(), IDC_ARROW) },
+			style: CS_OWNDC,
+			hbrBackground: std::ptr::null_mut(), hIcon: std::ptr::null_mut(),
+			hIconSm: std::ptr::null_mut(),
+			lpfnWndProc: Some(common_wndproc), lpszClassName: classname.as_ptr(),
+			lpszMenuName: std::ptr::null()
+		};
+		let comclass = unsafe { RegisterClassExW(&wce) };
+		if comclass <= 0 { Err(EngineError::GenericError("Unable to register window class")) }
+		else
+		{
+			Ok(Arc::new(Win32Server
+			{
+				appinstance: appinstance, common_class: comclass
+			}))
+		}
+	}
+}
+impl WindowServer for Win32Server
+{
+	type NativeWindowT = HWND;
+
+	fn create_unresizable_window(&self, size: VkExtent2D, title: &str) -> Result<Self::NativeWindowT, EngineError>
+	{
+		let VkExtent2D(width, height) = size;
+		let title_str = widestring::WideCString::from_str(title).unwrap();
+		let wnd = unsafe { CreateWindowExW(0, std::mem::transmute((self.common_class as usize) & 0x0000ffff), title_str.as_ptr(),
+			WS_OVERLAPPED | WS_CAPTION | WS_BORDER | WS_SYSMENU | WS_MINIMIZEBOX,
+			CW_USEDEFAULT, CW_USEDEFAULT, width as i32, height as i32, std::ptr::null_mut(), std::ptr::null_mut(), self.appinstance, std::ptr::null_mut()) };
+		if wnd.is_null() { Err(EngineError::GenericError("Unable to create win32 window")) } else { Ok(wnd) }
+	}
+	fn show_window(&self, target: &Self::NativeWindowT) { target.native_show(self); }
+	fn flush(&self) {}
+	fn process_events(&self) -> ApplicationState
+	{
+		let mut msg: MSG = unsafe { std::mem::uninitialized() };
+		while unsafe { PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, PM_REMOVE) } != 0
+		{
+			if msg.message == WM_QUIT { return ApplicationState::Exited }
+			unsafe { TranslateMessage(&mut msg) };
+			unsafe { DispatchMessageW(&mut msg) };
+		}
+		ApplicationState::Continue
+	}
+	fn process_all_events(&self)
+	{
+		let mut msg: MSG = unsafe { std::mem::uninitialized() };
+		while unsafe { GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) } > 0
+		{
+			unsafe { TranslateMessage(&mut msg) };
+			unsafe { DispatchMessageW(&mut msg) };
+		}
+	}
+	fn is_vk_presentation_support(&self, adapter: &vk::PhysicalDevice, qf_index: u32) -> bool
+	{
+		adapter.is_win32_presentation_support(qf_index)
+	}
+	fn make_vk_surface(&self, target: &Self::NativeWindowT, instance: &Rc<vk::Instance>) -> Result<vk::Surface, EngineError>
+	{
+		vk::Surface::new_win32(instance, &target.native_surface_create_info(self)).map_err(EngineError::from)
+	}
+}
+pub fn connect_win32_server() -> Result<Arc<Win32Server>, EngineError> { Win32Server::connect() }
