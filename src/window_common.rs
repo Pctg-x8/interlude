@@ -11,7 +11,7 @@ use vk::traits::*;
 
 /// Application State(has exited?)
 #[derive(PartialEq)]
-pub enum ApplicationState { Continue, Exited }
+pub enum ApplicationState { Continue, EventArrived(u32), Exited }
 
 /// Indicates Native Window
 pub trait NativeWindow : std::marker::Sized + 'static
@@ -33,6 +33,7 @@ pub trait WindowServer: std::marker::Sync + std::marker::Send + std::marker::Siz
 	fn flush(&self);
 	fn process_events(&self) -> ApplicationState;
 	fn process_all_events(&self);
+	fn process_events_and_messages(&self, events: &[&Event]) -> ApplicationState;
 	fn is_vk_presentation_support(&self, adapter: &vk::PhysicalDevice, qf_index: u32) -> bool;
 	fn make_vk_surface(&self, target: &Self::NativeWindowT, instance: &Rc<vk::Instance>) -> Result<vk::Surface, EngineError>;
 }

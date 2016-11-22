@@ -31,6 +31,7 @@ mod descriptor;
 mod input;
 mod data;
 mod internal_traits;
+mod concurrent;
 
 // platform dependents
 #[cfg(unix)] mod linux;
@@ -61,6 +62,7 @@ pub use self::input::*;
 pub use self::data::*;
 pub use self::window_common::ApplicationState;
 pub use self::vk::ffi;
+pub use self::concurrent::*;
 
 // traits
 pub use self::engine::CommandSubmitter;
@@ -100,6 +102,7 @@ mod internals
 	pub use super::debug_info::*;
 	pub use super::data::*;
 	pub use super::input::*;
+	pub use super::concurrent::*;
 }
 
 // Result<_, EngineError> as Unrecoverable(Crashes immediately)

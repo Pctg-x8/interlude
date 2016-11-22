@@ -39,7 +39,7 @@ impl NativeWindow for HWND
 // Win32 Window Server(dummy object)
 pub struct Win32Server
 {
-	appinstance: HINSTANCE, common_class: ATOM, windows: RefCell<Vec<HWND>>
+	appinstance: HINSTANCE, common_class: ATOM
 }
 unsafe impl Sync for Win32Server {}
 unsafe impl Send for Win32Server {}
@@ -106,6 +106,27 @@ impl WindowServer for Win32Server
 			unsafe { TranslateMessage(&mut msg) };
 			unsafe { DispatchMessageW(&mut msg) };
 		}
+	}
+	fn process_events_and_messages(&self, events: &[&Event]) -> ApplicationState
+	{
+		let ev_handles = events.iter().map(|x| x.get_internal()).collect::<Vec<_>>();
+		let res = unsafe { MsgWaitForMultipleObjectsEx(events.len() as u32, ev_handles.as_ptr(), INFINITE,
+			QS_ALLEVENTS, MWMO_INPUTAVAILABLE) };
+		if res == WAIT_OBJECT_0 + events.len() as u32
+		{
+			let mut msg: MSG = unsafe { std::mem::uninitialized() };
+			while unsafe { PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, PM_REMOVE) > 0 }
+			{
+				if msg.message == WM_QUIT { return ApplicationState::Exited }
+				unsafe { TranslateMessage(&mut msg); DispatchMessageW(&mut msg); }
+			}
+			ApplicationState::Continue
+		}
+		else if WAIT_OBJECT_0 <= res && res < WAIT_OBJECT_0 + events.len() as u32
+		{
+			ApplicationState::EventArrived(res - WAIT_OBJECT_0)
+		}
+		else { ApplicationState::Continue }
 	}
 	fn is_vk_presentation_support(&self, adapter: &vk::PhysicalDevice, qf_index: u32) -> bool
 	{
