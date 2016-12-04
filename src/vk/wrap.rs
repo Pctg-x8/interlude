@@ -187,7 +187,7 @@ impl PhysicalDevice
 	{
 		let mut mode_count = 0u32;
 		unsafe { vkGetPhysicalDeviceSurfacePresentModesKHR(self.obj, surface.obj, &mut mode_count, std::ptr::null_mut()) };
-		warn!(target: "vk::Wrap[NV/rustc1.12.0]", "あとで外す at interlude/src/vk/wrap.rs:181");
+		// warn!(target: "vk::Wrap[NV/rustc1.12.0]", "あとで外す at interlude/src/vk/wrap.rs:181");
 		let mut modes: Vec<VkPresentModeKHR> = unsafe { vec![std::mem::uninitialized(); mode_count as usize] };
 		unsafe { vkGetPhysicalDeviceSurfacePresentModesKHR(self.obj, surface.obj, &mut mode_count, modes.as_mut_ptr()) };
 		modes

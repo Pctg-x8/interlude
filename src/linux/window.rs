@@ -3,10 +3,12 @@
 use {std, vk};
 use xcb::ffi::*;
 use super::super::ffi::*;
-#[cfg(unix)] use std::os::raw::*;
+use std::os::raw::*;
 use super::super::internals::*;
 use std::sync::Arc;
 use std::rc::Rc;
+use epoll;
+use std::os::unix::io::*;
 
 // Global Shared atomic value
 pub enum XInternAtom<'a>
@@ -47,6 +49,7 @@ impl NativeWindow for xcb_window_t
 			sType: VkStructureType::XcbSurfaceCreateInfoKHR, pNext: std::ptr::null(), flags: 0, connection: server.internal, window: *self
 		}
 	}
+	fn destroy(&self) { /* nothing to do */ }
 }
 
 // XCB(X11) Server
@@ -175,6 +178,22 @@ impl WindowServer for XServer
 			}
 		}
 	}
+	fn process_events_and_messages(&self, events: &[&Event]) -> ApplicationState
+	{
+		let mut polling = epoll::EpollInstance::new().unwrap();
+		polling.add_interest(epoll::Interest::new(self.as_raw_fd(), epoll::EPOLLIN, std::u64::MAX)).unwrap();
+		for (n, &ev) in events.into_iter().enumerate() { polling.add_interest(epoll::Interest::new(ev.as_raw_fd(), epoll::EPOLLIN, n as u64)).unwrap(); }
+		if let Ok(events) = polling.wait(-1, 1)
+		{
+			if events[0].data() == std::u64::MAX
+			{
+				// xcb events
+				self.process_events()
+			}
+			else { ApplicationState::EventArrived(events[0].data() as u32) }
+		}
+		else { ApplicationState::Exited }
+	}
 	fn is_vk_presentation_support(&self, adapter: &vk::PhysicalDevice, qf_index: u32) -> bool
 	{
 		adapter.is_xcb_presentation_support(qf_index, self.internal, self.root_visual)
@@ -190,5 +209,9 @@ impl std::ops::Drop for XServer
 	{
 		unsafe { xcb_disconnect(self.internal) };
 	}
+}
+impl AsRawFd for XServer
+{
+	fn as_raw_fd(&self) -> RawFd { unsafe { base::xcb_get_file_descriptor(self.internal) } }
 }
 pub fn connect_xserver() -> Result<Arc<XServer>, EngineError> { XServer::connect() }

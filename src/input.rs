@@ -5,7 +5,7 @@ use std;
 use super::internals::*;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-#[cfg(unix)] use super::linux::evdev::*;
+#[cfg(unix)] use super::linux::evdev::{KeyEvents, AbsoluteAxisEvents, EventDevice, PressedState, DeviceEvent};
 #[cfg(unix)] use super::linux::udev::*;
 #[cfg(unix)] use std::os::unix::io::{RawFd, AsRawFd};
 use std::hash::Hash;

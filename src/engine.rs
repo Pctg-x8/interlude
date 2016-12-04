@@ -180,7 +180,8 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	fn is_optimized_debug_render_support(&self) -> bool { self.optimized_debug_render }
 }
 // For XServer
-#[cfg(unix)] impl<InputNames> Engine<super::linux::XServer, super::input::UnixInputSystem<InputNames>, InputNames>
+#[cfg(unix)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+	Engine<super::linux::XServer, super::input::UnixInputSystem<InputNames>, InputNames>
 {
 	pub fn new<StrT: AsRef<Path>>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures) -> Result<Self, EngineError>
 	{
