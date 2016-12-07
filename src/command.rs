@@ -165,7 +165,9 @@ impl <'a> std::convert::Into<VkImageMemoryBarrier> for &'a ImageMemoryBarrier<'a
 pub struct IndirectCallParameter(pub u32, pub u32, pub u32, pub u32);		// vertex_count, instance_count, first_vertex, first_instance
 
 pub type GraphicsCommandBuffer = VkCommandBuffer;
+pub type TransferCommandBuffer = VkCommandBuffer;
 pub type GraphicsCommandBuffersView = [GraphicsCommandBuffer];
+pub type TransferCommandBuffersView = [TransferCommandBuffer];
 pub type BundledCommandBuffersView = [VkCommandBuffer];
 
 pub struct GraphicsCommandBuffers { parent: Rc<vk::CommandPool>, internal: Vec<VkCommandBuffer> }
@@ -173,7 +175,7 @@ impl std::ops::Drop for GraphicsCommandBuffers
 {
 	fn drop(&mut self)
 	{
-		unsafe { vkFreeCommandBuffers(self.parent.parent().get(), self.parent.get(), self.internal.len() as u32, self.internal.as_ptr()) };
+		unsafe { vkFreeCommandBuffers(**self.parent.parent(), **self.parent, self.internal.len() as u32, self.internal.as_ptr()) };
 	}
 }
 impl std::ops::Deref for GraphicsCommandBuffers
@@ -197,7 +199,7 @@ impl std::ops::Drop for BundledCommandBuffers
 {
 	fn drop(&mut self)
 	{
-		unsafe { vkFreeCommandBuffers(self.parent.parent().get(), self.parent.get(), self.internal.len() as u32, self.internal.as_ptr()) };
+		unsafe { vkFreeCommandBuffers(**self.parent.parent(), **self.parent, self.internal.len() as u32, self.internal.as_ptr()) };
 	}
 }
 impl std::ops::Deref for BundledCommandBuffers
@@ -219,8 +221,13 @@ impl std::ops::Drop for TransferCommandBuffers
 {
 	fn drop(&mut self)
 	{
-		unsafe { vkFreeCommandBuffers(self.parent.parent().get(), self.parent.get(), self.internal.len() as u32, self.internal.as_ptr()) };
+		unsafe { vkFreeCommandBuffers(**self.parent.parent(), **self.parent, self.internal.len() as u32, self.internal.as_ptr()) };
 	}
+}
+impl std::ops::Deref for TransferCommandBuffers
+{
+	type Target = TransferCommandBuffersView;
+	fn deref(&self) -> &Self::Target { &self.internal }
 }
 unsafe impl Sync for TransferCommandBuffers {}
 unsafe impl Send for TransferCommandBuffers {}
@@ -238,8 +245,13 @@ impl <'a> std::ops::Drop for TransientTransferCommandBuffers<'a>
 {
 	fn drop(&mut self)
 	{
-		unsafe { vkFreeCommandBuffers(self.parent.parent().get(), self.parent.get(), self.internal.len() as u32, self.internal.as_ptr()) };
+		unsafe { vkFreeCommandBuffers(**self.parent.parent(), **self.parent, self.internal.len() as u32, self.internal.as_ptr()) };
 	}
+}
+impl<'a> std::ops::Deref for TransientTransferCommandBuffers<'a>
+{
+	type Target = TransferCommandBuffersView;
+	fn deref(&self) -> &Self::Target { &self.internal }
 }
 pub trait TransientTransferCommandBuffersInternals<'a> { fn new(parent: &'a vk::CommandPool, queue: &'a vk::Queue, cbs: Vec<VkCommandBuffer>) -> Self; }
 impl <'a> TransientTransferCommandBuffersInternals<'a> for TransientTransferCommandBuffers<'a>
@@ -254,8 +266,13 @@ impl <'a> std::ops::Drop for TransientGraphicsCommandBuffers<'a>
 {
 	fn drop(&mut self)
 	{
-		unsafe { vkFreeCommandBuffers(self.parent.parent().get(), self.parent.get(), self.internal.len() as u32, self.internal.as_ptr()) };
+		unsafe { vkFreeCommandBuffers(**self.parent.parent(), **self.parent, self.internal.len() as u32, self.internal.as_ptr()) };
 	}
+}
+impl<'a> std::ops::Deref for TransientGraphicsCommandBuffers<'a>
+{
+	type Target = GraphicsCommandBuffersView;
+	fn deref(&self) -> &Self::Target { &self.internal }
 }
 pub trait TransientGraphicsCommandBuffersInternals<'a> { fn new(parent: &'a vk::CommandPool, queue: &'a vk::Queue, cbs: Vec<VkCommandBuffer>) -> Self; }
 impl <'a> TransientGraphicsCommandBuffersInternals<'a> for TransientGraphicsCommandBuffers<'a>
@@ -315,7 +332,7 @@ impl <'a> SecondaryCommandBuffers<'a, BundleCommandRecorder<'a>> for BundledComm
 		let inheritance_info = VkCommandBufferInheritanceInfo
 		{
 			sType: VkStructureType::CommandBufferInheritanceInfo, pNext: std::ptr::null(),
-			renderPass: cont_rp.get_internal().get(), subpass: subindex, framebuffer: cont_fb.get_internal().get(),
+			renderPass: ***cont_rp.get_internal(), subpass: subindex, framebuffer: **cont_fb.get_internal(),
 			occlusionQueryEnable: false as VkBool32, queryFlags: 0, pipelineStatistics: 0
 		};
 		unsafe
@@ -407,7 +424,14 @@ impl <'a> TransientTransferCommandBuffers<'a>
 {
 	pub fn execute(self) -> Result<(), EngineError>
 	{
-		self.queue.submit_commands(&self.internal, &[], &[], &[], None).and_then(|()| self.queue.wait_for_idle()).map_err(EngineError::from)
+		let subcmd = VkSubmitInfo
+		{
+			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
+			waitSemaphoreCount: 0, pWaitSemaphores: std::ptr::null(), pWaitDstStageMask: std::ptr::null(),
+			commandBufferCount: self.internal.len() as u32, pCommandBuffers: self.internal.as_ptr(),
+			signalSemaphoreCount: 0, pSignalSemaphores: std::ptr::null()
+		};
+		self.queue.submit(&[subcmd], None).and_then(|()| self.queue.wait_for_idle()).map_err(EngineError::from)
 	}
 }
 pub struct GraphicsCommandRecorder<'a> { buffer_ref: &'a VkCommandBuffer }
@@ -445,7 +469,7 @@ impl <'a> DrawingCommandRecorder for GraphicsCommandRecorder<'a>
 {
 	fn bind_pipeline(self, pipeline: &GraphicsPipeline) -> Self
 	{
-		unsafe { vkCmdBindPipeline(*self.buffer_ref, VkPipelineBindPoint::Graphics, pipeline.get_internal().get()) };
+		unsafe { vkCmdBindPipeline(*self.buffer_ref, VkPipelineBindPoint::Graphics, **pipeline.get_internal()) };
 		self
 	}
 	fn bind_descriptor_sets(self, layout: &PipelineLayout, sets: &DescriptorSetArrayView) -> Self
@@ -454,14 +478,14 @@ impl <'a> DrawingCommandRecorder for GraphicsCommandRecorder<'a>
 	}
 	fn bind_descriptor_sets_partial(self, layout: &PipelineLayout, start_set: u32, sets: &DescriptorSetArrayView) -> Self
 	{
-		unsafe { vkCmdBindDescriptorSets(*self.buffer_ref, VkPipelineBindPoint::Graphics, layout.get_internal().get(),
+		unsafe { vkCmdBindDescriptorSets(*self.buffer_ref, VkPipelineBindPoint::Graphics, **layout.get_internal(),
 			start_set, sets.len() as u32, sets.as_ptr(), 0, std::ptr::null()) };
 		self
 	}
 	fn push_constants(self, layout: &PipelineLayout, shader_stage: &[ShaderStage], range: std::ops::Range<u32>, data: &[f32]) -> Self
 	{
 		let stages = shader_stage.into_iter().fold(0, |acc, x| acc | Into::<VkShaderStageFlags>::into(*x));
-		unsafe { vkCmdPushConstants(*self.buffer_ref, layout.get_internal().get(), stages,
+		unsafe { vkCmdPushConstants(*self.buffer_ref, **layout.get_internal(), stages,
 			range.start, range.len() as u32, data.as_ptr() as *const std::os::raw::c_void) };
 		self
 	}
@@ -513,7 +537,7 @@ impl <'a> DrawingCommandRecorder for BundleCommandRecorder<'a>
 {
 	fn bind_pipeline(self, pipeline: &GraphicsPipeline) -> Self
 	{
-		unsafe { vkCmdBindPipeline(*self.buffer_ref, VkPipelineBindPoint::Graphics, pipeline.get_internal().get()) };
+		unsafe { vkCmdBindPipeline(*self.buffer_ref, VkPipelineBindPoint::Graphics, **pipeline.get_internal()) };
 		self
 	}
 	fn bind_descriptor_sets(self, layout: &PipelineLayout, sets: &DescriptorSetArrayView) -> Self
@@ -522,14 +546,14 @@ impl <'a> DrawingCommandRecorder for BundleCommandRecorder<'a>
 	}
 	fn bind_descriptor_sets_partial(self, layout: &PipelineLayout, start_set: u32, sets: &DescriptorSetArrayView) -> Self
 	{
-		unsafe { vkCmdBindDescriptorSets(*self.buffer_ref, VkPipelineBindPoint::Graphics, layout.get_internal().get(),
+		unsafe { vkCmdBindDescriptorSets(*self.buffer_ref, VkPipelineBindPoint::Graphics, **layout.get_internal(),
 			start_set, sets.len() as u32, sets.as_ptr(), 0, std::ptr::null()) };
 		self
 	}
 	fn push_constants(self, layout: &PipelineLayout, shader_stage: &[ShaderStage], range: std::ops::Range<u32>, data: &[f32]) -> Self
 	{
 		let stages = shader_stage.into_iter().fold(0, |acc, x| acc | Into::<VkShaderStageFlags>::into(*x));
-		unsafe { vkCmdPushConstants(*self.buffer_ref, layout.get_internal().get(), stages,
+		unsafe { vkCmdPushConstants(*self.buffer_ref, **layout.get_internal(), stages,
 			range.start, range.len() as u32, data.as_ptr() as *const std::os::raw::c_void) };
 		self
 	}
@@ -605,7 +629,7 @@ impl<'a> GraphicsCommandRecorder<'a>
 		let begin_info = VkRenderPassBeginInfo
 		{
 			sType: VkStructureType::RenderPassBeginInfo, pNext: std::ptr::null(),
-			renderPass: framebuffer.get_mold().get(), framebuffer: framebuffer.get_internal().get(),
+			renderPass: ***framebuffer.get_mold(), framebuffer: **framebuffer.get_internal(),
 			renderArea: VkRect2D(VkOffset2D(0, 0), framebuffer.get_area()),
 			clearValueCount: clear_values_native.len() as u32, pClearValues: clear_values_native.as_ptr()
 		};

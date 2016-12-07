@@ -24,8 +24,7 @@ pub trait LinearImage2DInternals : std::marker::Sized
 }
 pub struct Buffer { internal: vk::Buffer, size: VkDeviceSize }
 impl Resource for Buffer { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
-impl BufferResource for Buffer { fn get_resource(&self) -> VkBuffer { self.internal.get() } }
-#[derive(Debug)]
+impl BufferResource for Buffer { fn get_resource(&self) -> VkBuffer { *self.internal } }
 pub struct Image1D { internal: vk::Image, size: u32 }
 pub struct Image2D { internal: vk::Image, size: VkExtent2D }
 pub struct LinearImage2D { internal: vk::Image, size: VkExtent2D }
@@ -34,10 +33,10 @@ impl Resource for Image1D { fn get_memory_requirements(&self) -> VkMemoryRequire
 impl Resource for Image2D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
 impl Resource for LinearImage2D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
 impl Resource for Image3D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
-impl ImageResource for Image1D { fn get_resource(&self) -> VkImage { self.internal.get() } }
-impl ImageResource for Image2D { fn get_resource(&self) -> VkImage { self.internal.get() } }
-impl ImageResource for LinearImage2D { fn get_resource(&self) -> VkImage { self.internal.get() } }
-impl ImageResource for Image3D { fn get_resource(&self) -> VkImage { self.internal.get() } }
+impl ImageResource for Image1D { fn get_resource(&self) -> VkImage { *self.internal } }
+impl ImageResource for Image2D { fn get_resource(&self) -> VkImage { *self.internal } }
+impl ImageResource for LinearImage2D { fn get_resource(&self) -> VkImage { *self.internal } }
+impl ImageResource for Image3D { fn get_resource(&self) -> VkImage { *self.internal } }
 impl InternalExports<vk::Image> for Image1D { fn get_internal(&self) -> &vk::Image { &self.internal } }
 impl InternalExports<vk::Image> for Image2D { fn get_internal(&self) -> &vk::Image { &self.internal } }
 impl InternalExports<vk::Image> for LinearImage2D { fn get_internal(&self) -> &vk::Image { &self.internal } }
@@ -360,10 +359,7 @@ impl DeviceBufferInternals for DeviceBuffer
 		.map_err(EngineError::from)
 	}
 }
-impl BufferResource for DeviceBuffer
-{
-	fn get_resource(&self) -> VkBuffer { self.buffer.get() }
-}
+impl BufferResource for DeviceBuffer { fn get_resource(&self) -> VkBuffer { *self.buffer } }
 pub struct StagingBuffer
 {
 	buffer: vk::Buffer, memory: vk::DeviceMemory, size: VkDeviceSize
@@ -390,10 +386,7 @@ impl StagingBufferInternals for StagingBuffer
 		.map_err(EngineError::from)
 	}
 }
-impl BufferResource for StagingBuffer
-{
-	fn get_resource(&self) -> VkBuffer { self.buffer.get() }
-}
+impl BufferResource for StagingBuffer { fn get_resource(&self) -> VkBuffer { *self.buffer } }
 impl StagingBuffer
 {
 	pub fn map(&self) -> Result<MemoryMappedRange, EngineError>
@@ -678,7 +671,7 @@ impl SamplerInternals for Sampler
 		vk::Sampler::new(engine.get_device().get_internal(), info).map(|s| Sampler { internal: s })
 			.map_err(EngineError::from)
 	}
-	fn get_native(&self) -> VkSampler { self.internal.get() }
+	fn get_native(&self) -> VkSampler { *self.internal }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -728,7 +721,6 @@ impl std::convert::Into<VkComponentMapping> for ComponentMapping
 		}
 	}
 }
-#[derive(Debug)]
 pub struct ImageView1D { parent: Rc<Image1D>, internal: vk::ImageView }
 pub struct ImageView2D { parent: Rc<Image2D>, internal: vk::ImageView }
 pub struct ImageView3D { parent: Rc<Image3D>, internal: vk::ImageView }
@@ -788,15 +780,15 @@ pub trait UserImageView<ResourceT: ImageResource>: ImageView
 }
 impl ImageView for ImageView1D
 {
-	fn get_native(&self) -> VkImageView { self.internal.get() }
+	fn get_native(&self) -> VkImageView { *self.internal }
 }
 impl ImageView for ImageView2D
 {
-	fn get_native(&self) -> VkImageView { self.internal.get() }
+	fn get_native(&self) -> VkImageView { *self.internal }
 }
 impl ImageView for ImageView3D
 {
-	fn get_native(&self) -> VkImageView { self.internal.get() }
+	fn get_native(&self) -> VkImageView { *self.internal }
 }
 impl UserImageView<Image1D> for ImageView1D
 {

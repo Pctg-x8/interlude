@@ -24,6 +24,6 @@ pub trait NativeOwner<NativeObjectT: Copy>
 }
 pub trait HasParent
 {
-	type ParentRefType: ?Sized;
-	fn parent(&self) -> &Self::ParentRefType;
+	type Parent: ?Sized;
+	fn parent(&self) -> &Self::Parent;
 }

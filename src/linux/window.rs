@@ -196,11 +196,11 @@ impl WindowServer for XServer
 	}
 	fn is_vk_presentation_support(&self, adapter: &vk::PhysicalDevice, qf_index: u32) -> bool
 	{
-		adapter.is_xcb_presentation_support(qf_index, self.internal, self.root_visual)
+		adapter.is_platform_presentation_support(qf_index, self.internal, self.root_visual)
 	}
 	fn make_vk_surface(&self, target: &Self::NativeWindowT, instance: &Rc<vk::Instance>) -> Result<vk::Surface, EngineError>
 	{
-		vk::Surface::new_xcb(instance, &target.native_surface_create_info(self)).map_err(EngineError::from)
+		vk::Surface::new(instance, &target.native_surface_create_info(self)).map_err(EngineError::from)
 	}
 }
 impl std::ops::Drop for XServer

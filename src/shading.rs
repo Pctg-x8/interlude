@@ -2,7 +2,6 @@
 
 use {std, vk};
 use vk::ffi::*;
-use vk::traits::*;
 use std::ffi::CString;
 use super::internals::*;
 
@@ -281,7 +280,7 @@ impl<'a> std::convert::Into<IntoNativeShaderStageCreateInfoStruct> for &'a Pipel
 				&ShaderProgram::TessControl { .. } => VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
 				&ShaderProgram::TessEvaluate { .. } => VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
 			},
-			module: self.0.get_internal().get(), entry_point: self.0.get_entry_point().as_ptr(),
+			module: **self.0.get_internal(), entry_point: self.0.get_entry_point().as_ptr(),
 			specialization_structure: if map_entries.is_empty() { None } else { Some(VkSpecializationInfo
 			{
 				mapEntryCount: map_entries.len() as u32, pMapEntries: map_entries.as_ptr(),
@@ -487,7 +486,7 @@ impl <'a> std::convert::Into<VkGraphicsPipelineCreateInfo> for &'a IntoNativeGra
 			pRasterizationState: &self.rasterization_state, pMultisampleState: &self.multisample_state,
 			pDepthStencilState: std::ptr::null(), pColorBlendState: &self.color_blend_state,
 			pDynamicState: std::ptr::null(),
-			layout: self.base.layout.internal.get(), renderPass: self.base.render_pass.get_internal().get(), subpass: self.base.subpass_index,
+			layout: *self.base.layout.internal, renderPass: ***self.base.render_pass.get_internal(), subpass: self.base.subpass_index,
 			basePipelineHandle: std::ptr::null_mut(), basePipelineIndex: 0
 		}
 	}

@@ -24,7 +24,7 @@ impl DeviceExports for Device
 {
 	fn is_surface_support(&self, surface: &vk::Surface) -> bool
 	{
-		self.adapter.is_surface_support(self.graphics_queue.family_index, surface)
+		self.adapter.is_surface_support(self.graphics_queue.family_index(), surface)
 	}
 	fn get_internal(&self) -> &Rc<vk::Device> { &self.internal }
 	fn get_adapter(&self) -> &Rc<vk::PhysicalDevice> { &self.adapter }
@@ -33,7 +33,7 @@ impl DeviceExports for Device
 }
 impl Device
 {
-	pub fn new(adapter: &Rc<vk::PhysicalDevice>, features: &VkPhysicalDeviceFeatures,
+	pub fn new(adapter: &Rc<vk::PhysicalDevice>, features: VkPhysicalDeviceFeatures,
 		graphics_qf: u32, transfer_qf: Option<u32>, qf_props: &VkQueueFamilyProperties) -> Result<Self, EngineError>
 	{
 		fn device_queue_create_info(family_index: u32, count: u32, priorities: &[f32]) -> VkDeviceQueueCreateInfo
@@ -61,8 +61,8 @@ impl Device
 		};
 		vk::Device::new(adapter, &queue_info, &["VK_LAYER_LUNARG_standard_validation"], &["VK_KHR_swapchain"], features).map(|device| Device
 		{
-			graphics_queue: device.get_queue(graphics_qf, 0),
-			transfer_queue: device.get_queue(transfer_qf.unwrap_or(graphics_qf), queue_info[0].queueCount - 1),
+			graphics_queue: device.queue_at(graphics_qf, 0),
+			transfer_queue: device.queue_at(transfer_qf.unwrap_or(graphics_qf), queue_info[0].queueCount - 1),
 			internal: Rc::new(device), adapter: adapter.clone()
 		}).map_err(|e| EngineError::from(e))
 	}

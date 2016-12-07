@@ -160,7 +160,7 @@ type CMatrix4 = [[f32; 4]; 4];
 pub struct DebugInfo<'a>
 {
 	dres_buf: DeviceBuffer, sres_buf: StagingBuffer,
-	dres_image: DeviceImage, sres_image: StagingImage,
+	dres_image: DeviceImage, sres_image: StagingImage, imgview: ImageView2D,
 	optimized_lines: Vec<OptimizedDebugLine<'a>>,
 	update_commands: TransferCommandBuffers,
 	ds_layout: DescriptorSetLayout, playout: PipelineLayout,
@@ -441,7 +441,7 @@ impl <'a> DebugInfo<'a>
 		Ok(Box::new(DebugInfo
 		{
 			dres_buf: bdev, sres_buf: bstage,
-			dres_image: idev, sres_image: istage,
+			dres_image: idev, sres_image: istage, imgview: image_view,
 			optimized_lines: optimized_lines,
 			update_commands: update_commands,
 			ds_layout: ds_layout, playout: playout,

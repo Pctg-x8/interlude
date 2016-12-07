@@ -7,7 +7,6 @@ use {std, vk};
 use std::rc::Rc;
 use std::sync::Arc;
 use vk::ffi::*;
-use vk::traits::*;
 
 /// Application State(has exited?)
 #[derive(PartialEq)]
@@ -61,7 +60,7 @@ pub trait RenderWindow: std::marker::Send
 }
 pub struct WindowRenderTarget { pub resource: VkImage, pub view: vk::ImageView }
 impl ImageResource for WindowRenderTarget { fn get_resource(&self) -> VkImage { self.resource } }
-impl ImageView for WindowRenderTarget { fn get_native(&self) -> VkImageView { self.view.get() } }
+impl ImageView for WindowRenderTarget { fn get_native(&self) -> VkImageView { *self.view } }
 pub struct Window<N: NativeWindow>
 {
 	#[allow(dead_code)] server: Arc<N::NativeWindowServerT>, #[allow(dead_code)] native: N,
@@ -84,22 +83,19 @@ impl<N: NativeWindow> Window<N>
 
 		// caps check //
 		if !engine.get_device().is_surface_support(&surface) { return Err(EngineError::GenericError("Unsupported Surface")); }
-		let surface_caps = adapter.get_surface_caps(&surface);
+		let surface_caps = adapter.surface_caps(&surface);
 
 		// making desired parameters //
 		let format = try!
 		{
-			adapter.enumerate_surface_formats(&surface).into_iter()
+			adapter.surface_formats(&surface).map_err(EngineError::from).and_then(|formats| formats.into_iter()
 				.find(|x| x.format == VkFormat::R8G8B8A8_SRGB || x.format == VkFormat::B8G8R8A8_SRGB)
-				.ok_or(EngineError::GenericError("Desired Format(32bpp SRGB) is not supported"))
+				.ok_or(EngineError::GenericError("Desired Format(32bpp SRGB) is not supported")))
 		};
-		let present_modes = adapter.enumerate_present_modes(&surface);
-		let present_mode = try!
-		{
-			present_modes.iter().find(|&&x| x == VkPresentModeKHR::FIFO)
-				.or_else(|| present_modes.iter().find(|&&x| x == VkPresentModeKHR::Mailbox))
-				.ok_or(EngineError::GenericError("Desired Present Mode is not found"))
-		};
+		let present_mode = try!(adapter.present_modes(&surface).map_err(EngineError::from)
+			.and_then(|present_modes| present_modes.iter().find(|&&x| x == VkPresentModeKHR::FIFO)
+				.or_else(|| present_modes.iter().find(|&&x| x == VkPresentModeKHR::Mailbox)).cloned()
+				.ok_or(EngineError::GenericError("Desired Present Mode is not found"))));
 		let extent = match surface_caps.currentExtent
 		{
 			VkExtent2D(std::u32::MAX, _) | VkExtent2D(_, std::u32::MAX) => size,
@@ -107,19 +103,19 @@ impl<N: NativeWindow> Window<N>
 		};
 
 		// set information and create //
-		let queue_family_indices = [engine.get_device().get_graphics_queue().family_index];
+		let queue_family_indices = [engine.get_device().get_graphics_queue().family_index()];
 		let scinfo = VkSwapchainCreateInfoKHR
 		{
 			sType: VkStructureType::SwapchainCreateInfoKHR, pNext: std::ptr::null(),
 			minImageCount: std::cmp::max(surface_caps.minImageCount, 2), imageFormat: format.format, imageColorSpace: format.colorSpace,
 			imageExtent: extent, imageArrayLayers: 1, imageUsage: VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 			imageSharingMode: VkSharingMode::Exclusive, compositeAlpha: VK_COMPOSITE_ALPHA_OPAQUE_BIT,
-			preTransform: VK_SURFACE_TRANSFORM_IDENTITY_BIT, presentMode: *present_mode, clipped: true as VkBool32,
+			preTransform: VK_SURFACE_TRANSFORM_IDENTITY_BIT, presentMode: present_mode, clipped: true as VkBool32,
 			pQueueFamilyIndices: queue_family_indices.as_ptr(), queueFamilyIndexCount: queue_family_indices.len() as u32,
-			oldSwapchain: std::ptr::null_mut(), flags: 0, surface: surface.get()
+			oldSwapchain: std::ptr::null_mut(), flags: 0, surface: **surface
 		};
 		let sc = try!(vk::Swapchain::new(engine.get_device().get_internal(), &surface, &scinfo).map(|x| Rc::new(x)));
-		let rt_images = try!(sc.get_images());
+		let rt_images = try!(sc.images());
 		let rt = try!(rt_images.iter().map(|&res|
 		{
 			vk::ImageView::new(engine.get_device().get_internal(), &VkImageViewCreateInfo
@@ -135,7 +131,7 @@ impl<N: NativeWindow> Window<N>
 		engine.create_queue_fence().map(|transfer_complete_signal| Box::new(Window
 		{
 			server: server.clone(), native: native_w, device_obj: surface, swapchain: sc, render_targets: rt,
-			format: format.format, extent: extent, has_vsync: *present_mode == VkPresentModeKHR::FIFO,
+			format: format.format, extent: extent, has_vsync: present_mode == VkPresentModeKHR::FIFO,
 			backbuffer_available_signal: backbuffer_available_signal,
 			transfer_complete_signal: transfer_complete_signal
 		})))
@@ -152,6 +148,6 @@ impl<N: NativeWindow> RenderWindow for Window<N>
 	}
 	fn acquire_next_backbuffer_index(&self, wait_semaphore: &QueueFence) -> Result<u32, EngineError>
 	{
-		self.swapchain.acquire_next_image(wait_semaphore.get_internal()).map_err(EngineError::from)
+		self.swapchain.acquire_next(wait_semaphore.get_internal()).map_err(EngineError::from)
 	}
 }

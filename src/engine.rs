@@ -5,7 +5,6 @@
 use super::internals::*;
 use {std, log, vk};
 use vk::ffi::*;
-use vk::traits::*;
 use ansi_term::*;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
@@ -115,11 +114,11 @@ pub trait EngineCore : EngineCoreExports + CommandSubmitter
 	fn create_postprocess_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>;
 
 	// Allocation Methods //
-	fn allocate_graphics_command_buffers(&self, count: u32) -> Result<GraphicsCommandBuffers, EngineError>;
-	fn allocate_bundled_command_buffers(&self, count: u32) -> Result<BundledCommandBuffers, EngineError>;
-	fn allocate_transfer_command_buffers(&self, count: u32) -> Result<TransferCommandBuffers, EngineError>;
-	fn allocate_transient_transfer_command_buffers(&self, count: u32) -> Result<TransientTransferCommandBuffers, EngineError>;
-	fn allocate_transient_graphics_command_buffers(&self, count: u32) -> Result<TransientGraphicsCommandBuffers, EngineError>;
+	fn allocate_graphics_command_buffers(&self, count: usize) -> Result<GraphicsCommandBuffers, EngineError>;
+	fn allocate_bundled_command_buffers(&self, count: usize) -> Result<BundledCommandBuffers, EngineError>;
+	fn allocate_transfer_command_buffers(&self, count: usize) -> Result<TransferCommandBuffers, EngineError>;
+	fn allocate_transient_transfer_command_buffers(&self, count: usize) -> Result<TransientTransferCommandBuffers, EngineError>;
+	fn allocate_transient_graphics_command_buffers(&self, count: usize) -> Result<TransientGraphicsCommandBuffers, EngineError>;
 	fn preallocate_all_descriptor_sets(&self, layouts: &[&DescriptorSetLayout]) -> Result<DescriptorSets, EngineError>;
 	fn buffer_preallocate(&self, structure_sizes: &[(usize, BufferDataType)]) -> BufferPreallocator;
 
@@ -216,7 +215,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	fn diagnose_adapter(server_con: &WS, adapter: &vk::PhysicalDevice, queue_index: u32)
 	{
 		// Feature Check //
-		let features = adapter.get_features();
+		let features = adapter.features();
 		info!(target: "Prelude::DiagAdapter", "adapter features");
 		info!(target: "Prelude::DiagAdapter", "-- independentBlend: {}", bool_to_str(features.independentBlend));
 		info!(target: "Prelude::DiagAdapter", "-- geometryShader: {}", bool_to_str(features.geometryShader));
@@ -248,10 +247,10 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 		let instance = try!(vk::Instance::new(app_name, app_version, "Prelude Computer-Graphics Engine", VK_MAKE_VERSION!(0, 0, 1),
 			&["VK_LAYER_LUNARG_standard_validation"], &["VK_KHR_surface", surface_ex_name, "VK_EXT_debug_report"]).map(|x| Rc::new(x)));
 		let dbg_callback = try!(vk::DebugReportCallback::new(&instance, device_report_callback));
-		let adapter = try!(instance.enumerate_adapters().map_err(|e| EngineError::from(e))
+		let adapter = try!(instance.adapters().map_err(|e| EngineError::from(e))
 			.and_then(|aa| aa.into_iter().next().ok_or(EngineError::GenericError("PhysicalDevices are not found")))
 			.map(|a| Rc::new(vk::PhysicalDevice::from(a, &instance))));
-		let features = adapter.get_features();
+		let features = adapter.features();
 		let (odr, extra_features) = if features.multiDrawIndirect != 0 && features.drawIndirectFirstInstance != 0
 		{
 			// Required for optimized debug rendering
@@ -264,19 +263,19 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 		};
 		let device =
 		{
-			let queue_family_properties = adapter.enumerate_queue_family_properties();
+			let queue_family_properties = adapter.queue_family_properties();
 			let graphics_qf = try!(queue_family_properties.iter().enumerate().find(|&(_, fp)| (fp.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
 				.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Unable to find Graphics Queue")));
 			let transfer_qf = queue_family_properties.iter().enumerate().filter(|&(i, _)| i as u32 != graphics_qf)
 				.find(|&(_, fp)| (fp.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0).map(|(i, _)| i as u32);
 			Self::diagnose_adapter(&*window_server, &adapter, graphics_qf);
 			let device_features = extra_features.0;
-			try!(Device::new(&adapter, &device_features, graphics_qf, transfer_qf, &queue_family_properties[graphics_qf as usize]))
+			try!(Device::new(&adapter, device_features, graphics_qf, transfer_qf, &queue_family_properties[graphics_qf as usize]))
 		};
 		let pools = try!(CommandPool::new(&device));
-		let pipeline_cache = Rc::new(try!(vk::PipelineCache::new_empty(&device)));
+		let pipeline_cache = Rc::new(try!(vk::PipelineCache::new_empty(&device, &[])));
 
-		let memory_types = adapter.get_memory_properties();
+		let memory_types = adapter.memory_properties();
 		let mt_index_for_device_local = try!(memory_types.memoryTypes[..memory_types.memoryTypeCount as usize].iter()
 			.enumerate().find(|&(_, &VkMemoryType(flags, _))| (flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0)
 			.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Device Local Memory is not found")));
@@ -296,7 +295,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 			instance: instance, debug_callback: dbg_callback, device: device, pools: pools,
 			memory_types: memory_types,
 			pipeline_cache: pipeline_cache, asset_dir: asset_base,
-			physical_device_limits: adapter.get_properties().limits,
+			physical_device_limits: adapter.properties().limits,
 			memory_type_index_for_device_local: mt_index_for_device_local,
 			memory_type_index_for_host_visible: mt_index_for_host_visible,
 			optimized_debug_render: odr,
@@ -356,35 +355,35 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 		let info = VkFramebufferCreateInfo
 		{
 			sType: VkStructureType::FramebufferCreateInfo, pNext: std::ptr::null(), flags: 0,
-			renderPass: mold.get_internal().get(),
+			renderPass: ***mold.get_internal(),
 			attachmentCount: attachments_native.len() as u32, pAttachments: attachments_native.as_ptr(),
 			width: width, height: height, layers: layers
 		};
 		vk::Framebuffer::new(&self.device, &info).map(|f| Framebuffer::new(f, mold.get_internal(), VkExtent2D(width, height))).map_err(EngineError::from)
 	}
-	fn allocate_graphics_command_buffers(&self, count: u32) -> Result<GraphicsCommandBuffers, EngineError>
+	fn allocate_graphics_command_buffers(&self, count: usize) -> Result<GraphicsCommandBuffers, EngineError>
 	{
-		self.pools.for_graphics().allocate_buffers(&self.device, VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
+		self.pools.for_graphics().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
 			.map(|v| GraphicsCommandBuffers::new(self.pools.for_graphics(), v))
 	}
-	fn allocate_bundled_command_buffers(&self, count: u32) -> Result<BundledCommandBuffers, EngineError>
+	fn allocate_bundled_command_buffers(&self, count: usize) -> Result<BundledCommandBuffers, EngineError>
 	{
-		self.pools.for_graphics().allocate_buffers(&self.device, VkCommandBufferLevel::Secondary, count).map_err(EngineError::from)
+		self.pools.for_graphics().allocate(VkCommandBufferLevel::Secondary, count).map_err(EngineError::from)
 			.map(|v| BundledCommandBuffers::new(self.pools.for_graphics(), v))
 	}
-	fn allocate_transfer_command_buffers(&self, count: u32) -> Result<TransferCommandBuffers, EngineError>
+	fn allocate_transfer_command_buffers(&self, count: usize) -> Result<TransferCommandBuffers, EngineError>
 	{
-		self.pools.for_transfer().allocate_buffers(&self.device, VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
+		self.pools.for_transfer().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
 			.map(|v| TransferCommandBuffers::new(self.pools.for_transfer(), v))
 	}
-	fn allocate_transient_transfer_command_buffers(&self, count: u32) -> Result<TransientTransferCommandBuffers, EngineError>
+	fn allocate_transient_transfer_command_buffers(&self, count: usize) -> Result<TransientTransferCommandBuffers, EngineError>
 	{
-		self.pools.for_transient().allocate_buffers(&self.device, VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
+		self.pools.for_transient().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
 			.map(|v| TransientTransferCommandBuffers::new(self.pools.for_transient(), self.device.get_transfer_queue(), v))
 	}
-	fn allocate_transient_graphics_command_buffers(&self, count: u32) -> Result<TransientGraphicsCommandBuffers, EngineError>
+	fn allocate_transient_graphics_command_buffers(&self, count: usize) -> Result<TransientGraphicsCommandBuffers, EngineError>
 	{
-		self.pools.for_transient_graphics().allocate_buffers(&self.device, VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
+		self.pools.for_transient_graphics().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
 			.map(|v| TransientGraphicsCommandBuffers::new(self.pools.for_transient_graphics(), self.device.get_graphics_queue(), v))
 	}
 	fn create_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str, vertex_bindings: &[VertexBinding], vertex_attributes: &[VertexAttribute])
@@ -424,13 +423,13 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	fn create_pipeline_layout(&self, descriptor_sets: &[&DescriptorSetLayout], push_constants: &[PushConstantDesc]) -> Result<PipelineLayout, EngineError>
 	{
 		vk::PipelineLayout::new(self.device.get_internal(),
-			&descriptor_sets.into_iter().map(|x| x.get_internal().get()).collect::<Vec<_>>(),
+			&descriptor_sets.into_iter().map(|x| **x.get_internal()).collect::<Vec<_>>(),
 			&push_constants.into_iter().map(|x| x.into()).collect::<Vec<_>>()).map(PipelineLayout::new).map_err(EngineError::from)
 	}
 	fn create_graphics_pipelines(&self, builders: &[&GraphicsPipelineBuilder]) -> Result<Vec<GraphicsPipeline>, EngineError>
 	{
 		let builder_into_natives = builders.into_iter().map(|&x| x.into()).collect::<Vec<IntoNativeGraphicsPipelineCreateInfoStruct>>();
-		vk::Pipeline::new(self.device.get_internal(), &self.pipeline_cache,
+		vk::Pipeline::new_graphics(self.device.get_internal(), Some(&self.pipeline_cache),
 			&builder_into_natives.iter().map(|x| x.into()).collect::<Vec<_>>())
 			.map(|v| v.into_iter().map(GraphicsPipeline::new).collect::<Vec<_>>()).map_err(EngineError::from)
 	}
@@ -475,11 +474,12 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 			&Descriptor::CombinedSampler(n, _) => (u, cs + n, ia),
 			&Descriptor::InputAttachment(n, _) => (u, cs, ia + n)
 		})).fold((0, 0, 0), |(u, cs, ia), (u2, cs2, ia2)| (u + u2, cs + cs2, ia + ia2));
-		let pool_sizes = [Descriptor::Uniform(uniform_total, vec![]), Descriptor::CombinedSampler(combined_sampler_total, vec![]), Descriptor::InputAttachment(ia_total, vec![])]
+		let pool_sizes =
+			[Descriptor::Uniform(uniform_total, vec![]), Descriptor::CombinedSampler(combined_sampler_total, vec![]), Descriptor::InputAttachment(ia_total, vec![])]
 			.into_iter().filter(|&desc| desc.count() != 0).map(|desc| desc.into_pool_size()).collect::<Vec<_>>();
 
-		vk::DescriptorPool::new(self.device.get_internal(), set_count as u32, &pool_sizes).and_then(|pool|
-		pool.allocate_sets(self.device.get_internal(), &layouts.into_iter().map(|x| x.get_internal().get()).collect::<Vec<_>>())
+		vk::DescriptorPool::new(self.device.get_internal(), set_count, &pool_sizes).and_then(|pool|
+		pool.allocate(&layouts.into_iter().map(|x| **x.get_internal()).collect::<Vec<_>>())
 			.map(|sets| DescriptorSets::new(pool, sets))).map_err(EngineError::from)
 	}
 	fn create_sampler(&self, state: &SamplerState) -> Result<Sampler, EngineError>
@@ -546,51 +546,43 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	{
 		let write_infos_native_interp = write_infos.into_iter().map(|x| Into::<IntoWriteDescriptorSetNativeStruct>::into(x)).collect::<Vec<_>>();
 		let write_infos_native = write_infos_native_interp.iter().map(|x| Into::<VkWriteDescriptorSet>::into(x)).collect::<Vec<_>>();
-		unsafe { vkUpdateDescriptorSets(self.device.get_internal().get(), write_infos_native.len() as u32, write_infos_native.as_ptr(),
+		unsafe { vkUpdateDescriptorSets(***self.device.get_internal(), write_infos_native.len() as u32, write_infos_native.as_ptr(),
 			0, std::ptr::null()) };
 	}
 
 	fn submit_transient_commands(&self, tt: Option<TransientTransferCommandBuffers>, gt: Option<TransientGraphicsCommandBuffers>) -> Result<(), EngineError>
 	{
-		if let &Some(ref t) = &tt { try!(self.device.get_transfer_queue().submit_commands(t.get_internal(), &[], &[], &[], None)); }
-		if let &Some(ref g) = &gt { try!(self.device.get_graphics_queue().submit_commands(g.get_internal(), &[], &[], &[], None)); }
+		if let &Some(ref t) = &tt
+		{
+			let sub = VkSubmitInfo
+			{
+				sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
+				commandBufferCount: t.len() as u32, pCommandBuffers: t.as_ptr(),
+				waitSemaphoreCount: 0, pWaitSemaphores: std::ptr::null(), pWaitDstStageMask: std::ptr::null(),
+				signalSemaphoreCount: 0, pSignalSemaphores: std::ptr::null()
+			};
+			try!(self.device.get_transfer_queue().submit(&[sub], None));
+		}
+		if let &Some(ref g) = &gt
+		{
+			let sub = VkSubmitInfo
+			{
+				sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
+				commandBufferCount: g.len() as u32, pCommandBuffers: g.as_ptr(),
+				waitSemaphoreCount: 0, pWaitSemaphores: std::ptr::null(), pWaitDstStageMask: std::ptr::null(),
+				signalSemaphoreCount: 0, pSignalSemaphores: std::ptr::null()
+			};
+			try!(self.device.get_graphics_queue().submit(&[sub], None));
+		}
 		if tt.is_some() { try!(self.device.get_transfer_queue().wait_for_idle()); }
 		if gt.is_some() { try!(self.device.get_graphics_queue().wait_for_idle()); }
 		Ok(())
 	}
 
-	fn new_command_sender(&self) -> CommandSender { CommandSender { device: &self.device } }
+	fn new_command_sender(&self) -> CommandSender { CommandSender(&self.device) }
 	fn graphics_queue_ref(&self) -> &vk::Queue { self.device.get_graphics_queue() }
 
 	fn get_postprocess_vsh(&self, require_uv: bool) -> &ShaderProgram { if require_uv { &self.postprocess_vsh } else { &self.postprocess_vsh_nouv } }
-}
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
-	CommandSubmitter for Engine<WS, IS, InputNames>
-{
-	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
-		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
-	{
-		let signals_on_complete = signal_on_complete.map(|q| vec![q.get_internal().get()]).unwrap_or(vec![]);
-		let wait_stages = if wait_for_execute.is_empty() { vec![VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT] }
-		else { wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>() };
-
-		self.device.get_graphics_queue().submit_commands(commands,
-			&wait_for_execute.into_iter().map(|&(q, _)| q.get_internal().get()).collect::<Vec<_>>(), &wait_stages,
-			&signals_on_complete, signal_on_complete_host.map(|f| f.get_internal()))
-			.map_err(EngineError::from)
-	}
-	fn submit_transfer_commands(&self, commands: &TransferCommandBuffers, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
-		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
-	{
-		let signals_on_complete = signal_on_complete.map(|q| vec![q.get_internal().get()]).unwrap_or(vec![]);
-		let wait_stages = if wait_for_execute.is_empty() { vec![VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT] }
-		else { wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>() };
-
-		self.device.get_transfer_queue().submit_commands(commands.get_internal(),
-			&wait_for_execute.into_iter().map(|&(q, _)| q.get_internal().get()).collect::<Vec<_>>(), &wait_stages,
-			&signals_on_complete, signal_on_complete_host.map(|f| f.get_internal()))
-			.map_err(EngineError::from)
-	}
 }
 
 unsafe extern "system" fn device_report_callback(flags: VkDebugReportFlagsEXT, object_type: VkDebugReportObjectTypeEXT, _: u64,
@@ -619,38 +611,83 @@ pub trait CommandSubmitter
 {
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>;
-	fn submit_transfer_commands(&self, commands: &TransferCommandBuffers, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
+	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>;
 }
-pub struct CommandSender<'a>
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+	CommandSubmitter for Engine<WS, IS, InputNames>
 {
-	device: &'a Device
+	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
+		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
+	{
+		let signals_on_complete = signal_on_complete.map(|q| vec![**q.get_internal()]).unwrap_or(vec![]);
+		let wait_stages = if wait_for_execute.is_empty() { vec![VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT] }
+		else { wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>() };
+		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| **q.get_internal()).collect::<Vec<_>>();
+
+		let subinfo = VkSubmitInfo
+		{
+			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
+			commandBufferCount: commands.len() as u32, pCommandBuffers: commands.as_ptr(),
+			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: wait_stages.as_ptr(),
+			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
+		};
+		self.device.get_graphics_queue().submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
+	}
+	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
+		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
+	{
+		let signals_on_complete = signal_on_complete.map(|q| vec![**q.get_internal()]).unwrap_or(vec![]);
+		let wait_stages = if wait_for_execute.is_empty() { vec![VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT] }
+		else { wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>() };
+		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| **q.get_internal()).collect::<Vec<_>>();
+
+		let subinfo = VkSubmitInfo
+		{
+			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
+			commandBufferCount: commands.len() as u32, pCommandBuffers: commands.as_ptr(),
+			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: wait_stages.as_ptr(),
+			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
+		};
+		self.device.get_transfer_queue().submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
+	}
 }
+pub struct CommandSender<'a>(&'a Device);
 unsafe impl<'a> Send for CommandSender<'a> {}
 impl<'a> CommandSubmitter for CommandSender<'a>
 {
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
 	{
-		let signals_on_complete = signal_on_complete.map(|q| vec![q.get_internal().get()]).unwrap_or(vec![]);
+		let signals_on_complete = signal_on_complete.map(|q| vec![**q.get_internal()]).unwrap_or(vec![]);
 		let wait_stages = if wait_for_execute.is_empty() { vec![VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT] }
 		else { wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>() };
+		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| **q.get_internal()).collect::<Vec<_>>();
 
-		self.device.get_graphics_queue().submit_commands(commands,
-			&wait_for_execute.into_iter().map(|&(q, _)| q.get_internal().get()).collect::<Vec<_>>(), &wait_stages,
-			&signals_on_complete, signal_on_complete_host.map(|f| f.get_internal()))
-			.map_err(EngineError::from)
+		let subinfo = VkSubmitInfo
+		{
+			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
+			commandBufferCount: commands.len() as u32, pCommandBuffers: commands.as_ptr(),
+			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: wait_stages.as_ptr(),
+			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
+		};
+		self.0.get_graphics_queue().submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
 	}
-	fn submit_transfer_commands(&self, commands: &TransferCommandBuffers, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
+	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
 	{
-		let signals_on_complete = signal_on_complete.map(|q| vec![q.get_internal().get()]).unwrap_or(vec![]);
+		let signals_on_complete = signal_on_complete.map(|q| vec![**q.get_internal()]).unwrap_or(vec![]);
 		let wait_stages = if wait_for_execute.is_empty() { vec![VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT] }
 		else { wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>() };
+		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| **q.get_internal()).collect::<Vec<_>>();
 
-		self.device.get_transfer_queue().submit_commands(commands.get_internal(),
-			&wait_for_execute.into_iter().map(|&(q, _)| q.get_internal().get()).collect::<Vec<_>>(), &wait_stages,
-			&signals_on_complete, signal_on_complete_host.map(|f| f.get_internal()))
-			.map_err(EngineError::from)
+		let subinfo = VkSubmitInfo
+		{
+			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
+			commandBufferCount: commands.len() as u32, pCommandBuffers: commands.as_ptr(),
+			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: wait_stages.as_ptr(),
+			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
+		};
+		self.0.get_transfer_queue().submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
 	}
 }
