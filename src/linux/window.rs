@@ -101,10 +101,10 @@ impl WindowServer for XServer
 {
 	type NativeWindowT = xcb_window_t;
 
-	fn create_unresizable_window(&self, size: VkExtent2D, title: &str) -> Result<Self::NativeWindowT, EngineError>
+	fn create_unresizable_window(&self, size: &Size2, title: &str) -> Result<Self::NativeWindowT, EngineError>
 	{
 		let object_id = unsafe { xcb_generate_id(self.internal) };
-		let VkExtent2D(width, height) = size;
+		let &Size2(width, height) = size;
 		unsafe { xcb_create_window(self.internal, self.root_depth, object_id, self.root_window,
 			0, 0, width as u16, height as u16, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT as u16,
 			self.root_visual, 0, std::ptr::null()) };

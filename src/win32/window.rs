@@ -76,9 +76,9 @@ impl WindowServer for Win32Server
 {
 	type NativeWindowT = HWND;
 
-	fn create_unresizable_window(&self, size: VkExtent2D, title: &str) -> Result<Self::NativeWindowT, EngineError>
+	fn create_unresizable_window(&self, size: &Size2, title: &str) -> Result<Self::NativeWindowT, EngineError>
 	{
-		let VkExtent2D(width, height) = size;
+		let &Size2(width, height) = size;
 		let title_str = widestring::WideCString::from_str(title).unwrap();
 		let wnd = unsafe { CreateWindowExW(0, std::mem::transmute((self.common_class as usize) & 0x0000ffff), title_str.as_ptr(),
 			WS_OVERLAPPED | WS_CAPTION | WS_BORDER | WS_SYSMENU | WS_MINIMIZEBOX,

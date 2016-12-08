@@ -27,7 +27,7 @@ pub trait WindowServer: std::marker::Sync + std::marker::Send + std::marker::Siz
 {
 	type NativeWindowT : NativeWindow<NativeWindowServerT = Self> + 'static;
 
-	fn create_unresizable_window(&self, size: VkExtent2D, title: &str) -> Result<Self::NativeWindowT, EngineError>;
+	fn create_unresizable_window(&self, size: &Size2, title: &str) -> Result<Self::NativeWindowT, EngineError>;
 	fn show_window(&self, target: &Self::NativeWindowT);
 	fn flush(&self);
 	fn process_events(&self) -> ApplicationState;
@@ -54,7 +54,7 @@ pub trait RenderWindow: std::marker::Send
 {
 	fn get_back_images(&self) -> Vec<&WindowRenderTarget>;
 	fn get_format(&self) -> VkFormat;
-	fn get_extent(&self) -> VkExtent2D;
+	fn size(&self) -> Size2;
 	fn acquire_next_backbuffer_index(&self, wait_semaphore: &QueueFence) -> Result<u32, EngineError>;
 	fn present(&self, gqueue: &vk::Queue, index: u32) -> Result<(), EngineError>;
 }
@@ -65,14 +65,14 @@ pub struct Window<N: NativeWindow>
 {
 	#[allow(dead_code)] server: Arc<N::NativeWindowServerT>, #[allow(dead_code)] native: N,
 	#[allow(dead_code)] device_obj: Rc<vk::Surface>, swapchain: Rc<vk::Swapchain>, render_targets: Vec<WindowRenderTarget>,
-	format: VkFormat, extent: VkExtent2D, has_vsync: bool,
+	format: VkFormat, extent: Size2, has_vsync: bool,
 	backbuffer_available_signal: QueueFence, transfer_complete_signal: QueueFence
 }
 unsafe impl<N: NativeWindow> Send for Window<N> {}
 impl<N: NativeWindow> Window<N>
 {
 	pub fn create_unresizable<IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>(
-		engine: &Engine<N::NativeWindowServerT, IS, InputNames>, size: VkExtent2D, title: &str) -> Result<Box<Self>, EngineError>
+		engine: &Engine<N::NativeWindowServerT, IS, InputNames>, size: &Size2, title: &str) -> Result<Box<Self>, EngineError>
 	{
 		let server = engine.get_window_server();
 		let native_w = try!(server.create_unresizable_window(size, title));
@@ -98,7 +98,7 @@ impl<N: NativeWindow> Window<N>
 				.ok_or(EngineError::GenericError("Desired Present Mode is not found"))));
 		let extent = match surface_caps.currentExtent
 		{
-			VkExtent2D(std::u32::MAX, _) | VkExtent2D(_, std::u32::MAX) => size,
+			VkExtent2D(std::u32::MAX, _) | VkExtent2D(_, std::u32::MAX) => unsafe { std::mem::transmute(size) },
 			_ => surface_caps.currentExtent
 		};
 
@@ -131,7 +131,7 @@ impl<N: NativeWindow> Window<N>
 		engine.create_queue_fence().map(|transfer_complete_signal| Box::new(Window
 		{
 			server: server.clone(), native: native_w, device_obj: surface, swapchain: sc, render_targets: rt,
-			format: format.format, extent: extent, has_vsync: present_mode == VkPresentModeKHR::FIFO,
+			format: format.format, extent: size.clone(), has_vsync: present_mode == VkPresentModeKHR::FIFO,
 			backbuffer_available_signal: backbuffer_available_signal,
 			transfer_complete_signal: transfer_complete_signal
 		})))
@@ -141,7 +141,7 @@ impl<N: NativeWindow> RenderWindow for Window<N>
 {
 	fn get_back_images(&self) -> Vec<&WindowRenderTarget> { self.render_targets.iter().collect() }
 	fn get_format(&self) -> VkFormat { self.format }
-	fn get_extent(&self) -> VkExtent2D { self.extent }
+	fn size(&self) -> Size2 { self.extent.clone() }
 	fn present(&self, gqueue: &vk::Queue, index: u32) -> Result<(), EngineError>
 	{
 		self.swapchain.present(gqueue, index, &[]).map_err(EngineError::from)

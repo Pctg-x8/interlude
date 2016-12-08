@@ -156,14 +156,14 @@ impl std::convert::Into<VkPrimitiveTopology> for PrimitiveTopology
 		}
 	}
 }
-#[derive(Clone, Copy)]
-pub struct ViewportWithScissorRect(VkViewport, VkRect2D);
+#[derive(Clone)]
+pub struct ViewportWithScissorRect(Viewport, Rect2);
 impl ViewportWithScissorRect
 {
-	pub fn default_scissor(vp: VkViewport) -> Self
+	pub fn default_scissor(vp: &Viewport) -> Self
 	{
-		let VkViewport(vx, vy, vw, vh, _, _) = vp;
-		ViewportWithScissorRect(vp, VkRect2D(VkOffset2D(vx as i32, vy as i32), VkExtent2D(vw as u32, vh as u32)))
+		let &Viewport(vx, vy, vw, vh, _, _) = vp;
+		ViewportWithScissorRect(vp.clone(), Rect2(Offset2(vx as i32, vy as i32), Size2(vw as u32, vh as u32)))
 	}
 }
 #[derive(Clone, Copy)]
@@ -332,7 +332,7 @@ impl <'a> GraphicsPipelineBuilder<'a>
 		}
 	}
 	pub fn for_postprocess<Engine: EngineCore>(engine: &'a Engine, layout: &'a PipelineLayout, render_pass: &'a RenderPass, subpass_index: u32,
-		fragment_shader: PipelineShaderProgram<'a>, processing_viewport: VkViewport) -> Self
+		fragment_shader: PipelineShaderProgram<'a>, processing_viewport: &Viewport) -> Self
 	{
 		GraphicsPipelineBuilder
 		{
@@ -425,8 +425,8 @@ impl <'a> std::convert::Into<IntoNativeGraphicsPipelineCreateInfoStruct<'a>> for
 		if let Some(ref fs) = self.fragment_shader { shader_stage_vec.push(Into::into(fs)); }
 		let shader_stage = shader_stage_vec.iter().map(Into::into).collect();
 		let into_input_state = vshader.0.into_native_vertex_input_state();
-		let vports = self.vp_sc.iter().map(|&ViewportWithScissorRect(vp, _)| vp).collect::<Vec<_>>();
-		let scissors = self.vp_sc.iter().map(|&ViewportWithScissorRect(_, sc)| sc).collect::<Vec<_>>();
+		let (vports, scissors): (Vec<_>, Vec<_>) = self.vp_sc.iter().map(|&ViewportWithScissorRect(ref vp, ref sc)|
+			unsafe { (std::mem::transmute::<_, VkViewport>(vp.clone()), std::mem::transmute::<_, VkRect2D>(sc.clone())) }).unzip();
 		let attachment_blend_states = self.attachment_blend_states.iter().map(|&x| x.into()).collect::<Vec<_>>();
 		IntoNativeGraphicsPipelineCreateInfoStruct
 		{

@@ -20,15 +20,15 @@ pub trait BufferInternals : std::marker::Sized
 }
 pub trait LinearImage2DInternals : std::marker::Sized
 {
-	fn new<Engine: EngineCore>(engine: &Engine, size: VkExtent2D, format: VkFormat) -> Result<Self, EngineError>;
+	fn new<Engine: EngineCore>(engine: &Engine, size: Size2, format: VkFormat) -> Result<Self, EngineError>;
 }
 pub struct Buffer { internal: vk::Buffer, size: VkDeviceSize }
 impl Resource for Buffer { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
 impl BufferResource for Buffer { fn get_resource(&self) -> VkBuffer { *self.internal } }
 pub struct Image1D { internal: vk::Image, size: u32 }
-pub struct Image2D { internal: vk::Image, size: VkExtent2D }
-pub struct LinearImage2D { internal: vk::Image, size: VkExtent2D }
-pub struct Image3D { internal: vk::Image, size: VkExtent3D }
+pub struct Image2D { internal: vk::Image, size: Size2 }
+pub struct LinearImage2D { internal: vk::Image, size: Size2 }
+pub struct Image3D { internal: vk::Image, size: Size3 }
 impl Resource for Image1D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
 impl Resource for Image2D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
 impl Resource for LinearImage2D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
@@ -55,9 +55,9 @@ impl BufferInternals for Buffer
 }
 impl LinearImage2DInternals for LinearImage2D
 {
-	fn new<Engine: EngineCore>(engine: &Engine, size: VkExtent2D, format: VkFormat) -> Result<Self, EngineError>
+	fn new<Engine: EngineCore>(engine: &Engine, size: Size2, format: VkFormat) -> Result<Self, EngineError>
 	{
-		let VkExtent2D(width, height) = size;
+		let Size2(width, height) = size;
 		vk::Image::new(engine.get_device().get_internal(), &VkImageCreateInfo
 		{
 			sType: VkStructureType::ImageCreateInfo, pNext: std::ptr::null(), flags: 0,
@@ -88,7 +88,7 @@ impl DescriptedImage for Image2D
 		{
 			usage: desc.usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 			.. *desc
-		}).map(|img| Image2D { internal: img, size: VkExtent2D(desc.extent.0, desc.extent.1) }).map_err(EngineError::from)
+		}).map(|img| Image2D { internal: img, size: Size2(desc.extent.0, desc.extent.1) }).map_err(EngineError::from)
 	}
 }
 impl DescriptedImage for Image3D
@@ -99,7 +99,7 @@ impl DescriptedImage for Image3D
 		{
 			usage: desc.usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 			.. *desc
-		}).map(|img| Image3D { internal: img, size: desc.extent }).map_err(EngineError::from)
+		}).map(|img| Image3D { internal: img, size: unsafe { std::mem::transmute(desc.extent) } }).map_err(EngineError::from)
 	}
 }
 pub enum SampleCount { Bit1, Bit2, Bit4, Bit8, Bit16, Bit32, Bit64 }
@@ -133,9 +133,9 @@ impl ImageDescriptor1
 }
 impl ImageDescriptor2
 {
-	pub fn new(format: VkFormat, extent: VkExtent2D, usage: VkImageUsageFlags) -> Self
+	pub fn new(format: VkFormat, extent: Size2, usage: VkImageUsageFlags) -> Self
 	{
-		let VkExtent2D(width, height) = extent;
+		let Size2(width, height) = extent;
 		ImageDescriptor2
 		{
 			internal: VkImageCreateInfo
@@ -158,14 +158,14 @@ impl ImageDescriptor2
 }
 impl ImageDescriptor3
 {
-	pub fn new(format: VkFormat, extent: VkExtent3D, usage: VkImageUsageFlags) -> Self
+	pub fn new(format: VkFormat, extent: Size3, usage: VkImageUsageFlags) -> Self
 	{
 		ImageDescriptor3
 		{
 			internal: VkImageCreateInfo
 			{
 				sType: VkStructureType::ImageCreateInfo, pNext: std::ptr::null(), flags: 0,
-				imageType: VkImageType::Dim3, format: format, extent: extent,
+				imageType: VkImageType::Dim3, format: format, extent: unsafe { std::mem::transmute(extent) },
 				mipLevels: 1, arrayLayers: 1, samples: VK_SAMPLE_COUNT_1_BIT, tiling: VkImageTiling::Optimal,
 				usage: usage, sharingMode: VkSharingMode::Exclusive, initialLayout: VkImageLayout::Preinitialized,
 				queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null()

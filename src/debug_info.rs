@@ -193,7 +193,7 @@ impl <'a> std::ops::Drop for DebugInfo<'a>
 impl <'a> DebugInfo<'a>
 {
 	pub fn new<Engine: EngineCore>(engine: &Engine, lines: &[DebugLine<'a>],
-		rendered_pass: &RenderPass, subindex: u32, framebuffer_size: VkViewport) -> Result<Box<Self>, EngineError>
+		rendered_pass: &RenderPass, subindex: u32, framebuffer_size: &Viewport) -> Result<Box<Self>, EngineError>
 	{
 		info!(target: "Interlude::DebugInfo", "Starting Visual Debugger...");
 
@@ -204,7 +204,7 @@ impl <'a> DebugInfo<'a>
 			(std::mem::size_of::<StrRenderInstanceData>() * max_instance_count, BufferDataType::Vertex),
 			(std::mem::size_of::<CMatrix4>(), BufferDataType::Uniform)
 		]);
-		let texture_atlas_desc = ImageDescriptor2::new(VkFormat::R8_UNORM, VkExtent2D(TEXTURE_SIZE, TEXTURE_SIZE),
+		let texture_atlas_desc = ImageDescriptor2::new(VkFormat::R8_UNORM, Size2(TEXTURE_SIZE, TEXTURE_SIZE),
 			ImageUsagePresets::AsColorTexture);
 		let image_prealloc = ImagePreallocator::new()
 			.image_2d(vec![&texture_atlas_desc]);
@@ -265,7 +265,7 @@ impl <'a> DebugInfo<'a>
 				Position(1.0f32, 0.0f32, 0.0f32, 1.0f32),
 				Position(1.0f32, 1.0f32, 0.0f32, 1.0f32)
 			];
-			let VkViewport(_, _, w, h, _, _) = framebuffer_size;
+			let &Viewport(_, _, w, h, _, _) = framebuffer_size;
 			let pp_matrix = OrthographicMatrix3::new(0.0f32, w as f32, 0.0f32, h as f32, -2.0f32, 1.0f32);
 			*mapped_buf.map_mut::<CMatrix4>(rendering_params_prealloc.offset(3)) = *pp_matrix.as_matrix().transpose().as_ref();
 

@@ -94,7 +94,7 @@ pub trait EngineCore : EngineCoreExports + CommandSubmitter
 	fn create_fence(&self) -> Result<Fence, EngineError>;
 	fn create_queue_fence(&self) -> Result<QueueFence, EngineError>;
 	fn create_render_pass(&self, attachments: &[AttachmentDesc], passes: &[PassDesc], deps: &[PassDependency]) -> Result<RenderPass, EngineError>;
-	fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: VkExtent3D) -> Result<Framebuffer, EngineError>;
+	fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: &Size3) -> Result<Framebuffer, EngineError>;
 	fn create_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str, vertex_bindings: &[VertexBinding], vertex_attributes: &[VertexAttribute])
 		-> Result<ShaderProgram, EngineError>;
 	fn create_geometry_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>;
@@ -206,7 +206,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	{
 		self.window_system.process_events() == ApplicationState::Continue
 	}
-	pub fn create_render_window(&self, size: VkExtent2D, title: &str) -> Result<Box<RenderWindow>, EngineError>
+	pub fn create_render_window(&self, size: &Size2, title: &str) -> Result<Box<RenderWindow>, EngineError>
 	{
 		info!(target: "Prelude", "Creating Render Window \"{}\" ({}x{})", title, size.0, size.1);
 		Window::<WS::NativeWindowT>::create_unresizable(self, size, title).map(|x| x as Box<RenderWindow>)
@@ -348,10 +348,10 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 		};
 		vk::RenderPass::new(&self.device, &rp_info).map(RenderPass::new).map_err(EngineError::from)
 	}
-	fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: VkExtent3D) -> Result<Framebuffer, EngineError>
+	fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: &Size3) -> Result<Framebuffer, EngineError>
 	{
 		let attachments_native = attachments.into_iter().map(|x| x.get_native()).collect::<Vec<_>>();
-		let VkExtent3D(width, height, layers) = form;
+		let &Size3(width, height, layers) = form;
 		let info = VkFramebufferCreateInfo
 		{
 			sType: VkStructureType::FramebufferCreateInfo, pNext: std::ptr::null(), flags: 0,
@@ -444,9 +444,9 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 		let image2 = try!(prealloc.dim2_images().iter().map(|desc| Image2D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>());
 		let image3 = try!(prealloc.dim3_images().iter().map(|desc| Image3D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>());
 		let linear_image1 = try!(prealloc.dim1_images().iter().filter(|desc| !desc.is_device_resource()).map(|desc| desc.get_internal())
-			.map(|desc| LinearImage2D::new(self, VkExtent2D(desc.extent.0, 1), desc.format)).collect::<Result<Vec<_>, EngineError>>());
+			.map(|desc| LinearImage2D::new(self, Size2(desc.extent.0, 1), desc.format)).collect::<Result<Vec<_>, EngineError>>());
 		let linear_image2 = try!(prealloc.dim2_images().iter().filter(|desc| !desc.is_device_resource()).map(|desc| desc.get_internal())
-			.map(|desc| LinearImage2D::new(self, VkExtent2D(desc.extent.0, desc.extent.1), desc.format)).collect::<Result<Vec<_>, EngineError>>());
+			.map(|desc| LinearImage2D::new(self, Size2(desc.extent.0, desc.extent.1), desc.format)).collect::<Result<Vec<_>, EngineError>>());
 		let linear_images = linear_image1.into_iter().chain(linear_image2.into_iter()).collect::<Vec<_>>();
 
 		DeviceImage::new(self, image1, image2, image3).and_then(|dev|
