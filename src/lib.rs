@@ -63,6 +63,8 @@ pub use self::data::*;
 pub use self::window_common::ApplicationState;
 pub use self::vk::ffi;
 pub use self::concurrent::*;
+// Transient or Stateful APIs //
+pub use self::command::{GraphicsCommandRecorder, TransferCommandRecorder};
 
 // traits
 pub use self::engine::CommandSubmitter;

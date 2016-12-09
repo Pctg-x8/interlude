@@ -363,28 +363,28 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	}
 	fn allocate_graphics_command_buffers(&self, count: usize) -> Result<GraphicsCommandBuffers, EngineError>
 	{
-		self.pools.for_graphics().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
-			.map(|v| GraphicsCommandBuffers::new(self.pools.for_graphics(), v))
+		self.pools.graphics().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
+			.map(|v| GraphicsCommandBuffers::new(self.pools.graphics(), v))
 	}
 	fn allocate_bundled_command_buffers(&self, count: usize) -> Result<BundledCommandBuffers, EngineError>
 	{
-		self.pools.for_graphics().allocate(VkCommandBufferLevel::Secondary, count).map_err(EngineError::from)
-			.map(|v| BundledCommandBuffers::new(self.pools.for_graphics(), v))
+		self.pools.graphics().allocate(VkCommandBufferLevel::Secondary, count).map_err(EngineError::from)
+			.map(|v| BundledCommandBuffers::new(self.pools.graphics(), v))
 	}
 	fn allocate_transfer_command_buffers(&self, count: usize) -> Result<TransferCommandBuffers, EngineError>
 	{
-		self.pools.for_transfer().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
-			.map(|v| TransferCommandBuffers::new(self.pools.for_transfer(), v))
+		self.pools.transfer().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
+			.map(|v| TransferCommandBuffers::new(self.pools.transfer(), v))
 	}
 	fn allocate_transient_transfer_command_buffers(&self, count: usize) -> Result<TransientTransferCommandBuffers, EngineError>
 	{
-		self.pools.for_transient().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
-			.map(|v| TransientTransferCommandBuffers::new(self.pools.for_transient(), self.device.get_transfer_queue(), v))
+		self.pools.transient().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
+			.map(|v| TransientTransferCommandBuffers::new(self.pools.transient(), self.device.get_transfer_queue(), v))
 	}
 	fn allocate_transient_graphics_command_buffers(&self, count: usize) -> Result<TransientGraphicsCommandBuffers, EngineError>
 	{
-		self.pools.for_transient_graphics().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
-			.map(|v| TransientGraphicsCommandBuffers::new(self.pools.for_transient_graphics(), self.device.get_graphics_queue(), v))
+		self.pools.transient_graphics().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
+			.map(|v| TransientGraphicsCommandBuffers::new(self.pools.transient_graphics(), self.device.get_graphics_queue(), v))
 	}
 	fn create_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str, vertex_bindings: &[VertexBinding], vertex_attributes: &[VertexAttribute])
 		-> Result<ShaderProgram, EngineError>
