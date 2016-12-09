@@ -76,6 +76,15 @@ impl<'a> ImageMemoryBarrier<'a>
 			image: img, subresource_range: subresource_range
 		}
 	}
+	pub fn initialize(img: &'a ImageResource, subresource_range: ImageSubresourceRange, dst_mask: VkAccessFlags, dst_layout: VkImageLayout) -> Self
+	{
+		ImageMemoryBarrier
+		{
+			src_mask: 0, dst_mask: dst_mask, src_layout: VkImageLayout::Preinitialized, dst_layout: dst_layout,
+			src_queue_family_index: VK_QUEUE_FAMILY_IGNORED, dst_queue_family_index: VK_QUEUE_FAMILY_IGNORED,
+			image: img, subresource_range: subresource_range
+		}
+	}
 }
 /// A Template for constructing Image Memory Barrier.
 /// This holds a reference of ImageResource and a ImageSubresourceRange
@@ -102,6 +111,10 @@ impl<'a> ImageMemoryBarrierTemplate<'a>
 	pub fn from_transfer_dst(&self, dst_mask: VkAccessFlags, dst_layout: VkImageLayout) -> ImageMemoryBarrier<'a>
 	{
 		self.hold_ownership(VK_ACCESS_TRANSFER_WRITE_BIT, dst_mask, VkImageLayout::TransferDestOptimal, dst_layout)
+	}
+	pub fn initialize(&self, dst_mask: VkAccessFlags, dst_layout: VkImageLayout) -> ImageMemoryBarrier<'a>
+	{
+		self.hold_ownership(0, dst_mask, VkImageLayout::Preinitialized, dst_layout)
 	}
 }
 // NativeForms //
