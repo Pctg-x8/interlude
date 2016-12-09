@@ -93,7 +93,7 @@ pub trait EngineCore : EngineCoreExports + CommandSubmitter
 	// Factory Methods //
 	fn create_fence(&self) -> Result<Fence, EngineError>;
 	fn create_queue_fence(&self) -> Result<QueueFence, EngineError>;
-	fn create_render_pass(&self, attachments: &[AttachmentDesc], passes: &[PassDesc], deps: &[PassDependency]) -> Result<RenderPass, EngineError>;
+	fn create_render_pass(&self, attachments: &[&AttachmentDesc], passes: &[&PassDesc], deps: &[&PassDependency]) -> Result<RenderPass, EngineError>;
 	fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: &Size3) -> Result<Framebuffer, EngineError>;
 	fn create_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str, vertex_bindings: &[VertexBinding], vertex_attributes: &[VertexAttribute])
 		-> Result<ShaderProgram, EngineError>;
@@ -334,11 +334,11 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	{
 		vk::Semaphore::new(&self.device).map(QueueFence::new).map_err(EngineError::from)
 	}
-	fn create_render_pass(&self, attachments: &[AttachmentDesc], passes: &[PassDesc], deps: &[PassDependency]) -> Result<RenderPass, EngineError>
+	fn create_render_pass(&self, attachments: &[&AttachmentDesc], passes: &[&PassDesc], deps: &[&PassDependency]) -> Result<RenderPass, EngineError>
 	{
-		let attachments_native = attachments.into_iter().map(|x| x.into()).collect::<Vec<_>>();
-		let subpasses_native = passes.into_iter().map(|x| x.into()).collect::<Vec<_>>();
-		let deps_native = deps.into_iter().map(|x| x.into()).collect::<Vec<_>>();
+		let attachments_native = attachments.into_iter().map(|&x| x.into()).collect::<Vec<_>>();
+		let subpasses_native = passes.into_iter().map(|&x| x.into()).collect::<Vec<_>>();
+		let deps_native = deps.into_iter().map(|&x| x.into()).collect::<Vec<_>>();
 		let rp_info = VkRenderPassCreateInfo
 		{
 			sType: VkStructureType::RenderPassCreateInfo, pNext: std::ptr::null(), flags: 0,

@@ -53,6 +53,7 @@ impl WindowServer for WaylandServer
 pub trait RenderWindow: std::marker::Send
 {
 	fn get_back_images(&self) -> Vec<&WindowRenderTarget>;
+	fn backimage_count(&self) -> usize;
 	fn get_format(&self) -> VkFormat;
 	fn size(&self) -> Size2;
 	fn acquire_next_backbuffer_index(&self, wait_semaphore: &QueueFence) -> Result<u32, EngineError>;
@@ -140,6 +141,7 @@ impl<N: NativeWindow> Window<N>
 impl<N: NativeWindow> RenderWindow for Window<N>
 {
 	fn get_back_images(&self) -> Vec<&WindowRenderTarget> { self.render_targets.iter().collect() }
+	fn backimage_count(&self) -> usize { self.render_targets.len() }
 	fn get_format(&self) -> VkFormat { self.format }
 	fn size(&self) -> Size2 { self.extent.clone() }
 	fn present(&self, gqueue: &vk::Queue, index: u32) -> Result<(), EngineError>
