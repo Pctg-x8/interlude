@@ -383,6 +383,21 @@ impl <'a> TransientTransferCommandBuffers<'a>
 		self.2.submit(&[subcmd], None).and_then(|()| self.2.wait_for_idle()).map_err(EngineError::from)
 	}
 }
+impl<'a> TransientGraphicsCommandBuffers<'a>
+{
+	pub fn execute(self, wait_semaphore: Option<(&QueueFence, VkPipelineStageFlags)>) -> Result<(), EngineError>
+	{
+		let (wsem, stage) = wait_semaphore.map(|(x, w)| (vec![**x.get_internal()], vec![w])).unwrap_or((Vec::new(), Vec::new()));
+		let subcmd = VkSubmitInfo
+		{
+			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
+			waitSemaphoreCount: wsem.len() as u32, pWaitSemaphores: wsem.as_ptr(), pWaitDstStageMask: stage.as_ptr(),
+			commandBufferCount: self.0.len() as u32, pCommandBuffers: self.0.as_ptr(),
+			signalSemaphoreCount: 0, pSignalSemaphores: std::ptr::null()
+		};
+		self.2.submit(&[subcmd], None).and_then(|_| self.2.wait_for_idle()).map_err(EngineError::from)
+	}
+}
 
 /// An recording state of Graphics Command Buffer
 pub struct GraphicsCommandRecorder<'a>(&'a VkCommandBuffer);

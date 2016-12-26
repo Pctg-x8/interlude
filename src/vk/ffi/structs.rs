@@ -660,7 +660,7 @@ pub struct VkSurfaceCapabilitiesKHR
 	pub supportedCompositeAlpha: VkCompositeAlphaFlagsKHR,
 	pub supportedUsageFlags: VkImageUsageFlags
 }
-#[repr(C)] #[derive(Clone)]
+#[repr(C)] #[derive(Clone, Debug)]
 pub struct VkSurfaceFormatKHR
 {
 	pub format: VkFormat,

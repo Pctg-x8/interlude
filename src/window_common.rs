@@ -57,7 +57,7 @@ pub trait RenderWindow: std::marker::Send
 	fn get_format(&self) -> VkFormat;
 	fn size(&self) -> Size2;
 	fn acquire_next_backbuffer_index(&self, wait_semaphore: &QueueFence) -> Result<u32, EngineError>;
-	fn present(&self, gqueue: &vk::Queue, index: u32) -> Result<(), EngineError>;
+	fn present(&self, gqueue: &vk::Queue, index: u32, wait_semaphore: Option<&QueueFence>) -> Result<(), EngineError>;
 }
 pub struct WindowRenderTarget { pub resource: VkImage, pub view: vk::ImageView }
 impl ImageResource for WindowRenderTarget { fn get_resource(&self) -> VkImage { self.resource } }
@@ -93,10 +93,12 @@ impl<N: NativeWindow> Window<N>
 				.find(|x| x.format == VkFormat::R8G8B8A8_SRGB || x.format == VkFormat::B8G8R8A8_SRGB)
 				.ok_or(EngineError::GenericError("Desired Format(32bpp SRGB) is not supported")))
 		};
+		info!(target: "interlude::Window", "Using format: {:?}", format);
 		let present_mode = try!(adapter.present_modes(&surface).map_err(EngineError::from)
 			.and_then(|present_modes| present_modes.iter().find(|&&x| x == VkPresentModeKHR::FIFO)
 				.or_else(|| present_modes.iter().find(|&&x| x == VkPresentModeKHR::Mailbox)).cloned()
 				.ok_or(EngineError::GenericError("Desired Present Mode is not found"))));
+		info!(target: "interlude::Window", "Using present mode: {:?}", present_mode);
 		let extent = match surface_caps.currentExtent
 		{
 			VkExtent2D(std::u32::MAX, _) | VkExtent2D(_, std::u32::MAX) => unsafe { std::mem::transmute(size) },
@@ -144,9 +146,10 @@ impl<N: NativeWindow> RenderWindow for Window<N>
 	fn backimage_count(&self) -> usize { self.render_targets.len() }
 	fn get_format(&self) -> VkFormat { self.format }
 	fn size(&self) -> Size2 { self.extent.clone() }
-	fn present(&self, gqueue: &vk::Queue, index: u32) -> Result<(), EngineError>
+	fn present(&self, gqueue: &vk::Queue, index: u32, wait_semaphore: Option<&QueueFence>) -> Result<(), EngineError>
 	{
-		self.swapchain.present(gqueue, index, &[]).map_err(EngineError::from)
+		let sem = wait_semaphore.map(|s| **s.get_internal());
+		self.swapchain.present(gqueue, index, &if let Some(s) = sem { vec![s] } else { Vec::new() }).map_err(EngineError::from)
 	}
 	fn acquire_next_backbuffer_index(&self, wait_semaphore: &QueueFence) -> Result<u32, EngineError>
 	{

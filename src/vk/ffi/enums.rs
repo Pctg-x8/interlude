@@ -594,7 +594,7 @@ pub const VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT: VkFlags	= 0x01;
 	FloatOpaqueWhite = 4, IntOpaqueWhite = 5
 }
 
-#[repr(C)] #[derive(Clone, Copy)]
+#[repr(C)] #[derive(Clone, Copy, Debug)]
 pub enum VkColorSpaceKHR
 {
 	SRGB_NonLinear = 0
