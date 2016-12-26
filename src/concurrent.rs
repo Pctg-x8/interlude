@@ -9,10 +9,7 @@ use super::internals::*;
 #[cfg(unix)] use std::os::unix::io::*;
 
 /// An event object tells the signal to other threads
-#[cfg(windows)] pub struct Event
-{
-	handle: HANDLE
-}
+#[cfg(windows)] pub struct Event(HANDLE);
 #[cfg(windows)] impl Event
 {
 	pub fn new<Str: Into<Vec<u8>>>(name: Str) -> Result<Arc<Self>, EngineError>
@@ -20,11 +17,11 @@ use super::internals::*;
 		let evname = std::ffi::CString::new(name).unwrap();
 		let ev = unsafe { CreateEventA(std::ptr::null_mut(), FALSE, FALSE, evname.as_ptr()) };
 		if ev.is_null() { Err(EngineError::from(std::io::Error::last_os_error())) }
-		else { Ok(Arc::new(Event { handle: ev })) }
+		else { Ok(Arc::new(Event(ev))) }
 	}
-	pub fn set(&self) { unsafe { SetEvent(self.handle); } }
-	pub fn reset(&self) { unsafe { ResetEvent(self.handle); } }
-	pub fn get_internal(&self) -> HANDLE { self.handle }
+	pub fn set(&self) { unsafe { SetEvent(self.0); } }
+	pub fn reset(&self) { unsafe { ResetEvent(self.0); } }
+	pub fn get_internal(&self) -> HANDLE { self.0 }
 }
 
 /// An event object tells the signal to other threads
