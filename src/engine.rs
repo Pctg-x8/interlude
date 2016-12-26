@@ -35,14 +35,14 @@ impl log::Log for EngineLogger
 	}
 }
 
-fn mtflags_decomposite(flags: VkMemoryPropertyFlags) -> Vec<String>
+fn mtflags_decomposite(flags: VkMemoryPropertyFlags) -> Vec<&'static str>
 {
-	let mut temp: Vec<String> = Vec::new();
-	if (flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0 { temp.push(String::from("Device Local")); }
-	if (flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0 { temp.push(String::from("Host Visible")); }
-	if (flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0 { temp.push(String::from("Host Coherent")); }
-	if (flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) != 0 { temp.push(String::from("Host Cached")); }
-	if (flags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) != 0 { temp.push(String::from("Lazily Allocated")); }
+	let mut temp = Vec::new();
+	if (flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0 { temp.push("Device Local"); }
+	if (flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0 { temp.push("Host Visible"); }
+	if (flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0 { temp.push("Host Coherent"); }
+	if (flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) != 0 { temp.push("Host Cached"); }
+	if (flags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) != 0 { temp.push("Lazily Allocated"); }
 	temp
 }
 

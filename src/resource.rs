@@ -12,13 +12,13 @@ use std::rc::Rc;
 pub trait Resource { fn get_memory_requirements(&self) -> VkMemoryRequirements; }
 pub trait BufferResource { fn get_resource(&self) -> VkBuffer; }
 pub trait ImageResource { fn get_resource(&self) -> VkImage; }
-pub trait DescriptedImage : std::marker::Sized { fn new<Engine: EngineCore>(engine: &Engine, desc: &VkImageCreateInfo) -> Result<Self, EngineError>; }
+pub trait DescriptedImage : Sized { fn new<Engine: EngineCore>(engine: &Engine, desc: &VkImageCreateInfo) -> Result<Self, EngineError>; }
 
-pub trait BufferInternals : std::marker::Sized
+pub trait BufferInternals : Sized
 {
 	fn new<Engine: EngineCore>(engine: &Engine, size: VkDeviceSize, usage: VkBufferUsageFlags) -> Result<Self, EngineError>;
 }
-pub trait LinearImage2DInternals : std::marker::Sized
+pub trait LinearImage2DInternals : Sized
 {
 	fn new<Engine: EngineCore>(engine: &Engine, size: Size2, format: VkFormat) -> Result<Self, EngineError>;
 }
@@ -323,11 +323,8 @@ impl <'a> ImagePreallocatorInternals<'a> for ImagePreallocator<'a>
 	fn dim3_images(&self) -> &[&'a ImageDescriptor3] { &self.dim3_images }
 }
 
-pub struct DeviceBuffer
-{
-	buffer: vk::Buffer, memory: vk::DeviceMemory, size: VkDeviceSize
-}
-pub trait DeviceBufferInternals : std::marker::Sized
+pub struct DeviceBuffer { buffer: vk::Buffer, memory: vk::DeviceMemory, size: VkDeviceSize }
+pub trait DeviceBufferInternals : Sized
 {
 	fn new<Engine: EngineCore>(engine: &Engine, size: VkDeviceSize, usage: VkBufferUsageFlags) -> Result<Self, EngineError>;
 }
@@ -350,11 +347,8 @@ impl DeviceBufferInternals for DeviceBuffer
 	}
 }
 impl BufferResource for DeviceBuffer { fn get_resource(&self) -> VkBuffer { *self.buffer } }
-pub struct StagingBuffer
-{
-	buffer: vk::Buffer, memory: vk::DeviceMemory, size: VkDeviceSize
-}
-pub trait StagingBufferInternals : std::marker::Sized
+pub struct StagingBuffer { buffer: vk::Buffer, memory: vk::DeviceMemory, size: VkDeviceSize }
+pub trait StagingBufferInternals : Sized
 {
 	fn new<Engine: EngineCore>(engine: &Engine, size: VkDeviceSize) -> Result<Self, EngineError>;
 }
@@ -390,7 +384,7 @@ pub struct DeviceImage
 	dim1: Vec<Rc<Image1D>>, dim2: Vec<Rc<Image2D>>, dim3: Vec<Rc<Image3D>>,
 	memory: vk::DeviceMemory, size: VkDeviceSize
 }
-pub trait DeviceImageInternals : std::marker::Sized
+pub trait DeviceImageInternals : Sized
 {
 	fn new<Engine: EngineCore>(engine: &Engine, d1_images: Vec<Image1D>, d2_images: Vec<Image2D>, d3_images: Vec<Image3D>)
 		-> Result<Self, EngineError>;
@@ -459,7 +453,7 @@ pub struct StagingImage
 	linear_dim2_images: Vec<LinearImage2D>, linear_dim2_images_offset: Vec<VkDeviceSize>,
 	memory: vk::DeviceMemory, size: VkDeviceSize
 }
-pub trait StagingImageInternals : std::marker::Sized
+pub trait StagingImageInternals : Sized
 {
 	fn new<Engine: EngineCore>(engine: &Engine, ld2_images: Vec<LinearImage2D>) -> Result<Self, EngineError>;
 }
@@ -649,7 +643,7 @@ pub struct Sampler
 {
 	internal: vk::Sampler
 }
-pub trait SamplerInternals : std::marker::Sized
+pub trait SamplerInternals : Sized
 {
 	fn new<Engine: EngineCore>(engine: &Engine, info: &VkSamplerCreateInfo) -> Result<Self, EngineError>;
 	fn get_native(&self) -> VkSampler;
@@ -714,7 +708,7 @@ impl std::convert::Into<VkComponentMapping> for ComponentMapping
 pub struct ImageView1D { parent: Rc<Image1D>, internal: vk::ImageView }
 pub struct ImageView2D { parent: Rc<Image2D>, internal: vk::ImageView }
 pub struct ImageView3D { parent: Rc<Image3D>, internal: vk::ImageView }
-pub trait ImageViewFactory<ResourceT: ImageResource>: std::marker::Sized
+pub trait ImageViewFactory<ResourceT: ImageResource>: Sized
 {
 	fn new<Engine: EngineCore>(engine: &Engine, res: &Rc<ResourceT>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> Result<Self, EngineError>;
 }
