@@ -72,7 +72,7 @@ pub struct Window<N: NativeWindow>
 unsafe impl<N: NativeWindow> Send for Window<N> {}
 impl<N: NativeWindow> Window<N>
 {
-	pub fn create_unresizable<IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>(
+	pub fn create_unresizable<IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>(
 		engine: &Engine<N::NativeWindowServerT, IS, InputNames>, size: &Size2, title: &str) -> Result<Box<Self>, EngineError>
 	{
 		let server = engine.get_window_server();

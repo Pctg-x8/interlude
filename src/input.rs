@@ -9,10 +9,9 @@ use std::sync::{Arc, Mutex};
 #[cfg(unix)] use super::linux::udev::*;
 #[cfg(unix)] use std::os::unix::io::{RawFd, AsRawFd};
 use std::hash::Hash;
-use std::fmt::Debug;
 use std::ops::Index;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputKeys
 {
 	/* Keyboard */
@@ -28,7 +27,7 @@ pub enum InputKeys
 	ButtonA, ButtonB, ButtonC, ButtonX, ButtonY, ButtonZ, ButtonTrigLeft, ButtonTrigRight, ButtonTrigLeft2, ButtonTrigRight2,
 	ButtonSelect, ButtonStart, ButtonMode, ButtonThumbL, ButtonThumbR
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputAxis
 {
 	X, Y, Z, RX, RY, RZ, Hat0x, Hat0y, Hat1x, Hat1y, Unhandled
@@ -270,13 +269,13 @@ impl InputType
 {
 	fn as_raw_fd(&self) -> RawFd { self.dev.as_raw_fd() }
 }
-pub trait InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> : Sized + Index<InputNames, Output = f32>
+pub trait InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone> : Sized + Index<InputNames, Output = f32>
 {
 	fn new() -> Result<Self, EngineError>;
 	fn add_input(&mut self, to: InputNames, from: InputType);
 	fn update(&mut self);
 }
-#[cfg(unix)] pub struct UnixInputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug>
+#[cfg(unix)] pub struct UnixInputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone>
 {
 	keymap: HashMap<InputNames, Vec<InputType>>,
 	aggregate_key_states: AsyncExclusiveHashMap<InputKeys, u32>,
@@ -284,7 +283,7 @@ pub trait InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> 
 	input_states: HashMap<InputNames, f32>
 }
 // Platform-dependent code
-#[cfg(unix)] impl<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> UnixInputSystem<InputNames>
+#[cfg(unix)] impl<InputNames: PartialEq + Eq + Hash + Copy + Clone> UnixInputSystem<InputNames>
 {
 	fn search_device_name(device: &UserspaceDevice) -> String
 	{
@@ -311,7 +310,7 @@ pub trait InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> 
 		}
 	}
 }
-#[cfg(unix)] impl<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> InputSystem<InputNames> for UnixInputSystem<InputNames>
+#[cfg(unix)] impl<InputNames: PartialEq + Eq + Hash + Copy + Clone> InputSystem<InputNames> for UnixInputSystem<InputNames>
 {
 	fn new() -> Result<Self, EngineError>
 	{
@@ -413,7 +412,7 @@ pub trait InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> 
 		}
 	}
 }
-#[cfg(unix)] impl<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> Index<InputNames> for UnixInputSystem<InputNames>
+#[cfg(unix)] impl<InputNames: PartialEq + Eq + Hash + Copy + Clone> Index<InputNames> for UnixInputSystem<InputNames>
 {
 	type Output = f32;
 	fn index(&self, name: InputNames) -> &f32
@@ -423,14 +422,14 @@ pub trait InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> 
 	}
 }
 
-#[cfg(windows)] pub struct Win32InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug>
+#[cfg(windows)] pub struct Win32InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone>
 {
 	keymap: HashMap<InputNames, Vec<InputType>>,
 	aggregate_key_states: HashMap<InputKeys, u32>,
 	aggregate_axis_states: HashMap<InputAxis, f32>,
 	input_states: HashMap<InputNames, f32>
 }
-#[cfg(windows)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug> InputSystem<InputNames> for Win32InputSystem<InputNames>
+#[cfg(windows)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash> InputSystem<InputNames> for Win32InputSystem<InputNames>
 {
 	fn new() -> Result<Self, EngineError>
 	{
@@ -451,7 +450,7 @@ pub trait InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone + Debug> 
 
 	}
 }
-#[cfg(windows)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug> Index<InputNames> for Win32InputSystem<InputNames>
+#[cfg(windows)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash> Index<InputNames> for Win32InputSystem<InputNames>
 {
 	type Output = f32;
 	fn index(&self, name: InputNames) -> &f32

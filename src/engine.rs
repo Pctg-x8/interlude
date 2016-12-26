@@ -136,7 +136,7 @@ pub trait EngineCore : EngineCoreExports + CommandSubmitter
 	fn new_command_sender(&self) -> CommandSender;
 	fn graphics_queue_ref(&self) -> &vk::Queue;
 }
-pub struct Engine<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+pub struct Engine<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
 {
 	window_system: Arc<WS>, input_system: Arc<RwLock<IS>>,
 	instance: Rc<vk::Instance>, #[allow(dead_code)] debug_callback: vk::DebugReportCallback,
@@ -151,19 +151,19 @@ pub struct Engine<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: Par
 	// Phantom Data //
 	ph: std::marker::PhantomData<InputNames>
 }
-unsafe impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+unsafe impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
 	Send for Engine<WS, IS, InputNames> {}
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
 	Drop for Engine<WS, IS, InputNames>
 {
 	fn drop(&mut self) { self.device.wait_for_idle().unwrap(); }
 }
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
 	EngineExports<WS> for Engine<WS, IS, InputNames>
 {
 	fn get_window_server(&self) -> &Arc<WS> { &self.window_system }
 }
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
 	EngineCoreExports for Engine<WS, IS, InputNames>
 {
 	fn get_instance(&self) -> &Rc<vk::Instance> { &self.instance }
@@ -179,7 +179,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	fn is_optimized_debug_render_support(&self) -> bool { self.optimized_debug_render }
 }
 // For XServer
-#[cfg(unix)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+#[cfg(unix)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
 	Engine<super::linux::XServer, super::input::UnixInputSystem<InputNames>, InputNames>
 {
 	pub fn new<StrT: AsRef<Path>>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures) -> Result<Self, EngineError>
@@ -188,7 +188,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	}
 }
 // For Win32Server
-#[cfg(windows)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+#[cfg(windows)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
 	Engine<super::win32::Win32Server, super::input::Win32InputSystem<InputNames>, InputNames>
 {
 	pub fn new<StrT: AsRef<Path>>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures) -> Result<Self, EngineError>
@@ -197,7 +197,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	}
 }
 // For any WindowSystems
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug> Engine<WS, IS, InputNames>
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash> Engine<WS, IS, InputNames>
 {
 	pub fn window_system_ref(&self) -> &Arc<WS> { &self.window_system }
 	pub fn input_system_ref(&self) -> &Arc<RwLock<IS>> { &self.input_system }
@@ -205,6 +205,10 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	pub fn process_messages(&self) -> bool
 	{
 		self.window_system.process_events() == ApplicationState::Continue
+	}
+	pub fn process_all_messages(&self)
+	{
+		self.window_system.process_all_events()
 	}
 	pub fn create_render_window(&self, size: &Size2, title: &str) -> Result<Box<RenderWindow>, EngineError>
 	{
@@ -323,7 +327,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	}
 }
 // For WindowServer independent parts
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
 	EngineCore for Engine<WS, IS, InputNames>
 {
 	fn create_fence(&self) -> Result<Fence, EngineError>
@@ -438,9 +442,9 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	}
 	fn create_double_image(&self, prealloc: &ImagePreallocator) -> Result<(DeviceImage, Option<StagingImage>), EngineError>
 	{
-		let image1 = prealloc.dim1_images().iter().map(|desc| Image1D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>();
-		let image2 = prealloc.dim2_images().iter().map(|desc| Image2D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>();
-		let image3 = prealloc.dim3_images().iter().map(|desc| Image3D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>();
+		let image1 = prealloc.dim1_images().iter().map(|desc| Image1D::new(self, desc.get_internal())).collect::<Result<Vec<_>, _>>();
+		let image2 = prealloc.dim2_images().iter().map(|desc| Image2D::new(self, desc.get_internal())).collect::<Result<Vec<_>, _>>();
+		let image3 = prealloc.dim3_images().iter().map(|desc| Image3D::new(self, desc.get_internal())).collect::<Result<Vec<_>, _>>();
 		let linear_image1 = prealloc.dim1_images().iter().filter(|desc| !desc.is_device_resource()).map(|desc| desc.get_internal())
 			.map(|desc| LinearImage2D::new(self, Size2(desc.extent.0, 1), desc.format)).collect::<Result<Vec<_>, EngineError>>();
 		let linear_image2 = prealloc.dim2_images().iter().filter(|desc| !desc.is_device_resource()).map(|desc| desc.get_internal())
@@ -607,7 +611,7 @@ pub trait CommandSubmitter
 	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>;
 }
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash + std::fmt::Debug>
+impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
 	CommandSubmitter for Engine<WS, IS, InputNames>
 {
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
