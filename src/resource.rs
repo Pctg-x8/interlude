@@ -102,12 +102,11 @@ impl DescriptedImage for Image3D
 		}).map(|img| Image3D { internal: img, size: unsafe { std::mem::transmute(desc.extent) } }).map_err(EngineError::from)
 	}
 }
-pub enum SampleCount { Bit1, Bit2, Bit4, Bit8, Bit16, Bit32, Bit64 }
-pub trait ImageDescriptor : std::marker::Sized + InternalExports<VkImageCreateInfo>
+#[repr(u32)] #[derive(Clone, Copy)]
+pub enum SampleCount
 {
-	fn mip_levels(mut self, levels: u32) -> Self;
-	fn array_layers(mut self, layers: u32) -> Self;
-	fn sample_flags(mut self, samples: &[SampleCount]) -> Self;
+	Bit1 = VK_SAMPLE_COUNT_1_BIT, Bit2 = VK_SAMPLE_COUNT_2_BIT, Bit4 = VK_SAMPLE_COUNT_4_BIT, Bit8 = VK_SAMPLE_COUNT_8_BIT,
+	Bit16 = VK_SAMPLE_COUNT_16_BIT, Bit32 = VK_SAMPLE_COUNT_32_BIT, Bit64 = VK_SAMPLE_COUNT_64_BIT
 }
 pub struct ImageDescriptor1 { internal: VkImageCreateInfo, device_resource: bool }
 pub struct ImageDescriptor2 { internal: VkImageCreateInfo, device_resource: bool }
@@ -176,11 +175,11 @@ impl ImageDescriptor3
 impl InternalExports<VkImageCreateInfo> for ImageDescriptor1 { fn get_internal(&self) -> &VkImageCreateInfo { &self.internal } }
 impl InternalExports<VkImageCreateInfo> for ImageDescriptor2 { fn get_internal(&self) -> &VkImageCreateInfo { &self.internal } }
 impl InternalExports<VkImageCreateInfo> for ImageDescriptor3 { fn get_internal(&self) -> &VkImageCreateInfo { &self.internal } }
-macro_rules! ImplImageDescriptor
+macro_rules! ImplImageDescriptorMutations
 {
 	(for $t: ty) =>
 	{
-		impl ImageDescriptor for $t
+		impl $t
 		{
 			fn mip_levels(mut self, levels: u32) -> Self
 			{
@@ -194,24 +193,15 @@ macro_rules! ImplImageDescriptor
 			}
 			fn sample_flags(mut self, samples: &[SampleCount]) -> Self
 			{
-				self.internal.samples = samples.into_iter().fold(0, |flags, c| match c
-				{
-					&SampleCount::Bit1 => flags | VK_SAMPLE_COUNT_1_BIT,
-					&SampleCount::Bit2 => flags | VK_SAMPLE_COUNT_2_BIT,
-					&SampleCount::Bit4 => flags | VK_SAMPLE_COUNT_4_BIT,
-					&SampleCount::Bit8 => flags | VK_SAMPLE_COUNT_8_BIT,
-					&SampleCount::Bit16 => flags | VK_SAMPLE_COUNT_16_BIT,
-					&SampleCount::Bit32 => flags | VK_SAMPLE_COUNT_32_BIT,
-					&SampleCount::Bit64 => flags | VK_SAMPLE_COUNT_64_BIT
-				});
+				self.internal.samples = samples.into_iter().fold(0, |flags, &c| flags | (c as u32));
 				self
 			}
 		}
 	}
 }
-ImplImageDescriptor!(for ImageDescriptor1);
-ImplImageDescriptor!(for ImageDescriptor2);
-ImplImageDescriptor!(for ImageDescriptor3);
+ImplImageDescriptorMutations!(for ImageDescriptor1);
+ImplImageDescriptorMutations!(for ImageDescriptor2);
+ImplImageDescriptorMutations!(for ImageDescriptor3);
 
 #[derive(Clone, Copy)]
 pub struct ImageSubresourceRange(VkImageAspectFlags, u32, u32, u32, u32);

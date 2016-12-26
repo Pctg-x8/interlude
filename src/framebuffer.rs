@@ -1,11 +1,11 @@
-// Prelude: RenderPass and Framebuffer
+// Interlude: RenderPass and Framebuffer
 
 use super::internals::*;
 use {std, vk};
 use vk::ffi::*;
 use std::rc::Rc;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct AttachmentDesc
 {
 	pub format: VkFormat, pub samples: VkSampleCountFlagBits,
@@ -178,18 +178,12 @@ impl <'a> std::convert::Into<VkClearValue> for &'a AttachmentClearValue
 	}
 }
 
-pub struct RenderPass { internal: Rc<vk::RenderPass> }
+pub struct RenderPass(Rc<vk::RenderPass>);
 pub struct Framebuffer { mold: Rc<vk::RenderPass>, internal: vk::Framebuffer, area: VkExtent2D }
-impl InternalExports<Rc<vk::RenderPass>> for RenderPass { fn get_internal(&self) -> &Rc<vk::RenderPass> { &self.internal } }
+impl InternalExports<Rc<vk::RenderPass>> for RenderPass { fn get_internal(&self) -> &Rc<vk::RenderPass> { &self.0 } }
 impl InternalExports<vk::Framebuffer> for Framebuffer { fn get_internal(&self) -> &vk::Framebuffer { &self.internal } }
-pub trait RenderPassInternals
-{
-	fn new(rp: vk::RenderPass) -> Self;
-}
-impl RenderPassInternals for RenderPass
-{
-	fn new(rp: vk::RenderPass) -> Self { RenderPass { internal: Rc::new(rp) } }
-}
+pub trait RenderPassInternals { fn new(o: vk::RenderPass) -> Self; }
+impl RenderPassInternals for RenderPass { fn new(o: vk::RenderPass) -> Self { RenderPass(Rc::new(o)) } }
 pub trait FramebufferInternals
 {
 	fn new(fb: vk::Framebuffer, mold: &Rc<vk::RenderPass>, area: VkExtent2D) -> Self;

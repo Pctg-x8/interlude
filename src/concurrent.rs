@@ -1,4 +1,4 @@
-// Concurrency Entities
+// Interlude: Concurrency Entities
 
 use std;
 use std::sync::Arc;

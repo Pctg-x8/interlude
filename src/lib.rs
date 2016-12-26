@@ -69,7 +69,7 @@ pub use self::command::{GraphicsCommandRecorder, TransferCommandRecorder};
 // traits
 pub use self::engine::CommandSubmitter;
 pub use self::command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
-pub use self::resource::{ImageDescriptor, ImageView, BufferResource, ImageResource};
+pub use self::resource::{ImageView, BufferResource, ImageResource};
 pub use self::resource::{ImageViewFactory};
 pub use self::window_common::{WindowServer, RenderWindow};
 // exported objects

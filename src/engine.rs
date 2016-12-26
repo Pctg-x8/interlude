@@ -336,21 +336,20 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	}
 	fn create_render_pass(&self, attachments: &[&AttachmentDesc], passes: &[&PassDesc], deps: &[&PassDependency]) -> Result<RenderPass, EngineError>
 	{
-		let attachments_native = attachments.into_iter().map(|&x| x.into()).collect::<Vec<_>>();
-		let subpasses_native = passes.into_iter().map(|&x| x.into()).collect::<Vec<_>>();
-		let deps_native = deps.into_iter().map(|&x| x.into()).collect::<Vec<_>>();
-		let rp_info = VkRenderPassCreateInfo
+		let attachments_native = attachments.iter().map(|&x| x.into()).collect::<Vec<_>>();
+		let subpasses_native = passes.iter().map(|&x| x.into()).collect::<Vec<_>>();
+		let deps_native = deps.iter().map(|&x| x.into()).collect::<Vec<_>>();
+		vk::RenderPass::new(&self.device, &VkRenderPassCreateInfo
 		{
 			sType: VkStructureType::RenderPassCreateInfo, pNext: std::ptr::null(), flags: 0,
 			attachmentCount: attachments_native.len() as u32, pAttachments: attachments_native.as_ptr(),
 			subpassCount: subpasses_native.len() as u32, pSubpasses: subpasses_native.as_ptr(),
 			dependencyCount: deps_native.len() as u32, pDependencies: deps_native.as_ptr()
-		};
-		vk::RenderPass::new(&self.device, &rp_info).map(RenderPass::new).map_err(EngineError::from)
+		}).map(RenderPass::new).map_err(EngineError::from)
 	}
 	fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: &Size3) -> Result<Framebuffer, EngineError>
 	{
-		let attachments_native = attachments.into_iter().map(|x| x.get_native()).collect::<Vec<_>>();
+		let attachments_native: Vec<_> = attachments.into_iter().map(|x| x.get_native()).collect();
 		let &Size3(width, height, layers) = form;
 		let info = VkFramebufferCreateInfo
 		{
