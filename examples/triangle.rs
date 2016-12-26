@@ -43,6 +43,7 @@ fn main()
 	let ps = engine.create_graphics_pipelines(&[&ps_mold]).or_crash().pop().unwrap();
 
 	// Transfer data / Setting image layout
+	info!("Transfering Staging Data...");
 	engine.allocate_transient_transfer_command_buffers(1).and_then(|setup_commands|
 	{
 		let bmbarriers = [
@@ -55,14 +56,15 @@ fn main()
 			.collect::<Vec<_>>();
 		
 		try!(setup_commands.begin(0).and_then(|recorder| recorder
-			.pipeline_barrier(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false, &[], &bmbarriers, &imbarriers)
+			.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false, &[], &bmbarriers, &imbarriers)
 			.copy_buffer(&stg, &dev, &[BufferCopyRegion(0, 0, bp.total_size())])
-			.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, false, &[], &[bmbarrier_ret], &[])
+			.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false, &[], &[bmbarrier_ret], &[])
 		.end()));
 		setup_commands.execute()
 	}).or_crash();
 
 	// Forward Presenting
+	info!("Forward Presenting...");
 	{
 		let ordersem = engine.create_queue_fence().or_crash();
 		wframe.acquire_next_backbuffer_index(&ordersem).and_then(|index|
@@ -72,7 +74,7 @@ fn main()
 				let imbarrier = ImageMemoryBarrier::hold_ownership(wframe.get_back_images()[index as usize], ImageSubresourceRange::base_color(), VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 					VkImageLayout::PresentSrcKHR, VkImageLayout::ColorAttachmentOptimal);
 				try!(fp_commands.begin(0).and_then(|recorder| recorder
-					.pipeline_barrier(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, true, &[], &[], &[imbarrier])
+					.pipeline_barrier(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, false, &[], &[], &[imbarrier])
 					.begin_render_pass(&fb[index as usize], &[AttachmentClearValue::Color(0.0, 0.0, 0.0, 1.0)], false).end_render_pass().end()
 				));
 				fp_commands.execute(Some((&ordersem, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)))
@@ -82,6 +84,7 @@ fn main()
 	}
 
 	// Draw commands and submit it
+	info!("Rendering...");
 	let cb = engine.allocate_graphics_command_buffers(wframe.backimage_count()).or_crash();
 	for (n, recorder) in cb.begin_all().or_crash()
 	{

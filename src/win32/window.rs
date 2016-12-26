@@ -5,7 +5,6 @@ use super::super::ffi::*;
 use super::super::internals::*;
 use std::sync::Arc;
 use std::rc::Rc;
-use std::cell::RefCell;
 use winapi::*; use kernel32::*; use user32::*;
 use widestring;
 
@@ -130,11 +129,11 @@ impl WindowServer for Win32Server
 	}
 	fn is_vk_presentation_support(&self, adapter: &vk::PhysicalDevice, qf_index: u32) -> bool
 	{
-		adapter.is_win32_presentation_support(qf_index)
+		adapter.is_platform_presentation_support(qf_index)
 	}
 	fn make_vk_surface(&self, target: &Self::NativeWindowT, instance: &Rc<vk::Instance>) -> Result<vk::Surface, EngineError>
 	{
-		vk::Surface::new_win32(instance, &target.native_surface_create_info(self)).map_err(EngineError::from)
+		vk::Surface::new(instance, &target.native_surface_create_info(self)).map_err(EngineError::from)
 	}
 }
 pub fn connect_win32_server() -> Result<Arc<Win32Server>, EngineError> { Win32Server::connect() }

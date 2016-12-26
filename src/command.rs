@@ -181,8 +181,8 @@ pub struct TransientGraphicsCommandBuffers<'a>(Vec<VkCommandBuffer>, &'a vk::Com
 impl std::ops::Deref for GraphicsCommandBuffers { type Target = GraphicsCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
 impl std::ops::Deref for BundledCommandBuffers { type Target = BundledCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
 impl std::ops::Deref for TransferCommandBuffers { type Target = TransferCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
-impl<'a> std::ops::Deref for TransientTransferCommandBuffers<'a> { type Target = GraphicsCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
-impl<'a> std::ops::Deref for TransientGraphicsCommandBuffers<'a> { type Target = TransferCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
+impl<'a> std::ops::Deref for TransientTransferCommandBuffers<'a> { type Target = TransferCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
+impl<'a> std::ops::Deref for TransientGraphicsCommandBuffers<'a> { type Target = GraphicsCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
 // Concurrency Supports //
 unsafe impl Sync for GraphicsCommandBuffers {}
 unsafe impl Send for GraphicsCommandBuffers {}
