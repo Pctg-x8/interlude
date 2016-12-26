@@ -32,6 +32,7 @@ mod input;
 mod data;
 mod internal_traits;
 mod concurrent;
+mod tuple_tools;
 
 // platform dependents
 #[cfg(unix)] mod linux;
@@ -72,6 +73,7 @@ pub use self::command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingC
 pub use self::resource::{ImageView, BufferResource, ImageResource};
 pub use self::resource::{ImageViewFactory};
 pub use self::window_common::{WindowServer, RenderWindow};
+pub use self::tuple_tools::{TupleFlatR};
 // exported objects
 pub use self::engine::Engine;
 pub use self::synchronize::{QueueFence, Fence, FenceRef};
@@ -105,6 +107,7 @@ mod internals
 	pub use super::data::*;
 	pub use super::input::*;
 	pub use super::concurrent::*;
+	pub use super::tuple_tools::*;
 }
 
 // Result<_, EngineError> as Unrecoverable(Crashes immediately)

@@ -208,7 +208,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	}
 	pub fn create_render_window(&self, size: &Size2, title: &str) -> Result<Box<RenderWindow>, EngineError>
 	{
-		info!(target: "Prelude", "Creating Render Window \"{}\" ({}x{})", title, size.0, size.1);
+		info!(target: "Interlude", "Creating Render Window \"{}\" ({}x{})", title, size.0, size.1);
 		Window::<WS::NativeWindowT>::create_unresizable(self, size, title).map(|x| x as Box<RenderWindow>)
 	}
 
@@ -216,20 +216,20 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	{
 		// Feature Check //
 		let features = adapter.features();
-		info!(target: "Prelude::DiagAdapter", "adapter features");
-		info!(target: "Prelude::DiagAdapter", "-- independentBlend: {}", bool_to_str(features.independentBlend));
-		info!(target: "Prelude::DiagAdapter", "-- geometryShader: {}", bool_to_str(features.geometryShader));
-		info!(target: "Prelude::DiagAdapter", "-- multiDrawIndirect: {}", bool_to_str(features.multiDrawIndirect));
-		info!(target: "Prelude::DiagAdapter", "-- drawIndirectFirstInstance: {}", bool_to_str(features.drawIndirectFirstInstance));
-		info!(target: "Prelude::DiagAdapter", "-- shaderTessellationAndGeometryPointSize: {}", bool_to_str(features.shaderTessellationAndGeometryPointSize));
-		info!(target: "Prelude::DiagAdapter", "-- depthClamp: {}", bool_to_str(features.depthClamp));
-		info!(target: "Prelude::DiagAdapter", "-- depthBiasClamp: {}", bool_to_str(features.depthBiasClamp));
-		info!(target: "Prelude::DiagAdapter", "-- wideLines: {}", bool_to_str(features.wideLines));
-		info!(target: "Prelude::DiagAdapter", "-- alphaToOne: {}", bool_to_str(features.alphaToOne));
-		info!(target: "Prelude::DiagAdapter", "-- multiViewport: {}", bool_to_str(features.multiViewport));
-		info!(target: "Prelude::DiagAdapter", "-- shaderCullDistance: {}", bool_to_str(features.shaderCullDistance));
-		info!(target: "Prelude::DiagAdapter", "-- shaderClipDistance: {}", bool_to_str(features.shaderClipDistance));
-		info!(target: "Prelude::DiagAdapter", "-- shaderResourceResidency: {}", bool_to_str(features.shaderResourceResidency));
+		info!(target: "Interlude::DiagAdapter", "adapter features");
+		info!(target: "Interlude::DiagAdapter", "-- independentBlend: {}", bool_to_str(features.independentBlend));
+		info!(target: "Interlude::DiagAdapter", "-- geometryShader: {}", bool_to_str(features.geometryShader));
+		info!(target: "Interlude::DiagAdapter", "-- multiDrawIndirect: {}", bool_to_str(features.multiDrawIndirect));
+		info!(target: "Interlude::DiagAdapter", "-- drawIndirectFirstInstance: {}", bool_to_str(features.drawIndirectFirstInstance));
+		info!(target: "Interlude::DiagAdapter", "-- shaderTessellationAndGeometryPointSize: {}", bool_to_str(features.shaderTessellationAndGeometryPointSize));
+		info!(target: "Interlude::DiagAdapter", "-- depthClamp: {}", bool_to_str(features.depthClamp));
+		info!(target: "Interlude::DiagAdapter", "-- depthBiasClamp: {}", bool_to_str(features.depthBiasClamp));
+		info!(target: "Interlude::DiagAdapter", "-- wideLines: {}", bool_to_str(features.wideLines));
+		info!(target: "Interlude::DiagAdapter", "-- alphaToOne: {}", bool_to_str(features.alphaToOne));
+		info!(target: "Interlude::DiagAdapter", "-- multiViewport: {}", bool_to_str(features.multiViewport));
+		info!(target: "Interlude::DiagAdapter", "-- shaderCullDistance: {}", bool_to_str(features.shaderCullDistance));
+		info!(target: "Interlude::DiagAdapter", "-- shaderClipDistance: {}", bool_to_str(features.shaderClipDistance));
+		info!(target: "Interlude::DiagAdapter", "-- shaderResourceResidency: {}", bool_to_str(features.shaderResourceResidency));
 		// if features.depthClamp == false as VkBool32 { panic!("DepthClamp Feature is required in device"); }
 
 		// Vulkan and XCB Integration Check //
@@ -240,11 +240,11 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	{
 		// Setup Engine Logger //
 		log::set_logger(|max_log_level| { max_log_level.set(log::LogLevelFilter::Info); Box::new(EngineLogger) }).unwrap();
-		info!(target: "Prelude", "Initializing Engine...");
+		info!(target: "Interlude", "Initializing Engine...");
 
 		let window_server = try!(connect_f());
 
-		let instance = try!(vk::Instance::new(app_name, app_version, "Prelude Computer-Graphics Engine", VK_MAKE_VERSION!(0, 0, 1),
+		let instance = try!(vk::Instance::new(app_name, app_version, "Interlude Computer-Graphics Engine", VK_MAKE_VERSION!(0, 0, 1),
 			&["VK_LAYER_LUNARG_standard_validation"], &["VK_KHR_surface", surface_ex_name, "VK_EXT_debug_report"]).map(|x| Rc::new(x)));
 		let dbg_callback = try!(vk::DebugReportCallback::new(&instance, device_report_callback));
 		let adapter = try!(instance.adapters().map_err(|e| EngineError::from(e))
@@ -258,7 +258,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 		}
 		else
 		{
-			info!(target: "Prelude::DiagAdapter", "MultiDrawIndirect or DrawIndirectFirstInstance features are not available.");
+			info!(target: "Interlude::DiagAdapter", "MultiDrawIndirect or DrawIndirectFirstInstance features are not available.");
 			(false, extra_features)
 		};
 		let device =
@@ -283,8 +283,8 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 			.enumerate().find(|&(_, &VkMemoryType(flags, _))| (flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0)
 			.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Host Visible Memory is not found")));
 
-		info!(target: "Prelude", "MemoryType[Device Local] Index = {}: {:?}", mt_index_for_device_local, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_device_local as usize].0));
-		info!(target: "Prelude", "MemoryType[Host Visible] Index = {}: {:?}", mt_index_for_host_visible, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_host_visible as usize].0));
+		info!(target: "Interlude", "MemoryType[Device Local] Index = {}: {:?}", mt_index_for_device_local, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_device_local as usize].0));
+		info!(target: "Interlude", "MemoryType[Host Visible] Index = {}: {:?}", mt_index_for_host_visible, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_host_visible as usize].0));
 
 		let asset_base = asset_base.map(|b| b.as_ref().to_path_buf())
 			.unwrap_or(std::env::current_exe().unwrap().parent().map(|x| x.to_path_buf()).unwrap()).join("assets");
@@ -389,7 +389,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 		-> Result<ShaderProgram, EngineError>
 	{
 		let entity_path = self.parse_asset(asset_path, "spv");
-		info!(target: "Prelude", "Loading Vertex Shader {:?}", entity_path);
+		info!(target: "Interlude", "Loading Vertex Shader {:?}", entity_path);
 		std::fs::File::open(entity_path).map_err(EngineError::from).and_then(|mut fp|
 		{
 			let mut bin: Vec<u8> = Vec::new();
@@ -400,7 +400,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	fn create_geometry_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>
 	{
 		let entity_path = self.parse_asset(asset_path, "spv");
-		info!(target: "Prelude", "Loading Geometry Shader {:?}", entity_path);
+		info!(target: "Interlude", "Loading Geometry Shader {:?}", entity_path);
 		std::fs::File::open(entity_path).map_err(EngineError::from).and_then(|mut fp|
 		{
 			let mut bin: Vec<u8> = Vec::new();
@@ -411,7 +411,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	fn create_fragment_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>
 	{
 		let entity_path = self.parse_asset(asset_path, "spv");
-		info!(target: "Prelude", "Loading Fragment Shader {:?}", entity_path);
+		info!(target: "Interlude", "Loading Fragment Shader {:?}", entity_path);
 		std::fs::File::open(entity_path).map_err(EngineError::from).and_then(|mut fp|
 		{
 			let mut bin: Vec<u8> = Vec::new();
@@ -434,29 +434,23 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	}
 	fn create_double_buffer(&self, prealloc: &BufferPreallocator) -> Result<(DeviceBuffer, StagingBuffer), EngineError>
 	{
-		DeviceBuffer::new(self, prealloc.total_size() as VkDeviceSize, prealloc.get_usage()).and_then(|dev|
-		StagingBuffer::new(self, prealloc.total_size() as VkDeviceSize).map(move |stg| (dev, stg)))
+		(DeviceBuffer::new(self, prealloc.total_size() as VkDeviceSize, prealloc.get_usage()), StagingBuffer::new(self, prealloc.total_size() as VkDeviceSize)).flatten()
 	}
 	fn create_double_image(&self, prealloc: &ImagePreallocator) -> Result<(DeviceImage, Option<StagingImage>), EngineError>
 	{
-		let image1 = try!(prealloc.dim1_images().iter().map(|desc| Image1D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>());
-		let image2 = try!(prealloc.dim2_images().iter().map(|desc| Image2D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>());
-		let image3 = try!(prealloc.dim3_images().iter().map(|desc| Image3D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>());
-		let linear_image1 = try!(prealloc.dim1_images().iter().filter(|desc| !desc.is_device_resource()).map(|desc| desc.get_internal())
-			.map(|desc| LinearImage2D::new(self, Size2(desc.extent.0, 1), desc.format)).collect::<Result<Vec<_>, EngineError>>());
-		let linear_image2 = try!(prealloc.dim2_images().iter().filter(|desc| !desc.is_device_resource()).map(|desc| desc.get_internal())
-			.map(|desc| LinearImage2D::new(self, Size2(desc.extent.0, desc.extent.1), desc.format)).collect::<Result<Vec<_>, EngineError>>());
-		let linear_images = linear_image1.into_iter().chain(linear_image2.into_iter()).collect::<Vec<_>>();
+		let image1 = prealloc.dim1_images().iter().map(|desc| Image1D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>();
+		let image2 = prealloc.dim2_images().iter().map(|desc| Image2D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>();
+		let image3 = prealloc.dim3_images().iter().map(|desc| Image3D::new(self, desc.get_internal())).collect::<Result<Vec<_>, EngineError>>();
+		let linear_image1 = prealloc.dim1_images().iter().filter(|desc| !desc.is_device_resource()).map(|desc| desc.get_internal())
+			.map(|desc| LinearImage2D::new(self, Size2(desc.extent.0, 1), desc.format)).collect::<Result<Vec<_>, EngineError>>();
+		let linear_image2 = prealloc.dim2_images().iter().filter(|desc| !desc.is_device_resource()).map(|desc| desc.get_internal())
+			.map(|desc| LinearImage2D::new(self, Size2(desc.extent.0, desc.extent.1), desc.format)).collect::<Result<Vec<_>, EngineError>>();
+		let linear_images = (linear_image1, linear_image2).flatten().map(|(l1, l2)| l1.into_iter().chain(l2.into_iter()).collect::<Vec<_>>());
 
-		DeviceImage::new(self, image1, image2, image3).and_then(|dev|
-		if !linear_images.is_empty()
+		(image1, image2, image3, linear_images).flatten().and_then(|(i1, i2, i3, l)| DeviceImage::new(self, i1, i2, i3).and_then(|dev| if !l.is_empty()
 		{
-			StagingImage::new(self, linear_images).map(move |stg| (dev, Some(stg)))
-		}
-		else
-		{
-			Ok((dev, None))
-		})
+			StagingImage::new(self, l).map(|stg| (dev, Some(stg)))
+		} else { Ok((dev, None)) }))
 	}
 	fn create_descriptor_set_layout(&self, bindings: &[Descriptor]) -> Result<DescriptorSetLayout, EngineError>
 	{
@@ -535,9 +529,9 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 			Some(current)
 		}).collect::<Vec<_>>();
 
-		info!(target: "Prelude::BufferPreallocator", "Preallocation Results: ");
-		info!(target: "Prelude::BufferPreallocator", "-- Minimum Alignment for Uniform Buffer: {} bytes", uniform_alignment);
-		info!(target: "Prelude::BufferPreallocator", "-- Preallocated Offsets: {:?}", offsets);
+		info!(target: "Interlude::BufferPreallocator", "Preallocation Results: ");
+		info!(target: "Interlude::BufferPreallocator", "-- Minimum Alignment for Uniform Buffer: {} bytes", uniform_alignment);
+		info!(target: "Interlude::BufferPreallocator", "-- Preallocated Offsets: {:?}", offsets);
 
 		BufferPreallocator::new(usage_flags, offsets)
 	}
