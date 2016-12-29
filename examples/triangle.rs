@@ -43,7 +43,6 @@ fn main()
 	let ps = engine.create_graphics_pipelines(&[&ps_mold]).or_crash().pop().unwrap();
 
 	// Transfer data / Setting image layout
-	info!("Transfering Staging Data...");
 	engine.allocate_transient_transfer_command_buffers(1).and_then(|setup_commands|
 	{
 		let bmbarriers = [
@@ -63,8 +62,8 @@ fn main()
 		setup_commands.execute()
 	}).or_crash();
 
-	// Forward Presenting
-	info!("Forward Presenting...");
+	// Forward Presenting(For Intel Graphics)
+	/*info!("Forward Presenting...");
 	{
 		let ordersem = engine.create_queue_fence().or_crash();
 		wframe.acquire_next_backbuffer_index(&ordersem).and_then(|index|
@@ -81,10 +80,9 @@ fn main()
 			}).map(|_| index)
 		}).and_then(|index| wframe.present(engine.graphics_queue_ref(), index, None)).or_crash();
 		engine.wait_device().or_crash();
-	}
+	}*/
 
 	// Draw commands and submit it
-	info!("Rendering...");
 	let cb = engine.allocate_graphics_command_buffers(wframe.backimage_count()).or_crash();
 	for (n, recorder) in cb.begin_all().or_crash()
 	{

@@ -4,6 +4,7 @@ use {std, vk};
 use vk::ffi::*;
 use std::ffi::CString;
 use super::internals::*;
+use libc::size_t;
 
 pub struct VertexInputState(Vec<VertexBinding>, Vec<VertexAttribute>);
 #[derive(Clone)]
@@ -253,7 +254,7 @@ impl<'a> std::convert::Into<IntoNativeShaderStageCreateInfoStruct> for &'a Pipel
 				{
 					&ConstantEntry::Float(_) | &ConstantEntry::Uint(_) => 4usize
 				};
-				let rval = VkSpecializationMapEntry(*id as u32, *acc as u32, size as VkDeviceSize);
+				let rval = VkSpecializationMapEntry(*id as u32, *acc as u32, size as size_t);
 				*acc += size;
 				Some(rval)
 			}).collect::<Vec<_>>();
@@ -284,7 +285,7 @@ impl<'a> std::convert::Into<IntoNativeShaderStageCreateInfoStruct> for &'a Pipel
 			specialization_structure: if map_entries.is_empty() { None } else { Some(VkSpecializationInfo
 			{
 				mapEntryCount: map_entries.len() as u32, pMapEntries: map_entries.as_ptr(),
-				dataSize: const_values.len() as VkDeviceSize, pData: const_values.as_ptr() as *const std::os::raw::c_void
+				dataSize: const_values.len() as size_t, pData: const_values.as_ptr() as *const std::os::raw::c_void
 			})},
 			specialization_entry: map_entries, specialization_values: const_values
 		}
