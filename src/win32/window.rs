@@ -79,9 +79,11 @@ impl WindowServer for Win32Server
 	{
 		let &Size2(width, height) = size;
 		let title_str = widestring::WideCString::from_str(title).unwrap();
-		let wnd = unsafe { CreateWindowExW(0, std::mem::transmute((self.common_class as usize) & 0x0000ffff), title_str.as_ptr(),
-			WS_OVERLAPPED | WS_CAPTION | WS_BORDER | WS_SYSMENU | WS_MINIMIZEBOX,
-			CW_USEDEFAULT, CW_USEDEFAULT, width as i32, height as i32, std::ptr::null_mut(), std::ptr::null_mut(), self.appinstance, std::ptr::null_mut()) };
+		let wstyle = WS_OVERLAPPED | WS_CAPTION | WS_BORDER | WS_SYSMENU | WS_MINIMIZEBOX;
+		let mut r = RECT { left: 0, top: 0, right: width as i32, bottom: height as i32 };
+		unsafe { AdjustWindowRectEx(&mut r, wstyle, FALSE, 0) };
+		let wnd = unsafe { CreateWindowExW(0, std::mem::transmute((self.common_class as usize) & 0x0000ffff), title_str.as_ptr(), wstyle,
+			CW_USEDEFAULT, CW_USEDEFAULT, r.right - r.left, r.bottom - r.top, std::ptr::null_mut(), std::ptr::null_mut(), self.appinstance, std::ptr::null_mut()) };
 		if wnd.is_null() { Err(EngineError::GenericError("Unable to create win32 window")) } else { Ok(wnd) }
 	}
 	fn show_window(&self, target: &Self::NativeWindowT) { target.native_show(self); }
