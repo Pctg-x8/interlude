@@ -125,7 +125,7 @@ pub trait EngineCore : EngineCoreExports + CommandSubmitter
 	// Asset Path //
 	fn parse_asset(&self, asset_path: &str, extension: &str) -> std::ffi::OsString;
 	fn _parse_asset(asset_base: &PathBuf, asset_path: &str, extension: &str) -> std::ffi::OsString;
-	fn get_postprocess_vsh(&self, require_uv: bool) -> &ShaderProgram;
+	fn postprocess_vsh(&self, require_uv: bool) -> Result<&ShaderProgram, &EngineError>;
 
 	// Device Configurations/Operations //
 	fn update_descriptors(&self, write_infos: &[DescriptorSetWriteInfo]);
@@ -136,6 +136,23 @@ pub trait EngineCore : EngineCoreExports + CommandSubmitter
 	fn new_command_sender(&self) -> CommandSender;
 	fn graphics_queue_ref(&self) -> &vk::Queue;
 }
+pub struct LazyLoadedResource<T>(Option<Result<T, EngineError>>);
+impl<T> LazyLoadedResource<T>
+{
+	fn new() -> Self { LazyLoadedResource(None) }
+	fn get<'s, F>(&'s self, initializer: F) -> Result<&'s T, &'s EngineError> where F: FnOnce() -> Result<T, EngineError>
+	{
+		if self.0.is_none()
+		{
+			unsafe { *std::mem::transmute::<_, *mut Option<Result<T, EngineError>>>(&self.0) = Some(initializer()); }
+		}
+		self.0.as_ref().unwrap().as_ref()
+	}
+}
+pub struct EngineResources
+{
+	postprocess_vsh: LazyLoadedResource<ShaderProgram>, postprocess_vsh_nouv: LazyLoadedResource<ShaderProgram>
+}
 pub struct Engine<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
 {
 	window_system: Arc<WS>, input_system: Arc<RwLock<IS>>,
@@ -145,9 +162,7 @@ pub struct Engine<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: Par
 	asset_dir: std::path::PathBuf,
 	physical_device_limits: VkPhysicalDeviceLimits,
 	memory_type_index_for_device_local: u32, memory_type_index_for_host_visible: u32,
-	optimized_debug_render: bool,
-	// CommonResources //
-	pub postprocess_vsh: ShaderProgram, pub postprocess_vsh_nouv: ShaderProgram,
+	optimized_debug_render: bool, common_resources: EngineResources,
 	// Phantom Data //
 	ph: std::marker::PhantomData<InputNames>
 }
@@ -292,7 +307,6 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 
 		let asset_base = asset_base.map(|b| b.as_ref().to_path_buf())
 			.unwrap_or(std::env::current_exe().unwrap().parent().map(|x| x.to_path_buf()).unwrap()).join("assets");
-		let (ppvsh, ppvsh_nouv) = try!(Self::init_common_resources(&device, &asset_base));
 		Ok(Engine
 		{
 			window_system: window_server, input_system: Arc::new(RwLock::new(try!(IS::new()))),
@@ -302,28 +316,24 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 			physical_device_limits: adapter.properties().limits,
 			memory_type_index_for_device_local: mt_index_for_device_local,
 			memory_type_index_for_host_visible: mt_index_for_host_visible,
-			optimized_debug_render: odr,
-			postprocess_vsh: ppvsh, postprocess_vsh_nouv: ppvsh_nouv,
+			optimized_debug_render: odr, common_resources: EngineResources::new(),
 			ph: std::marker::PhantomData
 		})
 	}
-	fn init_common_resources(device: &Rc<vk::Device>, asset_base: &PathBuf) -> Result<(ShaderProgram, ShaderProgram), EngineError>
+}
+// Delayed Loaders for EngineResources
+impl EngineResources
+{
+	fn new() -> Self { EngineResources { postprocess_vsh: LazyLoadedResource::new(), postprocess_vsh_nouv: LazyLoadedResource::new() } }
+	fn postprocess_vsh<E: EngineCore>(&self, context: &E) -> Result<&ShaderProgram, &EngineError>
 	{
-		info!(target: "Interlude::CommonResource", "Loading Vertex Shader for PostProcessing...");
-
-		std::fs::File::open(Self::_parse_asset(asset_base, "engine.shaders.PostProcessVertex", "spv")).map_err(EngineError::from).and_then(|mut fp|
-		{
-			let mut bin = Vec::new();
-			fp.read_to_end(&mut bin).map(move |_| bin).map_err(EngineError::from)
-		}).and_then(|b| vk::ShaderModule::new(device, &b).map_err(EngineError::from)).map(|m|
-			ShaderProgram::new_vertex(m, "main", &[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)])
-		).and_then(|ppvsh| std::fs::File::open(Self::_parse_asset(asset_base, "engine.shaders.PostProcessVertexNoUV", "spv")).map_err(EngineError::from).and_then(|mut fp|
-			{
-				let mut bin = Vec::new();
-				fp.read_to_end(&mut bin).map(move |_| bin).map_err(EngineError::from)
-			}).and_then(|b| vk::ShaderModule::new(device, &b).map_err(EngineError::from))
-			.map(move |m| (ppvsh, ShaderProgram::new_vertex(m, "main", &[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)])))
-		)
+		self.postprocess_vsh.get(|| context.create_vertex_shader_from_asset("engine.shaders.Post`ProcessVertex", "main",
+				&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
+	}
+	fn postprocess_vsh_nouv<E: EngineCore>(&self, context: &E) -> Result<&ShaderProgram, &EngineError>
+	{
+		self.postprocess_vsh_nouv.get(|| context.create_vertex_shader_from_asset("engine.shaders.Post`ProcessVertexNoUV", "main",
+				&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
 	}
 }
 // For WindowServer independent parts
@@ -579,7 +589,10 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	fn new_command_sender(&self) -> CommandSender { CommandSender(&self.device) }
 	fn graphics_queue_ref(&self) -> &vk::Queue { self.device.get_graphics_queue() }
 
-	fn get_postprocess_vsh(&self, require_uv: bool) -> &ShaderProgram { if require_uv { &self.postprocess_vsh } else { &self.postprocess_vsh_nouv } }
+	fn postprocess_vsh(&self, require_uv: bool) -> Result<&ShaderProgram, &EngineError>
+	{
+		if require_uv { self.common_resources.postprocess_vsh(self) } else { self.common_resources.postprocess_vsh_nouv(self) }
+	}
 }
 
 unsafe extern "system" fn device_report_callback(flags: VkDebugReportFlagsEXT, object_type: VkDebugReportObjectTypeEXT, _: u64,

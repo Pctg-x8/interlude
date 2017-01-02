@@ -272,7 +272,7 @@ pub enum VkFormat
 	ASTC_12x12_UNORM_BLOCK = 183,
 	ASTC_12x12_SRGB_BLOCK = 184
 }
-#[repr(C)] #[derive(PartialEq, Eq, Debug)]
+#[repr(C)] #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum VkResult
 {
 	Success = 0,

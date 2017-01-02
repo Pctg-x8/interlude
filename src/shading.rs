@@ -332,17 +332,17 @@ impl <'a> GraphicsPipelineBuilder<'a>
 		}
 	}
 	pub fn for_postprocess<Engine: EngineCore>(engine: &'a Engine, layout: &'a PipelineLayout, render_pass: &'a RenderPass, subpass_index: u32,
-		fragment_shader: PipelineShaderProgram<'a>, processing_viewport: &Viewport) -> Self
+		fragment_shader: PipelineShaderProgram<'a>, processing_viewport: &Viewport) -> Result<Self, &'a EngineError>
 	{
-		GraphicsPipelineBuilder
+		Ok(GraphicsPipelineBuilder
 		{
 			layout: layout, render_pass: render_pass, subpass_index: subpass_index,
-			vertex_shader: Some(PipelineShaderProgram::unspecialized(&engine.get_postprocess_vsh(true))), geometry_shader: None, fragment_shader: Some(fragment_shader),
+			vertex_shader: Some(PipelineShaderProgram::unspecialized(try!{engine.postprocess_vsh(true)})), geometry_shader: None, fragment_shader: Some(fragment_shader),
 			primitive_topology: PrimitiveTopology::TriangleStrip(false),
 			vp_sc: vec![ViewportWithScissorRect::default_scissor(processing_viewport)],
 			rasterizer_state: RasterizerState { wired_render: false, cull_side: None },
 			use_alpha_to_coverage: false, attachment_blend_states: vec![AttachmentBlendState::Disabled]
-		}
+		})
 	}
 
 	pub fn vertex_shader(mut self, vshader: PipelineShaderProgram<'a>) -> Self
