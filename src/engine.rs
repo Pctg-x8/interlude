@@ -73,6 +73,11 @@ impl DeviceFeatures
 		self.0.textureCompressionBC = true as VkBool32;
 		self
 	}
+	pub fn enable_nonsolid_fillmode(mut self) -> Self
+	{
+		self.0.fillModeNonSolid = true as VkBool32;
+		self
+	}
 }
 
 pub trait EngineExports<WS: WindowServer>

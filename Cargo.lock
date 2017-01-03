@@ -9,6 +9,7 @@ dependencies = [
  "libc 0.2.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "nalgebra 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thread-scoped 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-normalization 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "user32-sys 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "widestring 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -183,6 +184,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "thread-scoped"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "unicode-normalization"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -242,6 +248,7 @@ dependencies = [
 "checksum rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)" = "2791d88c6defac799c3f20d74f094ca33b9332612d9aef9078519c82e4fe04a5"
 "checksum rustc-serialize 0.3.19 (registry+https://github.com/rust-lang/crates.io-index)" = "6159e4e6e559c81bd706afe9c8fd68f547d3e851ce12e76b1de7914bab61691b"
 "checksum simple-slab 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "dc75421b4ed355c346a7138c34cd4fb4f8e170491a4c89fb86b522fd3f8ee475"
+"checksum thread-scoped 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "14387dce246d09efe184c8ebc34d9db5c0672a908b2f50efc53359ae13d5ae68"
 "checksum unicode-normalization 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "26643a2f83bac55f1976fb716c10234485f9202dcd65cfbdf9da49867b271172"
 "checksum user32-sys 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4ef4711d107b21b410a3a974b1204d9accc8b10dad75d8324b5d755de1617d47"
 "checksum widestring 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7157704c2e12e3d2189c507b7482c52820a16dfa4465ba91add92f266667cadb"

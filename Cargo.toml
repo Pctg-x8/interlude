@@ -10,6 +10,7 @@ freetype-sys = "0.4.0"
 unicode-normalization = "0.1.2"
 nalgebra = "0.10.1"
 ansi_term = "0.9.0"
+thread-scoped = "1.0.1"
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.2.8"
