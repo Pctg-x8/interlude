@@ -88,55 +88,91 @@ pub trait EngineCoreExports
 	fn get_compatible_memory_type_index(&self, bits: u32) -> Result<u32, EngineError>;
 	fn is_optimized_debug_render_support(&self) -> bool;
 }
-// Core Functions in Engine
+/// Core Operations in Engine
 pub trait EngineCore : EngineCoreExports + CommandSubmitter
 {
 	// Factory Methods //
+	/// Create a fence object which is used synchronizing between host(CPU) and device(GPU)
 	fn create_fence(&self) -> Result<Fence, EngineError>;
+	/// Create a queue fence(semaphore) object which is used synchronizing between queues
 	fn create_queue_fence(&self) -> Result<QueueFence, EngineError>;
+	/// Create a render pass which defines a rendering method to attachments
 	fn create_render_pass(&self, attachments: &[&AttachmentDesc], passes: &[&PassDesc], deps: &[&PassDependency]) -> Result<RenderPass, EngineError>;
+	/// Create a framebuffer which is collection of attachments(ImageViews) and a render pass
 	fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: &Size3) -> Result<Framebuffer, EngineError>;
+	/// Create a simple framebuffer which is with auto-generated render pass(Preserved Pixels to VRAM, Layout transition: ColorAttachmentOptimal -> ShaderReadOnlyOptimal).
+	/// Usable for rendering to single attachment which is used as Shader Input(Texture) 
 	fn create_simple_framebuffer(&self, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3) -> Result<Framebuffer, EngineError>;
+	/// Create a simple framebuffer which is with auto-generated render pass(Preserved Pixels to VRAM, Layout transition: ColorAttachmentOptimal -> PresentSrcKHR)
+	/// Usable for rendering to swapchain and no other subpasses are required.
 	fn create_presented_framebuffer(&self, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3) -> Result<Framebuffer, EngineError>;
+	/// Create a vertex shader from asset with Vertex Binding and Vertex Attribute inputs.
 	fn create_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str, vertex_bindings: &[VertexBinding], vertex_attributes: &[VertexAttribute])
 		-> Result<ShaderProgram, EngineError>;
+	/// Create a geometry shader from asset
 	fn create_geometry_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>;
+	/// Create a fragment shader from asset
 	fn create_fragment_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>;
+	/// Create a pipeline layout which defines layout of pipeline-shared data(shader uniforms)
 	fn create_pipeline_layout(&self, descriptor_sets: &[&DescriptorSetLayout], push_constants: &[PushConstantDesc]) -> Result<PipelineLayout, EngineError>;
+	/// Create graphics pipelines from Builder data
 	fn create_graphics_pipelines(&self, builders: &[&GraphicsPipelineBuilder]) -> Result<Vec<GraphicsPipeline>, EngineError>;
+	/// Create double-buffered(device-local and staging) buffer
 	fn create_double_buffer(&self, prealloc: &BufferPreallocator) -> Result<(DeviceBuffer, StagingBuffer), EngineError>;
+	/// Create double-buffered(device-local and staging) image
 	fn create_double_image(&self, prealloc: &ImagePreallocator) -> Result<(DeviceImage, Option<StagingImage>), EngineError>;
+	/// Create descriptor set layout which is group of shader inputs(uniform, texture, storage...)
 	fn create_descriptor_set_layout(&self, bindings: &[Descriptor]) -> Result<DescriptorSetLayout, EngineError>;
+	/// Create sampler object
 	fn create_sampler(&self, state: &SamplerState) -> Result<Sampler, EngineError>;
+	/// Create image view object for Image1D
 	fn create_image_view_1d(&self, res: &Rc<Image1D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange)
 		-> Result<ImageView1D, EngineError>;
+	/// Create image view object for Image2D
 	fn create_image_view_2d(&self, res: &Rc<Image2D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange)
 		-> Result<ImageView2D, EngineError>;
+	/// Create image view object for Image3D
 	fn create_image_view_3d(&self, res: &Rc<Image3D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange)
 		-> Result<ImageView3D, EngineError>;
+	/// Create vertex shader for post-processing
 	fn create_postprocess_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>;
 
 	// Allocation Methods //
+	/// Allocate graphics command buffers
 	fn allocate_graphics_command_buffers(&self, count: usize) -> Result<GraphicsCommandBuffers, EngineError>;
+	/// Allocate secondary graphics command buffers
 	fn allocate_bundled_command_buffers(&self, count: usize) -> Result<BundledCommandBuffers, EngineError>;
+	/// Allocate transfer command buffers
 	fn allocate_transfer_command_buffers(&self, count: usize) -> Result<TransferCommandBuffers, EngineError>;
-	fn allocate_transient_transfer_command_buffers(&self, count: usize) -> Result<TransientTransferCommandBuffers, EngineError>;
+	/// Allocate graphics command buffers which is short-lived and only used once
 	fn allocate_transient_graphics_command_buffers(&self, count: usize) -> Result<TransientGraphicsCommandBuffers, EngineError>;
+	/// Allocate transfer command buffers which is short-lived and only used once
+	fn allocate_transient_transfer_command_buffers(&self, count: usize) -> Result<TransientTransferCommandBuffers, EngineError>;
+	/// Allocate all of descriptor set with corresponding layout
 	fn preallocate_all_descriptor_sets(&self, layouts: &[&DescriptorSetLayout]) -> Result<DescriptorSets, EngineError>;
+	/// Pre-allocate(alignment and calculate total size of buffer) buffer contents
 	fn buffer_preallocate(&self, structure_sizes: &[(usize, BufferDataType)]) -> BufferPreallocator;
 
 	// Asset Path //
+	/// Parse asset path with extension. Asset path is delimitered by "."
 	fn parse_asset(&self, asset_path: &str, extension: &str) -> std::ffi::OsString;
+	/// Implementation of parse_asset
 	fn _parse_asset(asset_base: &PathBuf, asset_path: &str, extension: &str) -> std::ffi::OsString;
+	/// Get default vertex shader for post-processing
 	fn postprocess_vsh(&self, require_uv: bool) -> Result<&ShaderProgram, EngineError>;
 
 	// Device Configurations/Operations //
+	/// Update descriptor sets
 	fn update_descriptors(&self, write_infos: &[DescriptorSetWriteInfo]);
+	/// Wait device operations
 	fn wait_device(&self) -> Result<(), EngineError>;
+	/// Submit transient command buffers to device
 	fn submit_transient_commands(&self, tt: Option<TransientTransferCommandBuffers>, gt: Option<TransientGraphicsCommandBuffers>) -> Result<(), EngineError>;
 
 	// Detached Functions //
+	/// Detach a command sender which can submit command buffers
 	fn new_command_sender(&self) -> CommandSender;
+	/// Get a reference to graphics queue
 	fn graphics_queue_ref(&self) -> &vk::Queue;
 }
 pub struct LazyLoadedResource<T>(Option<T>);

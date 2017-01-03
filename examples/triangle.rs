@@ -1,6 +1,5 @@
 
 extern crate interlude;
-#[macro_use] extern crate log;
 use interlude::*;
 use interlude::ffi::*;
 
@@ -23,7 +22,7 @@ fn main()
 		];
 	}).or_crash();
 
-	// define RenderPass and make Framebuffer
+	// make Framebuffer
 	let Size2(w, h) = wframe.size();
 	let vport = Viewport::from(wframe.size());
 	let fb = wframe.get_back_images().iter().map(|&v| engine.create_presented_framebuffer(v, Some(true), &Size3(w, h, 1))).collect::<Result<Vec<_>, _>>().or_crash();
@@ -33,7 +32,7 @@ fn main()
 		&[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0), VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, std::mem::size_of::<CVector4>() as u32)]).or_crash();
 	let fshader = engine.create_fragment_shader_from_asset("engine.shaders.TrivialFragment", "main").or_crash();
 	let psl = engine.create_pipeline_layout(&[], &[]).or_crash();
-	let ps_mold = interlude::GraphicsPipelineBuilder::new(&psl, fb[0].renderpass(), 0)
+	let ps_mold = GraphicsPipelineBuilder::new(&psl, fb[0].renderpass(), 0)
 		.primitive_topology(PrimitiveTopology::TriangleList(false))
 		.vertex_shader(PipelineShaderProgram::unspecialized(&vshader))
 		.fragment_shader(PipelineShaderProgram::unspecialized(&fshader))

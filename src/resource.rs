@@ -1,6 +1,6 @@
-// Interlude: Resources(Buffer and Image)
-
 #![allow(dead_code)]
+
+///! Interlude: Resources(Buffer and Image)
 
 use super::internals::*;
 use vk::ffi::*;

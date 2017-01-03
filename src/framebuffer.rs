@@ -1,4 +1,4 @@
-// Interlude: RenderPass and Framebuffer
+///! Interlude: RenderPass and Framebuffer
 
 use super::internals::*;
 use {std, vk};

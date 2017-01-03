@@ -1,4 +1,4 @@
-// Prelude: Primitive Shading(Shaders and Pipelines)
+///! Interlude: Primitive Shading(Shaders and Pipelines)
 
 use {std, vk};
 use vk::ffi::*;
