@@ -4,10 +4,10 @@
 
 // Vulkan C to Rust FFI Structs and Handles
 
-#[cfg(unix)] use std::os::raw::*;
-#[cfg(unix)] use libc::size_t;
+use std::os::raw::*;
+use libc::size_t;
 use super::*;
-#[cfg(windows)] use winapi::*;		// c_*** and size_t types imported here
+#[cfg(windows)] use winapi;
 #[cfg(unix)] use xcb;
 
 // Basic Types(Copyable) //
@@ -638,7 +638,7 @@ impl VkComponentMapping
 pub struct VkWin32SurfaceCreateInfoKHR
 {
 	pub sType: VkStructureType, pub pNext: *const c_void, pub flags: VkWin32SurfaceCreateFlagsKHR,
-	pub hinstance: HINSTANCE, pub hwnd: HWND
+	pub hinstance: winapi::HINSTANCE, pub hwnd: winapi::HWND
 }
 #[repr(C)] #[cfg(unix)]
 pub struct VkXcbSurfaceCreateInfoKHR

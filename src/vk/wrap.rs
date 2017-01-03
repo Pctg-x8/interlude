@@ -7,7 +7,7 @@ use std::ffi::*;
 use std::ops::Deref;
 use std::rc::Rc;
 #[cfg(unix)] use xcb::ffi::*;
-#[cfg(windows)] use winapi::*;
+use libc::size_t;
 
 fn empty_handle<T>() -> *mut T { std::ptr::null_mut() }
 type VkWrapResult<T> = Result<T, VkResult>;
@@ -381,7 +381,7 @@ impl ShaderModule
 		let info = VkShaderModuleCreateInfo
 		{
 			sType: VkStructureType::ShaderModuleCreateInfo, pNext: std::ptr::null(), flags: 0,
-			codeSize: binary.len(), pCode: unsafe { std::mem::transmute(binary.as_ptr()) }
+			codeSize: binary.len() as size_t, pCode: unsafe { std::mem::transmute(binary.as_ptr()) }
 		};
 		let mut m = empty_handle();
 		unsafe { vkCreateShaderModule(***device, &info, std::ptr::null(), &mut m) }.map(|| ShaderModule(m, device.clone()))
@@ -409,7 +409,7 @@ impl PipelineCache
 		let info = VkPipelineCacheCreateInfo
 		{
 			sType: VkStructureType::PipelineCacheCreateInfo, pNext: std::ptr::null(), flags: 0,
-			pInitialData: unsafe { std::mem::transmute(initial_data.as_ptr()) }, initialDataSize: initial_data.len()
+			pInitialData: unsafe { std::mem::transmute(initial_data.as_ptr()) }, initialDataSize: initial_data.len() as size_t
 		};
 		let mut c = empty_handle();
 		unsafe { vkCreatePipelineCache(***device, &info, std::ptr::null(), &mut c) }.map(|| PipelineCache(c, device.clone()))

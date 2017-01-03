@@ -49,7 +49,7 @@ use super::internals::*;
 // Common Implements
 impl Drop for Event
 {
-	#[cfg(windows)] fn drop(&mut self) { unsafe { CloseHandle(self.handle); } }
+	#[cfg(windows)] fn drop(&mut self) { unsafe { CloseHandle(self.0); } }
 	#[cfg(unix)]    fn drop(&mut self) { unsafe { libc::close(self.0) }; }
 }
 unsafe impl Sync for Event {}
