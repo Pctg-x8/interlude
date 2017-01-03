@@ -13,6 +13,7 @@ use std::os::raw::*;
 use std::ffi::CStr;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
+use std::collections::HashMap;
 
 struct EngineLogger;
 impl log::Log for EngineLogger
@@ -95,6 +96,8 @@ pub trait EngineCore : EngineCoreExports + CommandSubmitter
 	fn create_queue_fence(&self) -> Result<QueueFence, EngineError>;
 	fn create_render_pass(&self, attachments: &[&AttachmentDesc], passes: &[&PassDesc], deps: &[&PassDependency]) -> Result<RenderPass, EngineError>;
 	fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: &Size3) -> Result<Framebuffer, EngineError>;
+	fn create_simple_framebuffer(&self, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3) -> Result<Framebuffer, EngineError>;
+	fn create_presented_framebuffer(&self, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3) -> Result<Framebuffer, EngineError>;
 	fn create_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str, vertex_bindings: &[VertexBinding], vertex_attributes: &[VertexAttribute])
 		-> Result<ShaderProgram, EngineError>;
 	fn create_geometry_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>;
@@ -125,7 +128,7 @@ pub trait EngineCore : EngineCoreExports + CommandSubmitter
 	// Asset Path //
 	fn parse_asset(&self, asset_path: &str, extension: &str) -> std::ffi::OsString;
 	fn _parse_asset(asset_base: &PathBuf, asset_path: &str, extension: &str) -> std::ffi::OsString;
-	fn postprocess_vsh(&self, require_uv: bool) -> Result<&ShaderProgram, &EngineError>;
+	fn postprocess_vsh(&self, require_uv: bool) -> Result<&ShaderProgram, EngineError>;
 
 	// Device Configurations/Operations //
 	fn update_descriptors(&self, write_infos: &[DescriptorSetWriteInfo]);
@@ -136,22 +139,23 @@ pub trait EngineCore : EngineCoreExports + CommandSubmitter
 	fn new_command_sender(&self) -> CommandSender;
 	fn graphics_queue_ref(&self) -> &vk::Queue;
 }
-pub struct LazyLoadedResource<T>(Option<Result<T, EngineError>>);
+pub struct LazyLoadedResource<T>(Option<T>);
 impl<T> LazyLoadedResource<T>
 {
 	fn new() -> Self { LazyLoadedResource(None) }
-	fn get<'s, F>(&'s self, initializer: F) -> Result<&'s T, &'s EngineError> where F: FnOnce() -> Result<T, EngineError>
+	fn get<'s, F>(&'s self, initializer: F) -> Result<&'s T, EngineError> where F: FnOnce() -> Result<T, EngineError>
 	{
 		if self.0.is_none()
 		{
-			unsafe { *std::mem::transmute::<_, *mut Option<Result<T, EngineError>>>(&self.0) = Some(initializer()); }
+			unsafe { *std::mem::transmute::<_, *mut Option<T>>(&self.0) = Some(try!{initializer()}); }
 		}
-		self.0.as_ref().unwrap().as_ref()
+		Ok(self.0.as_ref().unwrap())
 	}
 }
 pub struct EngineResources
 {
-	postprocess_vsh: LazyLoadedResource<ShaderProgram>, postprocess_vsh_nouv: LazyLoadedResource<ShaderProgram>
+	postprocess_vsh: LazyLoadedResource<ShaderProgram>, postprocess_vsh_nouv: LazyLoadedResource<ShaderProgram>,
+	default_renderpass: HashMap<(Option<bool>, VkFormat), RenderPass>, presenting_renderpass: HashMap<(Option<bool>, VkFormat), RenderPass>
 }
 pub struct Engine<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
 {
@@ -324,16 +328,50 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 // Delayed Loaders for EngineResources
 impl EngineResources
 {
-	fn new() -> Self { EngineResources { postprocess_vsh: LazyLoadedResource::new(), postprocess_vsh_nouv: LazyLoadedResource::new() } }
-	fn postprocess_vsh<E: EngineCore>(&self, context: &E) -> Result<&ShaderProgram, &EngineError>
+	fn new() -> Self
+	{
+		EngineResources
+		{
+			postprocess_vsh: LazyLoadedResource::new(), postprocess_vsh_nouv: LazyLoadedResource::new(),
+			default_renderpass: HashMap::new(), presenting_renderpass: HashMap::new()
+		}
+	}
+
+	fn postprocess_vsh<E: EngineCore>(&self, context: &E) -> Result<&ShaderProgram, EngineError>
 	{
 		self.postprocess_vsh.get(|| context.create_vertex_shader_from_asset("engine.shaders.Post`ProcessVertex", "main",
 				&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
 	}
-	fn postprocess_vsh_nouv<E: EngineCore>(&self, context: &E) -> Result<&ShaderProgram, &EngineError>
+	fn postprocess_vsh_nouv<E: EngineCore>(&self, context: &E) -> Result<&ShaderProgram, EngineError>
 	{
 		self.postprocess_vsh_nouv.get(|| context.create_vertex_shader_from_asset("engine.shaders.Post`ProcessVertexNoUV", "main",
 				&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
+	}
+	fn default_renderpass<E: EngineCore>(&self, context: &E, format: VkFormat, clear_mode: Option<bool>) -> Result<&RenderPass, EngineError>
+	{
+		Ok(unsafe { &mut *std::mem::transmute::<_, *mut HashMap<(Option<bool>, VkFormat), RenderPass>>(&self.default_renderpass) }.entry((clear_mode, format)).or_insert({
+			let attachment = AttachmentDesc
+			{
+				format: format, clear_on_load: clear_mode, preserve_stored_value: true,
+				initial_layout: VkImageLayout::ColorAttachmentOptimal, final_layout: VkImageLayout::ShaderReadOnlyOptimal,
+				.. Default::default()
+			};
+			let pass = PassDesc::single_fragment_output(0);
+			try!(context.create_render_pass(&[&attachment], &[&pass], &[]))
+		}))
+	}
+	fn presenting_renderpass<E: EngineCore>(&self, context: &E, format: VkFormat, clear_mode: Option<bool>) -> Result<&RenderPass, EngineError>
+	{
+		Ok(unsafe { &mut *std::mem::transmute::<_, *mut HashMap<(Option<bool>, VkFormat), RenderPass>>(&self.presenting_renderpass) }.entry((clear_mode, format)).or_insert({
+			let attachment = AttachmentDesc
+			{
+				format: format, clear_on_load: clear_mode, preserve_stored_value: true,
+				initial_layout: VkImageLayout::ColorAttachmentOptimal, final_layout: VkImageLayout::PresentSrcKHR,
+				.. Default::default()
+			};
+			let pass = PassDesc::single_fragment_output(0);
+			try!(context.create_render_pass(&[&attachment], &[&pass], &[]))
+		}))
 	}
 }
 // For WindowServer independent parts
@@ -373,6 +411,18 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 			width: width, height: height, layers: layers
 		};
 		vk::Framebuffer::new(&self.device, &info).map(|f| Framebuffer::new(f, mold.get_internal(), VkExtent2D(width, height))).map_err(EngineError::from)
+	}
+	// Preserve Bitmaps to VRAM, Begins with VkImageLayout::ColorAttachmentOptimal and Ends with VkImageLayout::ShaderReadOnlyOptimal
+	fn create_simple_framebuffer(&self, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3) -> Result<Framebuffer, EngineError>
+	{
+		self.common_resources.default_renderpass(self, attachment.format(), clear_mode).and_then(|mold_ref|
+			self.create_framebuffer(mold_ref, &[attachment], form))
+	}
+	// Preserve Bitmaps to VRAM, Begins with VkImageLayout::ColorAttachmentOptimal and Ends with VkImageLayout::PresentSrcKHR
+	fn create_presented_framebuffer(&self, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3) -> Result<Framebuffer, EngineError>
+	{
+		self.common_resources.presenting_renderpass(self, attachment.format(), clear_mode).and_then(|mold_ref|
+			self.create_framebuffer(mold_ref, &[attachment], form))
 	}
 	fn allocate_graphics_command_buffers(&self, count: usize) -> Result<GraphicsCommandBuffers, EngineError>
 	{
@@ -589,7 +639,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	fn new_command_sender(&self) -> CommandSender { CommandSender(&self.device) }
 	fn graphics_queue_ref(&self) -> &vk::Queue { self.device.get_graphics_queue() }
 
-	fn postprocess_vsh(&self, require_uv: bool) -> Result<&ShaderProgram, &EngineError>
+	fn postprocess_vsh(&self, require_uv: bool) -> Result<&ShaderProgram, EngineError>
 	{
 		if require_uv { self.common_resources.postprocess_vsh(self) } else { self.common_resources.postprocess_vsh_nouv(self) }
 	}

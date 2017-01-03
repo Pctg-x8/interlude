@@ -333,7 +333,7 @@ impl <'a> GraphicsPipelineBuilder<'a>
 		}
 	}
 	pub fn for_postprocess<Engine: EngineCore>(engine: &'a Engine, layout: &'a PipelineLayout, render_pass: &'a RenderPass, subpass_index: u32,
-		fragment_shader: PipelineShaderProgram<'a>, processing_viewport: &Viewport) -> Result<Self, &'a EngineError>
+		fragment_shader: PipelineShaderProgram<'a>, processing_viewport: &Viewport) -> Result<Self, EngineError>
 	{
 		Ok(GraphicsPipelineBuilder
 		{

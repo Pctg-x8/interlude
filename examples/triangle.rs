@@ -26,8 +26,7 @@ fn main()
 	// define RenderPass and make Framebuffer
 	let Size2(w, h) = wframe.size();
 	let vport = Viewport::from(wframe.size());
-	let rp = engine.create_render_pass(&[&AttachmentDesc::swapchain_buffer(wframe.get_format())], &[&PassDesc::single_fragment_output(0)], &[]).or_crash();
-	let fb = wframe.get_back_images().iter().map(|&v| engine.create_framebuffer(&rp, &[v], &Size3(w, h, 1))).collect::<Result<Vec<_>, _>>().or_crash();
+	let fb = wframe.get_back_images().iter().map(|&v| engine.create_presented_framebuffer(&rp, v, &Size3(w, h, 1))).collect::<Result<Vec<_>, _>>().or_crash();
 
 	// load shaders and build pipeline state
 	let vshader = engine.create_vertex_shader_from_asset("examples.triangle.vert", "main", &[VertexBinding::PerVertex(std::mem::size_of::<[CVector4; 2]>() as u32)],

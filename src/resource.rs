@@ -705,9 +705,9 @@ impl std::convert::Into<VkComponentMapping> for ComponentMapping
 		}
 	}
 }
-pub struct ImageView1D { parent: Rc<Image1D>, internal: vk::ImageView }
-pub struct ImageView2D { parent: Rc<Image2D>, internal: vk::ImageView }
-pub struct ImageView3D { parent: Rc<Image3D>, internal: vk::ImageView }
+pub struct ImageView1D { parent: Rc<Image1D>, internal: vk::ImageView, format: VkFormat }
+pub struct ImageView2D { parent: Rc<Image2D>, internal: vk::ImageView, format: VkFormat }
+pub struct ImageView3D { parent: Rc<Image3D>, internal: vk::ImageView, format: VkFormat }
 pub trait ImageViewFactory<ResourceT: ImageResource>: Sized
 {
 	fn new<Engine: EngineCore>(engine: &Engine, res: &Rc<ResourceT>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> Result<Self, EngineError>;
@@ -721,7 +721,7 @@ impl ImageViewFactory<Image1D> for ImageView1D
 			sType: VkStructureType::ImageViewCreateInfo, pNext: std::ptr::null(), flags: 0,
 			image: res.get_resource(), viewType: VkImageViewType::Dim1, format: format,
 			components: cm.into(), subresourceRange: subrange.into()	
-		}).map(|v| ImageView1D { parent: res.clone(), internal: v }).map_err(EngineError::from)
+		}).map(|v| ImageView1D { parent: res.clone(), internal: v, format: format }).map_err(EngineError::from)
 	}
 }
 impl ImageViewFactory<Image2D> for ImageView2D
@@ -733,7 +733,7 @@ impl ImageViewFactory<Image2D> for ImageView2D
 			sType: VkStructureType::ImageViewCreateInfo, pNext: std::ptr::null(), flags: 0,
 			image: res.get_resource(), viewType: VkImageViewType::Dim2, format: format,
 			components: cm.into(), subresourceRange: subrange.into()	
-		}).map(|v| ImageView2D { parent: res.clone(), internal: v }).map_err(EngineError::from)
+		}).map(|v| ImageView2D { parent: res.clone(), internal: v, format: format }).map_err(EngineError::from)
 	}
 }
 impl ImageViewFactory<Image3D> for ImageView3D
@@ -745,7 +745,7 @@ impl ImageViewFactory<Image3D> for ImageView3D
 			sType: VkStructureType::ImageViewCreateInfo, pNext: std::ptr::null(), flags: 0,
 			image: res.get_resource(), viewType: VkImageViewType::Dim3, format: format,
 			components: cm.into(), subresourceRange: subrange.into()	
-		}).map(|v| ImageView3D { parent: res.clone(), internal: v }).map_err(EngineError::from)
+		}).map(|v| ImageView3D { parent: res.clone(), internal: v, format: format }).map_err(EngineError::from)
 	}
 }
 impl std::ops::Deref for ImageView1D { type Target = Image1D; fn deref(&self) -> &Image1D { self.parent.deref() } }
@@ -757,6 +757,7 @@ impl ImageResource for ImageView3D { fn get_resource(&self) -> VkImage { self.pa
 pub trait ImageView
 {
 	fn get_native(&self) -> VkImageView;
+	fn format(&self) -> VkFormat;
 }
 pub trait UserImageView<ResourceT: ImageResource>: ImageView
 {
@@ -765,14 +766,17 @@ pub trait UserImageView<ResourceT: ImageResource>: ImageView
 impl ImageView for ImageView1D
 {
 	fn get_native(&self) -> VkImageView { *self.internal }
+	fn format(&self) -> VkFormat { self.format }
 }
 impl ImageView for ImageView2D
 {
 	fn get_native(&self) -> VkImageView { *self.internal }
+	fn format(&self) -> VkFormat { self.format }
 }
 impl ImageView for ImageView3D
 {
 	fn get_native(&self) -> VkImageView { *self.internal }
+	fn format(&self) -> VkFormat { self.format }
 }
 impl UserImageView<Image1D> for ImageView1D
 {

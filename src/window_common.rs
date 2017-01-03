@@ -59,9 +59,13 @@ pub trait RenderWindow: std::marker::Send
 	fn acquire_next_backbuffer_index(&self, wait_semaphore: &QueueFence) -> Result<u32, EngineError>;
 	fn present(&self, gqueue: &vk::Queue, index: u32, wait_semaphore: Option<&QueueFence>) -> Result<(), EngineError>;
 }
-pub struct WindowRenderTarget { pub resource: VkImage, pub view: vk::ImageView }
+pub struct WindowRenderTarget { pub resource: VkImage, pub view: vk::ImageView, format: VkFormat }
 impl ImageResource for WindowRenderTarget { fn get_resource(&self) -> VkImage { self.resource } }
-impl ImageView for WindowRenderTarget { fn get_native(&self) -> VkImageView { *self.view } }
+impl ImageView for WindowRenderTarget
+{
+	fn get_native(&self) -> VkImageView { *self.view }
+	fn format(&self) -> VkFormat { self.format }
+}
 pub struct Window<N: NativeWindow>
 {
 	#[allow(dead_code)] server: Arc<N::NativeWindowServerT>, #[allow(dead_code)] native: N,
@@ -127,7 +131,7 @@ impl<N: NativeWindow> Window<N>
 				image: res, subresourceRange: vk::ImageSubresourceRange::default_color(),
 				format: format.format, viewType: VkImageViewType::Dim2,
 				components: VkComponentMapping::default()
-			}).map(|v| WindowRenderTarget { resource: res, view: v })
+			}).map(|v| WindowRenderTarget { resource: res, view: v, format: format.format })
 		}).collect::<Result<Vec<_>, _>>());
 		
 		engine.create_queue_fence().and_then(|backbuffer_available_signal|
