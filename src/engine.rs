@@ -410,7 +410,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 			attachmentCount: attachments_native.len() as u32, pAttachments: attachments_native.as_ptr(),
 			width: width, height: height, layers: layers
 		};
-		vk::Framebuffer::new(&self.device, &info).map(|f| Framebuffer::new(f, mold.get_internal(), VkExtent2D(width, height))).map_err(EngineError::from)
+		vk::Framebuffer::new(&self.device, &info).map(|f| Framebuffer::new(f, mold, VkExtent2D(width, height))).map_err(EngineError::from)
 	}
 	// Preserve Bitmaps to VRAM, Begins with VkImageLayout::ColorAttachmentOptimal and Ends with VkImageLayout::ShaderReadOnlyOptimal
 	fn create_simple_framebuffer(&self, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3) -> Result<Framebuffer, EngineError>

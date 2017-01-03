@@ -26,14 +26,14 @@ fn main()
 	// define RenderPass and make Framebuffer
 	let Size2(w, h) = wframe.size();
 	let vport = Viewport::from(wframe.size());
-	let fb = wframe.get_back_images().iter().map(|&v| engine.create_presented_framebuffer(&rp, v, &Size3(w, h, 1))).collect::<Result<Vec<_>, _>>().or_crash();
+	let fb = wframe.get_back_images().iter().map(|&v| engine.create_presented_framebuffer(v, Some(true), &Size3(w, h, 1))).collect::<Result<Vec<_>, _>>().or_crash();
 
 	// load shaders and build pipeline state
 	let vshader = engine.create_vertex_shader_from_asset("examples.triangle.vert", "main", &[VertexBinding::PerVertex(std::mem::size_of::<[CVector4; 2]>() as u32)],
 		&[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0), VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, std::mem::size_of::<CVector4>() as u32)]).or_crash();
 	let fshader = engine.create_fragment_shader_from_asset("examples.triangle.frag", "main").or_crash();
 	let psl = engine.create_pipeline_layout(&[], &[]).or_crash();
-	let ps_mold = interlude::GraphicsPipelineBuilder::new(&psl, &rp, 0)
+	let ps_mold = interlude::GraphicsPipelineBuilder::new(&psl, fb[0].renderpass(), 0)
 		.primitive_topology(PrimitiveTopology::TriangleList(false))
 		.vertex_shader(PipelineShaderProgram::unspecialized(&vshader))
 		.fragment_shader(PipelineShaderProgram::unspecialized(&fshader))
@@ -100,7 +100,7 @@ fn main()
 
 	let ordersem = engine.create_queue_fence().or_crash();
 	let render_completion = engine.create_queue_fence().or_crash();
-	let frame_index = wframe.acquire_next_backbuffer_index(&ordersem).and_then(|index|
+	wframe.acquire_next_backbuffer_index(&ordersem).and_then(|index|
 		engine.submit_graphics_commands(&[cb[index as usize]], &[(&ordersem, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)], Some(&render_completion), None).map(|_| index)
 	).and_then(|index| wframe.present(engine.graphics_queue_ref(), index, Some(&render_completion)).map(|_| index)).or_crash();
 

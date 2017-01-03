@@ -531,7 +531,7 @@ impl<'a> GraphicsCommandRecorder<'a>
 		let begin_info = VkRenderPassBeginInfo
 		{
 			sType: VkStructureType::RenderPassBeginInfo, pNext: std::ptr::null(),
-			renderPass: ***framebuffer.get_mold(), framebuffer: **framebuffer.get_internal(),
+			renderPass: ***framebuffer.renderpass().get_internal(), framebuffer: **framebuffer.get_internal(),
 			renderArea: VkRect2D(VkOffset2D(0, 0), framebuffer.get_area()),
 			clearValueCount: clear_values_native.len() as u32, pClearValues: clear_values_native.as_ptr()
 		};

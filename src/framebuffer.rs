@@ -178,24 +178,27 @@ impl <'a> std::convert::Into<VkClearValue> for &'a AttachmentClearValue
 	}
 }
 
+#[derive(Clone)]
 pub struct RenderPass(Rc<vk::RenderPass>);
-pub struct Framebuffer { mold: Rc<vk::RenderPass>, internal: vk::Framebuffer, area: VkExtent2D }
+pub struct Framebuffer { mold: RenderPass, internal: vk::Framebuffer, area: VkExtent2D }
 impl InternalExports<Rc<vk::RenderPass>> for RenderPass { fn get_internal(&self) -> &Rc<vk::RenderPass> { &self.0 } }
 impl InternalExports<vk::Framebuffer> for Framebuffer { fn get_internal(&self) -> &vk::Framebuffer { &self.internal } }
 pub trait RenderPassInternals { fn new(o: vk::RenderPass) -> Self; }
 impl RenderPassInternals for RenderPass { fn new(o: vk::RenderPass) -> Self { RenderPass(Rc::new(o)) } }
 pub trait FramebufferInternals
 {
-	fn new(fb: vk::Framebuffer, mold: &Rc<vk::RenderPass>, area: VkExtent2D) -> Self;
-	fn get_mold(&self) -> &Rc<vk::RenderPass>;
+	fn new(fb: vk::Framebuffer, mold: &RenderPass, area: VkExtent2D) -> Self;
 	fn get_area(&self) -> VkExtent2D;
 }
 impl FramebufferInternals for Framebuffer
 {
-	fn new(fb: vk::Framebuffer, mold: &Rc<vk::RenderPass>, area: VkExtent2D) -> Self
+	fn new(fb: vk::Framebuffer, mold: &RenderPass, area: VkExtent2D) -> Self
 	{
 		Framebuffer { internal: fb, mold: mold.clone(), area: area }
 	}
-	fn get_mold(&self) -> &Rc<vk::RenderPass> { &self.mold }
 	fn get_area(&self) -> VkExtent2D { self.area }
+}
+impl Framebuffer
+{
+	pub fn renderpass(&self) -> &RenderPass { &self.mold }
 }
