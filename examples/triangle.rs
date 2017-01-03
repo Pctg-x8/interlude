@@ -31,7 +31,7 @@ fn main()
 	// load shaders and build pipeline state
 	let vshader = engine.create_vertex_shader_from_asset("examples.triangle.vert", "main", &[VertexBinding::PerVertex(std::mem::size_of::<[CVector4; 2]>() as u32)],
 		&[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0), VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, std::mem::size_of::<CVector4>() as u32)]).or_crash();
-	let fshader = engine.create_fragment_shader_from_asset("examples.triangle.frag", "main").or_crash();
+	let fshader = engine.create_fragment_shader_from_asset("engine.shaders.TrivialFragment", "main").or_crash();
 	let psl = engine.create_pipeline_layout(&[], &[]).or_crash();
 	let ps_mold = interlude::GraphicsPipelineBuilder::new(&psl, fb[0].renderpass(), 0)
 		.primitive_topology(PrimitiveTopology::TriangleList(false))

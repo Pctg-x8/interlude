@@ -1,3 +1,4 @@
 target/
 *.ttf
 *.spv
+*.lib
