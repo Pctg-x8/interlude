@@ -23,19 +23,21 @@ fn main()
 	let fb = target.get_back_images().iter().map(|&v| engine.create_presented_framebuffer(v, Some(true), &Size3(w, h, 1))).collect::<Result<Vec<_>, _>>().or_crash();
 
 	let bp = engine.buffer_preallocate(&[
-		(std::mem::size_of::<[CVector4; 12]>(), BufferDataType::Vertex),
-		(std::mem::size_of::<[[u16; 3]; 20]>(), BufferDataType::Index),
-		(std::mem::size_of::<[CMatrix4; 2]>(), BufferDataType::Uniform)
+		(std::mem::size_of::<[CMatrix4; 2]>(), BufferDataType::Uniform),
+		// (std::mem::size_of::<[CVector4; 12]>(), BufferDataType::Vertex),
+		// (std::mem::size_of::<[[u16; 3]; 20]>(), BufferDataType::Index)
+		(std::mem::size_of::<[[CVector4; 3]; 80]>(), BufferDataType::Vertex)
 	]);
 	let (dev, stg) = engine.create_double_buffer(&bp).or_crash();
 	stg.map().map(|m|
 	{
 		let (v, i) = generate_icosphere();
-		*m.map_mut::<[CVector4; 12]>(bp.offset(0)) = v;
-		*m.map_mut::<[[u16; 3]; 20]>(bp.offset(1)) = i;
+		m.map_mut::<[[CVector4; 3]; 80]>(bp.offset(1)).copy_from_slice(&subdiv_icosahedron(associate_vertex_indices(&v, &i))[..]);
+		// *m.map_mut::<[CVector4; 12]>(bp.offset(1)) = v;
+		// *m.map_mut::<[[u16; 3]; 20]>(bp.offset(2)) = i;
 		let proj = PerspectiveMatrix3::new(w as f32 / h as f32, 30.0f32.to_radians(), 0.1, 100.0).to_matrix() *
 			view_matrix(Vector3::new(5.0, 2.0, 30.0), Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
-		*m.map_mut::<[CMatrix4; 2]>(bp.offset(2)) = [*proj.as_ref(), *Rotation3::new(Vector3::new(0.0, 1.0, 0.0).normalize() * 0.0).submatrix().to_homogeneous().as_ref()];
+		*m.map_mut::<[CMatrix4; 2]>(bp.offset(0)) = [*proj.as_ref(), *Rotation3::new(Vector3::new(0.0, 1.0, 0.0).normalize() * 0.0).submatrix().to_homogeneous().as_ref()];
 	}).or_crash();
 
 	// load shaders and build pipeline state
@@ -60,7 +62,7 @@ fn main()
 
 	// create descriptor sets
 	let descriptor_sets = engine.preallocate_all_descriptor_sets(&[&dsl_cam]).or_crash();
-	let ubuf_info = BufferInfo(&dev, bp.offset(2) .. bp.total_size());
+	let ubuf_info = BufferInfo(&dev, bp.offset(0) .. bp.offset(1));
 	engine.update_descriptors(&[DescriptorSetWriteInfo::UniformBuffer(descriptor_sets[0], 0, vec![ubuf_info])]);
 
 	// transfer data / setting image layout
@@ -96,9 +98,10 @@ fn main()
 			.begin_render_pass(&fb[n], &[clear_value], false)
 			.bind_pipeline(&ps)
 			.bind_descriptor_sets(&psl, &[descriptor_sets[0]])
-			.bind_vertex_buffers(&[(&dev, bp.offset(0))])
-			.bind_index_buffer(&dev, bp.offset(1))
-			.draw_indexed(20 * 3, 1, 0)
+			.bind_vertex_buffers(&[(&dev, bp.offset(1))])
+			// .bind_index_buffer(&dev, bp.offset(2))
+			// .draw_indexed(20 * 3, 1, 0)
+			.draw(80 * 3, 1)
 			.end_render_pass()
 		.end().or_crash();
 	}
@@ -108,13 +111,13 @@ fn main()
 	ucb.begin(0).and_then(|recorder|
 	{
 		let bmbarrier = [
-			BufferMemoryBarrier::hold_ownership(&stg, bp.offset(2) + std::mem::size_of::<CMatrix4>() .. bp.total_size(), VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
-			BufferMemoryBarrier::hold_ownership(&dev, bp.offset(2) + std::mem::size_of::<CMatrix4>() .. bp.total_size(),
+			BufferMemoryBarrier::hold_ownership(&stg, bp.offset(0) + std::mem::size_of::<CMatrix4>() .. bp.offset(1), VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
+			BufferMemoryBarrier::hold_ownership(&dev, bp.offset(0) + std::mem::size_of::<CMatrix4>() .. bp.offset(1),
 				VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_INDEX_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT)
 		];
 		let bmbarrier_ret = bmbarrier.iter().map(|x| x.flipped_access_mask()).collect::<Vec<_>>();
 		recorder.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false, &[], &bmbarrier, &[])
-			.copy_buffer(&stg, &dev, &[BufferCopyRegion(bp.offset(2) + std::mem::size_of::<CMatrix4>(), bp.offset(2) + std::mem::size_of::<CMatrix4>(), bp.total_size())])
+			.copy_buffer(&stg, &dev, &[BufferCopyRegion(bp.offset(0) + std::mem::size_of::<CMatrix4>(), bp.offset(0) + std::mem::size_of::<CMatrix4>(), bp.offset(1))])
 			.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false, &[], &bmbarrier_ret, &[])
 		.end()
 	}).or_crash();
@@ -160,7 +163,7 @@ fn main()
 		}) };
 
 		let mapped = stg.map().or_crash();
-		let mut model_rot = mapped.map_mut::<CMatrix4>(bp.offset(2) + std::mem::size_of::<CMatrix4>());
+		let mut model_rot = mapped.map_mut::<CMatrix4>(bp.offset(0) + std::mem::size_of::<CMatrix4>());
 		let start_time = time::PreciseTime::now();
 		loop
 		{
@@ -198,6 +201,34 @@ fn generate_icosphere() -> ([CVector4; 12], [[u16; 3]; 20])
 		[3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
 		[4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]
 	])
+}
+fn associate_vertex_indices<T: Copy>(v: &[T], i: &[[u16; 3]]) -> Vec<[T; 3]>
+{
+	i.into_iter().map(|iv| [v[iv[0] as usize], v[iv[1] as usize], v[iv[2] as usize]]).collect()
+}
+fn icosahedron_middle(a: CVector4, b: CVector4) -> CVector4
+{
+	let temp_v = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5, (a[2] + b[2]) * 0.5, (a[3] + b[3]) * 0.5];
+	let temp_vlen = (temp_v[0].powf(2.0) + temp_v[1].powf(2.0) + temp_v[2].powf(2.0)).sqrt();
+	let temp_v = [temp_v[0] / temp_vlen, temp_v[1] / temp_vlen, temp_v[2] / temp_vlen, temp_v[3]];
+	let gratio = (1.0 + 5.0f32.sqrt()) / 2.0;
+	let offs = (gratio * gratio + 1.0).sqrt();
+	[temp_v[0] * offs, temp_v[1] * offs, temp_v[2] * offs, temp_v[3]]
+}
+fn subdiv_triangle(v: [CVector4; 3]) -> [[CVector4; 3]; 4]
+{
+	let newv = (icosahedron_middle(v[0], v[1]), icosahedron_middle(v[1], v[2]), icosahedron_middle(v[2], v[0]));
+
+	[
+		[v[0], newv.0, newv.2],
+		[newv.0, v[1], newv.1],
+		[newv.2, newv.1, v[2]],
+		[newv.0, newv.1, newv.2]
+	]
+}
+fn subdiv_icosahedron(v: Vec<[CVector4; 3]>) -> Vec<[CVector4; 3]>
+{
+	v.into_iter().flat_map(|v| Vec::from(&subdiv_triangle(v)[..]).into_iter()).collect()
 }
 
 fn view_matrix<N: BaseFloat>(eye: Vector3<N>, target: Vector3<N>, up: Vector3<N>) -> Matrix4<N>
