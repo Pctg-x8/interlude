@@ -50,6 +50,15 @@ impl<'a> BufferMemoryBarrier<'a>
 			buffer: buf, range: range
 		}
 	}
+	pub fn flipped_access_mask(&self) -> Self
+	{
+		BufferMemoryBarrier
+		{
+			src_mask: self.dst_mask, dst_mask: self.src_mask,
+			src_queue_family_index: self.src_queue_family_index, dst_queue_family_index: self.dst_queue_family_index,
+			buffer: self.buffer, range: self.range.clone()
+		}
+	}
 }
 /// Defines a Image Memory Barrier
 #[derive(Clone)]

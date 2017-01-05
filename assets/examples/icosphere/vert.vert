@@ -2,9 +2,9 @@
 
 layout(location = 0) in vec4 pos;
 out gl_PerVertex { out vec4 gl_Position; };
-layout(set = 0, binding = 0) uniform Matrixes { mat4 proj; };
+layout(set = 0, binding = 0) uniform Matrixes { mat4 proj, model_rot; };
 
 void main()
 {
-	gl_Position = proj * pos;
+	gl_Position = proj * model_rot * pos;
 }

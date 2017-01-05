@@ -2,6 +2,7 @@
 extern crate interlude;
 extern crate thread_scoped;
 extern crate nalgebra;
+extern crate time;
 use interlude::*;
 use interlude::ffi::*;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,7 +25,7 @@ fn main()
 	let bp = engine.buffer_preallocate(&[
 		(std::mem::size_of::<[CVector4; 12]>(), BufferDataType::Vertex),
 		(std::mem::size_of::<[[u16; 3]; 20]>(), BufferDataType::Index),
-		(std::mem::size_of::<CMatrix4>(), BufferDataType::Uniform)
+		(std::mem::size_of::<[CMatrix4; 2]>(), BufferDataType::Uniform)
 	]);
 	let (dev, stg) = engine.create_double_buffer(&bp).or_crash();
 	stg.map().map(|m|
@@ -34,7 +35,7 @@ fn main()
 		*m.map_mut::<[[u16; 3]; 20]>(bp.offset(1)) = i;
 		let proj = PerspectiveMatrix3::new(w as f32 / h as f32, 30.0f32.to_radians(), 0.1, 100.0).to_matrix() *
 			view_matrix(Vector3::new(5.0, 2.0, 30.0), Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
-		*m.map_mut::<CMatrix4>(bp.offset(2)) = *proj.as_ref();
+		*m.map_mut::<[CMatrix4; 2]>(bp.offset(2)) = [*proj.as_ref(), *Rotation3::new(Vector3::new(0.0, 1.0, 0.0).normalize() * 0.0).submatrix().to_homogeneous().as_ref()];
 	}).or_crash();
 
 	// load shaders and build pipeline state
@@ -102,6 +103,22 @@ fn main()
 		.end().or_crash();
 	}
 
+	// Update commands
+	let ucb = engine.allocate_transfer_command_buffers(1).or_crash();
+	ucb.begin(0).and_then(|recorder|
+	{
+		let bmbarrier = [
+			BufferMemoryBarrier::hold_ownership(&stg, bp.offset(2) + std::mem::size_of::<CMatrix4>() .. bp.total_size(), VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
+			BufferMemoryBarrier::hold_ownership(&dev, bp.offset(2) + std::mem::size_of::<CMatrix4>() .. bp.total_size(),
+				VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_INDEX_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT)
+		];
+		let bmbarrier_ret = bmbarrier.iter().map(|x| x.flipped_access_mask()).collect::<Vec<_>>();
+		recorder.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false, &[], &bmbarrier, &[])
+			.copy_buffer(&stg, &dev, &[BufferCopyRegion(bp.offset(2) + std::mem::size_of::<CMatrix4>(), bp.offset(2) + std::mem::size_of::<CMatrix4>(), bp.total_size())])
+			.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false, &[], &bmbarrier_ret, &[])
+		.end()
+	}).or_crash();
+
 	// dummy key setting
 	if let Ok(mut isw) = engine.input_system_ref().write()
 	{
@@ -112,9 +129,12 @@ fn main()
 	{
 		let window_system = engine.window_system_ref().clone();
 		let ordersem = engine.create_queue_fence().or_crash();
+		let copy_completion = engine.create_fence().or_crash();
 		let render_completion = engine.create_fence().or_crash();
 		let exit_signal = Arc::new(AtomicBool::new(false));
 		let exit_signal_uo = exit_signal.clone();
+		let update_event = Arc::new(Event::new("Update Event").or_crash());
+		let update_event_uo = update_event.clone();
 		let update_observer = unsafe { thread_scoped::scoped(move ||
 		{
 			let mut frame_index = target.acquire_next_backbuffer_index(&ordersem).and_then(|f|
@@ -124,6 +144,9 @@ fn main()
 			while !exit_signal_uo.load(Ordering::Acquire)
 			{
 				render_completion.wait().and_then(|()| render_completion.clear()).or_crash();
+				engine.submit_transfer_commands(&ucb[..], &[], None, Some(&copy_completion)).or_crash();
+				copy_completion.wait().and_then(|()| copy_completion.clear()).or_crash();
+				update_event_uo.set();
 				frame_index = target.present(engine.graphics_queue_ref(), frame_index, None).and_then(|_|
 					target.acquire_next_backbuffer_index(&ordersem).and_then(|f|
 						engine.submit_graphics_commands(&[cb[f as usize]], &[(&ordersem, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)],
@@ -136,13 +159,30 @@ fn main()
 			engine
 		}) };
 
-		window_system.process_all_events();
+		let mapped = stg.map().or_crash();
+		let mut model_rot = mapped.map_mut::<CMatrix4>(bp.offset(2) + std::mem::size_of::<CMatrix4>());
+		let start_time = time::PreciseTime::now();
+		loop
+		{
+			match window_system.process_events_and_messages(&[&update_event])
+			{
+				ApplicationState::Exited => break,
+				ApplicationState::EventArrived(0) =>
+				{
+					update_event.reset();
+					let elapsed = start_time.to(time::PreciseTime::now());
+					*model_rot = *Rotation3::new(Vector3::new(0.0, 1.0, 0.0).normalize() * (300.0f32 * elapsed.num_microseconds().unwrap() as f32 / 1_000_000.0f32).to_radians())
+						.submatrix().to_homogeneous().as_ref();
+				},
+				_ => ()
+			}
+		}
 		exit_signal.store(true, Ordering::Release);
 		update_observer.join()
 	};
 }
 
-/// Interlude:drafting
+/// Interlude:drafting Generate Icosphere mesh and indices
 fn generate_icosphere() -> ([CVector4; 12], [[u16; 3]; 20])
 {
 	let t = (1.0 + 5.0f32.sqrt()) / 2.0;
