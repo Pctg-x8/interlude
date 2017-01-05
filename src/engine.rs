@@ -380,12 +380,12 @@ impl EngineResources
 
 	fn postprocess_vsh<E: EngineCore>(&self, context: &E) -> Result<&ShaderProgram, EngineError>
 	{
-		self.postprocess_vsh.get(|| context.create_vertex_shader_from_asset("engine.shaders.Post`ProcessVertex", "main",
+		self.postprocess_vsh.get(|| context.create_vertex_shader_from_asset("engine.shaders.PostProcessVertex", "main",
 				&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
 	}
 	fn postprocess_vsh_nouv<E: EngineCore>(&self, context: &E) -> Result<&ShaderProgram, EngineError>
 	{
-		self.postprocess_vsh_nouv.get(|| context.create_vertex_shader_from_asset("engine.shaders.Post`ProcessVertexNoUV", "main",
+		self.postprocess_vsh_nouv.get(|| context.create_vertex_shader_from_asset("engine.shaders.PostProcessVertexNoUV", "main",
 				&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
 	}
 	fn default_renderpass<E: EngineCore>(&self, context: &E, format: VkFormat, clear_mode: Option<bool>) -> Result<&RenderPass, EngineError>
