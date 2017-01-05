@@ -9,7 +9,7 @@ pub enum EngineError
 {
 	DeviceError(VkResult), IOError(std::io::Error),
 	XServerError(c_int), FreeTypeError(FT_Error),
-	GenericError(&'static str),
+	GenericError(&'static str), Win32ErrorWith(&'static str, std::io::Error),
 	// Specific Errors //
 	AllocateMemoryWithEmptyResources
 }
@@ -33,6 +33,7 @@ impl std::fmt::Debug for EngineError
 		{
 			&EngineError::DeviceError(ref r) => write!(formatter, "DeviceError: {:?}", r),
 			&EngineError::IOError(ref e) => write!(formatter, "IOError: {:?}", e),
+			&EngineError::Win32ErrorWith(ref s, ref e) => write!(formatter, "{}: {:?}", s, e),
 			&EngineError::XServerError(ref c) => write!(formatter, "XServerError: {:?}", c),
 			&EngineError::FreeTypeError(ref f) => write!(formatter, "FreeTypeError: {:?}", f),
 			&EngineError::GenericError(ref e) => write!(formatter, "GenericError: {}", e),
@@ -47,6 +48,7 @@ pub fn crash(err: EngineError) -> !
 	{
 		EngineError::DeviceError(_) => "Device Error",
 		EngineError::IOError(_) => "Input/Output Error",
+		EngineError::Win32ErrorWith(_, _) => "Win32Error",
 		EngineError::XServerError(_) => "XServer Communication Error",
 		EngineError::FreeTypeError(_) => "FreeType Internal Error",
 		EngineError::GenericError(_) | EngineError::AllocateMemoryWithEmptyResources => "Generic Error"

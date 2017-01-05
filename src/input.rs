@@ -10,6 +10,8 @@ use std::sync::{Arc, Mutex};
 #[cfg(unix)] use std::os::unix::io::{RawFd, AsRawFd};
 use std::hash::Hash;
 use std::ops::Index;
+#[cfg(windows)] use winapi::*;
+#[cfg(windows)] use user32::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputKeys
@@ -433,11 +435,25 @@ pub trait InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone> : Sized 
 {
 	fn new() -> Result<Self, EngineError>
 	{
-		Ok(Win32InputSystem
+		info!(target: "Interlude::Input", "Registering RawInput Devices...");
+		let ri_devices = [
+			// Mouse //
+			RAWINPUTDEVICE { usUsagePage: 0x01, usUsage: 0x02, dwFlags: 0, hwndTarget: std::ptr::null_mut() },
+			// Keyboard //
+			RAWINPUTDEVICE { usUsagePage: 0x01, usUsage: 0x06, dwFlags: RIDEV_NOLEGACY | RIDEV_APPKEYS, hwndTarget: std::ptr::null_mut() }
+		];
+		if unsafe { RegisterRawInputDevices(ri_devices.as_ptr(), ri_devices.len() as u32, std::mem::size_of::<RAWINPUTDEVICE>() as UINT) } == 0
 		{
-			keymap: HashMap::new(), input_states: HashMap::new(),
-			aggregate_key_states: HashMap::new(), aggregate_axis_states: HashMap::new()
-		})
+			Err(EngineError::Win32ErrorWith("Failed value returned from RegisterrawInputDevices", std::io::Error::last_os_error()))
+		}
+		else
+		{
+			Ok(Win32InputSystem
+			{
+				keymap: HashMap::new(), input_states: HashMap::new(),
+				aggregate_key_states: HashMap::new(), aggregate_axis_states: HashMap::new()
+			})
+		}
 	}
 	fn add_input(&mut self, to: InputNames, from: InputType)
 	{

@@ -13,6 +13,7 @@ unsafe extern "system" fn common_wndproc(hwnd: HWND, msg: UINT, wp: WPARAM, lp: 
 	match msg
 	{
 		WM_DESTROY => { hwnd.destroy(); DefWindowProcW(hwnd, msg, wp, lp) },
+		WM_INPUT => { info!(target: "interlude::win32::window", "WM_INPUT Arrived."); DefWindowProcW(hwnd, msg, wp, lp) },
 		_ => DefWindowProcW(hwnd, msg, wp, lp)
 	}
 }
