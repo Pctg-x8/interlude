@@ -22,19 +22,19 @@ fn main()
 	let vport = Viewport::from(target.size());
 	let fb = target.get_back_images().iter().map(|&v| engine.create_presented_framebuffer(v, Some(true), &Size3(w, h, 1))).collect::<Result<Vec<_>, _>>().or_crash();
 
+	let (v, i) = generate_icosphere();
+	let (v, i) = index_triangles(subdiv_icosahedron(associate_vertex_indices(&v, &i)));
 	let bp = engine.buffer_preallocate(&[
 		(std::mem::size_of::<[CMatrix4; 2]>(), BufferDataType::Uniform),
-		// (std::mem::size_of::<[CVector4; 12]>(), BufferDataType::Vertex),
-		// (std::mem::size_of::<[[u16; 3]; 20]>(), BufferDataType::Index)
-		(std::mem::size_of::<[[CVector4; 3]; 80]>(), BufferDataType::Vertex)
+		(std::mem::size_of::<CVector4>() * v.len(), BufferDataType::Vertex),
+		(std::mem::size_of::<u16>() * i.len(), BufferDataType::Index)
+		// (std::mem::size_of::<[[CVector4; 3]; 80]>(), BufferDataType::Vertex)
 	]);
 	let (dev, stg) = engine.create_double_buffer(&bp).or_crash();
 	stg.map().map(|m|
 	{
-		let (v, i) = generate_icosphere();
-		m.map_mut::<[[CVector4; 3]; 80]>(bp.offset(1)).copy_from_slice(&subdiv_icosahedron(associate_vertex_indices(&v, &i))[..]);
-		// *m.map_mut::<[CVector4; 12]>(bp.offset(1)) = v;
-		// *m.map_mut::<[[u16; 3]; 20]>(bp.offset(2)) = i;
+		m.range_mut::<CVector4>(bp.offset(1), v.len()).copy_from_slice(&v[..]);
+		m.range_mut::<u16>(bp.offset(2), i.len()).copy_from_slice(&i[..]);
 		let proj = PerspectiveMatrix3::new(w as f32 / h as f32, 30.0f32.to_radians(), 0.1, 100.0).to_matrix() *
 			view_matrix(Vector3::new(5.0, 2.0, 30.0), Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
 		*m.map_mut::<[CMatrix4; 2]>(bp.offset(0)) = [*proj.as_ref(), *Rotation3::new(Vector3::new(0.0, 1.0, 0.0).normalize() * 0.0).submatrix().to_homogeneous().as_ref()];
@@ -99,9 +99,9 @@ fn main()
 			.bind_pipeline(&ps)
 			.bind_descriptor_sets(&psl, &[descriptor_sets[0]])
 			.bind_vertex_buffers(&[(&dev, bp.offset(1))])
-			// .bind_index_buffer(&dev, bp.offset(2))
-			// .draw_indexed(20 * 3, 1, 0)
-			.draw(80 * 3, 1)
+			.bind_index_buffer(&dev, bp.offset(2))
+			.draw_indexed(4 * 20 * 3, 1, 0)
+			// .draw(80 * 3, 1)
 			.end_render_pass()
 		.end().or_crash();
 	}
@@ -174,7 +174,7 @@ fn main()
 				{
 					update_event.reset();
 					let elapsed = start_time.to(time::PreciseTime::now());
-					*model_rot = *Rotation3::new(Vector3::new(0.0, 1.0, 0.0).normalize() * (300.0f32 * elapsed.num_microseconds().unwrap() as f32 / 1_000_000.0f32).to_radians())
+					*model_rot = *Rotation3::new(Vector3::new(0.1, 1.0, 0.0).normalize() * (230.0f32 * elapsed.num_microseconds().unwrap() as f32 / 1_000_000.0f32).to_radians())
 						.submatrix().to_homogeneous().as_ref();
 				},
 				_ => ()
@@ -229,6 +229,28 @@ fn subdiv_triangle(v: [CVector4; 3]) -> [[CVector4; 3]; 4]
 fn subdiv_icosahedron(v: Vec<[CVector4; 3]>) -> Vec<[CVector4; 3]>
 {
 	v.into_iter().flat_map(|v| Vec::from(&subdiv_triangle(v)[..]).into_iter()).collect()
+}
+fn index_triangles(v: Vec<[CVector4; 3]>) -> (Vec<CVector4>, Vec<u16>)
+{
+	let (mut verts, mut indices) = (Vec::new(), Vec::new());
+
+	for t in v.into_iter()
+	{
+		for n in 0 .. 3
+		{
+			match verts.iter().enumerate().find(|&(_, x): &(usize, &CVector4)| ((x[0usize] as f32 - t[n][0]).powf(2.0) + (x[1] as f32 - t[n][1]).powf(2.0) + (x[2] as f32 - t[n][2]).powf(2.0)).sqrt() <= std::f32::EPSILON)
+			{
+				Some((i, _)) => indices.push(i as u16),
+				None =>
+				{
+					verts.push(t[n]);
+					indices.push(verts.len() as u16 - 1);
+				}
+			}
+		}
+	}
+
+	(verts, indices)
 }
 
 fn view_matrix<N: BaseFloat>(eye: Vector3<N>, target: Vector3<N>, up: Vector3<N>) -> Matrix4<N>
