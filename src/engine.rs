@@ -566,15 +566,18 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	fn preallocate_all_descriptor_sets(&self, layouts: &[&DescriptorSetLayout]) -> Result<DescriptorSets, EngineError>
 	{
 		let set_count = layouts.len();
-		let (uniform_total, combined_sampler_total, ia_total) = layouts.iter().map(|x| x.descriptors().into_iter().fold((0, 0, 0), |(u, cs, ia), desc| match desc
-		{
-			&Descriptor::Uniform(n, _) => (u + n, cs, ia),
-			&Descriptor::CombinedSampler(n, _) => (u, cs + n, ia),
-			&Descriptor::InputAttachment(n, _) => (u, cs, ia + n)
-		})).fold((0, 0, 0), |(u, cs, ia), (u2, cs2, ia2)| (u + u2, cs + cs2, ia + ia2));
-		let pool_sizes =
-			[Descriptor::Uniform(uniform_total, vec![]), Descriptor::CombinedSampler(combined_sampler_total, vec![]), Descriptor::InputAttachment(ia_total, vec![])]
-			.into_iter().filter(|&desc| desc.count() != 0).map(|desc| desc.into_pool_size()).collect::<Vec<_>>();
+		let (uniform_total, storage_total, combined_sampler_total, ia_total) =
+			layouts.iter().map(|x| x.descriptors().into_iter().fold((0, 0, 0, 0), |(u, s, cs, ia), desc| match desc
+			{
+				&Descriptor::Uniform(n, _) => (u + n, s, cs, ia),
+				&Descriptor::Storage(n, _) => (u, s + n, cs, ia),
+				&Descriptor::CombinedSampler(n, _) => (u, s, cs + n, ia),
+				&Descriptor::InputAttachment(n, _) => (u, s, cs, ia + n)
+			})).fold((0, 0, 0, 0), |(u, s, cs, ia), (u2, s2, cs2, ia2)| (u + u2, s + s2, cs + cs2, ia + ia2));
+		let pool_sizes = [
+			Descriptor::Uniform(uniform_total, vec![]), Descriptor::Storage(storage_total, vec![]),
+			Descriptor::CombinedSampler(combined_sampler_total, vec![]), Descriptor::InputAttachment(ia_total, vec![])
+		].into_iter().filter(|&desc| desc.count() != 0).map(|desc| desc.into_pool_size()).collect::<Vec<_>>();
 
 		vk::DescriptorPool::new(self.device.get_internal(), set_count, &pool_sizes).and_then(|pool|
 		pool.allocate(&layouts.into_iter().map(|x| **x.get_internal()).collect::<Vec<_>>())
@@ -616,11 +619,13 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 	fn buffer_preallocate(&self, structure_sizes: &[(usize, BufferDataType)]) -> BufferPreallocator
 	{
 		let uniform_alignment = self.physical_device_limits.minUniformBufferOffsetAlignment as usize;
+		let storage_alignment = self.physical_device_limits.minStorageBufferOffsetAlignment as usize;
 		let usage_flags = structure_sizes.iter().fold(0, |flags_accum, &(_, data_type)| match data_type
 		{
 			BufferDataType::Vertex => flags_accum | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 			BufferDataType::Index => flags_accum | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 			BufferDataType::Uniform => flags_accum | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			BufferDataType::Storage => flags_accum | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 			BufferDataType::IndirectCallParam => flags_accum | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
 		});
 		let offsets = structure_sizes.into_iter().chain(&[(0, BufferDataType::Vertex)]).scan(0usize, |offset_accum, &(size, data_type)|
@@ -628,7 +633,8 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 			let current = match data_type
 			{
 				BufferDataType::Vertex | BufferDataType::Index | BufferDataType::IndirectCallParam => *offset_accum,
-				BufferDataType::Uniform => ((*offset_accum as f64 / uniform_alignment as f64).ceil() as usize) * uniform_alignment as usize
+				BufferDataType::Uniform => ((*offset_accum as f64 / uniform_alignment as f64).ceil() as usize) * uniform_alignment as usize,
+				BufferDataType::Storage => ((*offset_accum as f64 / storage_alignment as f64).ceil() as usize) * storage_alignment as usize
 			};
 			*offset_accum = current + size;
 			Some(current)

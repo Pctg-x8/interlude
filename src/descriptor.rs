@@ -26,7 +26,7 @@ impl std::convert::Into<VkShaderStageFlags> for ShaderStage
 #[derive(Clone)]
 pub enum Descriptor
 {
-	Uniform(u32, Vec<ShaderStage>),
+	Uniform(u32, Vec<ShaderStage>), Storage(u32, Vec<ShaderStage>),
 	CombinedSampler(u32, Vec<ShaderStage>),
 	InputAttachment(u32, Vec<ShaderStage>)
 }
@@ -43,6 +43,7 @@ impl Descriptor
 		match self
 		{
 			&Descriptor::Uniform(_, _) => VkDescriptorType::UniformBuffer,
+			&Descriptor::Storage(_, _) => VkDescriptorType::StorageBuffer,
 			&Descriptor::CombinedSampler(_, _) => VkDescriptorType::CombinedImageSampler,
 			&Descriptor::InputAttachment(_, _) => VkDescriptorType::InputAttachment
 		}
@@ -51,7 +52,7 @@ impl Descriptor
 	{
 		match self
 		{
-			&Descriptor::Uniform(_, ref s) => s,
+			&Descriptor::Uniform(_, ref s) => s, &Descriptor::Storage(_, ref s) => s,
 			&Descriptor::CombinedSampler(_, ref s) => s,
 			&Descriptor::InputAttachment(_, ref s) => s
 		}.iter().fold(0, |flag, f| flag | Into::<VkShaderStageFlags>::into(*f))
@@ -63,7 +64,7 @@ impl DescriptorInternals for Descriptor
 	{
 		match self
 		{
-			&Descriptor::Uniform(n, _) => n,
+			&Descriptor::Uniform(n, _) => n, &Descriptor::Storage(n, _) => n,
 			&Descriptor::CombinedSampler(n, _) => n,
 			&Descriptor::InputAttachment(n, _) => n
 		}
@@ -148,9 +149,11 @@ impl <'a> std::convert::Into<VkDescriptorImageInfo> for &'a ImageInfo<'a>
 	}
 }
 
+/// target, binding, infos
 pub enum DescriptorSetWriteInfo<'a>
 {
 	UniformBuffer(VkDescriptorSet, u32, Vec<BufferInfo<'a>>),
+	StorageBuffer(VkDescriptorSet, u32, Vec<BufferInfo<'a>>),
 	CombinedImageSampler(VkDescriptorSet, u32, Vec<ImageInfo<'a>>),
 	InputAttachment(VkDescriptorSet, u32, Vec<ImageInfo<'a>>)
 }
@@ -177,6 +180,11 @@ impl <'a> std::convert::Into<IntoWriteDescriptorSetNativeStruct> for &'a Descrip
 			{
 				target: target, binding: binding, buffers: bufs.iter().map(|x| x.into()).collect(),
 				dtype: VkDescriptorType::UniformBuffer
+			},
+			&DescriptorSetWriteInfo::StorageBuffer(target, binding, ref bufs) => IntoWriteDescriptorSetNativeStruct::Buffers
+			{
+				target: target, binding: binding, buffers: bufs.iter().map(|x| x.into()).collect(),
+				dtype: VkDescriptorType::StorageBuffer
 			},
 			&DescriptorSetWriteInfo::CombinedImageSampler(target, binding, ref imgs) => IntoWriteDescriptorSetNativeStruct::Images
 			{

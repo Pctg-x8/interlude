@@ -251,7 +251,7 @@ impl std::convert::Into<VkImageSubresourceLayers> for ImageSubresourceLayers
 #[derive(Clone, Copy)]
 pub enum BufferDataType
 {
-	Vertex, Index, Uniform, IndirectCallParam
+	Vertex, Index, Uniform, Storage, IndirectCallParam
 }
 pub struct BufferPreallocator
 {
