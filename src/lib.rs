@@ -7,6 +7,7 @@ extern crate libc;
 #[cfg(windows)] extern crate kernel32;
 #[cfg(windows)] extern crate user32;
 #[cfg(windows)] extern crate widestring;
+#[cfg(windows)] extern crate ole32;
 extern crate nalgebra;
 extern crate freetype_sys;
 extern crate unicode_normalization;

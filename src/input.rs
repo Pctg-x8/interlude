@@ -12,6 +12,7 @@ use std::hash::Hash;
 use std::ops::Index;
 #[cfg(windows)] use winapi::*;
 #[cfg(windows)] use user32::*;
+#[cfg(windows)] use super::win32::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputKeys
@@ -448,6 +449,10 @@ pub trait InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone> : Sized 
 		}
 		else
 		{
+			try!(std::thread::Builder::new().name("Input Thread[Win32/Xinput]".to_owned()).spawn(move ||
+			{
+				// No Works
+			}));
 			Ok(Win32InputSystem
 			{
 				keymap: HashMap::new(), input_states: HashMap::new(),
