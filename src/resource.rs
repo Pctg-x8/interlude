@@ -8,98 +8,71 @@ use vk::traits::*;
 use {std, vk};
 use std::os::raw::c_void;
 use std::rc::Rc;
+use ginterface::{GraphicsInterface, MemoryIndexType};
+use EngineResult;
 
 pub trait Resource { fn get_memory_requirements(&self) -> VkMemoryRequirements; }
 pub trait BufferResource { fn get_resource(&self) -> VkBuffer; }
 pub trait ImageResource { fn get_resource(&self) -> VkImage; }
-pub trait DescriptedImage : Sized { fn new<Engine: EngineCore>(engine: &Engine, desc: &VkImageCreateInfo) -> Result<Self, EngineError>; }
 
-pub trait BufferInternals : Sized
-{
-	fn new<Engine: EngineCore>(engine: &Engine, size: VkDeviceSize, usage: VkBufferUsageFlags) -> Result<Self, EngineError>;
-}
-pub trait LinearImage2DInternals : Sized
-{
-	fn new<Engine: EngineCore>(engine: &Engine, size: Size2, format: VkFormat) -> Result<Self, EngineError>;
-}
 pub struct Buffer { internal: vk::Buffer, size: VkDeviceSize }
 impl Resource for Buffer { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
 impl BufferResource for Buffer { fn get_resource(&self) -> VkBuffer { *self.internal } }
-pub struct Image1D { internal: vk::Image, size: u32 }
-pub struct Image2D { internal: vk::Image, size: Size2 }
-pub struct LinearImage2D { internal: vk::Image, size: Size2 }
-pub struct Image3D { internal: vk::Image, size: Size3 }
-impl Resource for Image1D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
-impl Resource for Image2D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
-impl Resource for LinearImage2D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
-impl Resource for Image3D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
-impl ImageResource for Image1D { fn get_resource(&self) -> VkImage { *self.internal } }
-impl ImageResource for Image2D { fn get_resource(&self) -> VkImage { *self.internal } }
-impl ImageResource for LinearImage2D { fn get_resource(&self) -> VkImage { *self.internal } }
-impl ImageResource for Image3D { fn get_resource(&self) -> VkImage { *self.internal } }
-impl InternalExports<vk::Image> for Image1D { fn get_internal(&self) -> &vk::Image { &self.internal } }
-impl InternalExports<vk::Image> for Image2D { fn get_internal(&self) -> &vk::Image { &self.internal } }
-impl InternalExports<vk::Image> for LinearImage2D { fn get_internal(&self) -> &vk::Image { &self.internal } }
-impl InternalExports<vk::Image> for Image3D { fn get_internal(&self) -> &vk::Image { &self.internal } }
-impl BufferInternals for Buffer
+pub struct Image1D(vk::Image, u32);
+pub struct Image2D(vk::Image, Size2);
+pub struct Image3D(vk::Image, Size3);
+pub struct LinearImage2D(vk::Image, Size2);
+impl Resource for Image1D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
+impl Resource for Image2D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
+impl Resource for LinearImage2D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
+impl Resource for Image3D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
+impl ImageResource for Image1D { fn get_resource(&self) -> VkImage { *self.0 } }
+impl ImageResource for Image2D { fn get_resource(&self) -> VkImage { *self.0 } }
+impl ImageResource for LinearImage2D { fn get_resource(&self) -> VkImage { *self.0 } }
+impl ImageResource for Image3D { fn get_resource(&self) -> VkImage { *self.0 } }
+impl LinearImage2D
 {
-	fn new<Engine: EngineCore>(engine: &Engine, size: VkDeviceSize, usage: VkBufferUsageFlags) -> Result<Self, EngineError>
+	fn new(engine: &GraphicsInterface, size: &Size2, format: VkFormat) -> EngineResult<Self>
 	{
-		vk::Buffer::new(engine.get_device().get_internal(), &VkBufferCreateInfo
-		{
-			sType: VkStructureType::BufferCreateInfo, pNext: std::ptr::null(), flags: 0,
-			size: size, usage: usage, sharingMode: VkSharingMode::Exclusive,
-			queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null(),
-		}).map(|buf| Buffer { internal: buf, size: size }).map_err(EngineError::from)
-	}
-}
-impl LinearImage2DInternals for LinearImage2D
-{
-	fn new<Engine: EngineCore>(engine: &Engine, size: Size2, format: VkFormat) -> Result<Self, EngineError>
-	{
-		let Size2(width, height) = size;
-		vk::Image::new(engine.get_device().get_internal(), &VkImageCreateInfo
+		let &Size2(w, h) = size;
+		vk::Image::new(engine.device(), &VkImageCreateInfo
 		{
 			sType: VkStructureType::ImageCreateInfo, pNext: std::ptr::null(), flags: 0,
-			imageType: VkImageType::Dim2, format: format, extent: VkExtent3D(width, height, 1),
-			mipLevels: 1, arrayLayers: 1, samples: VK_SAMPLE_COUNT_1_BIT, tiling: VkImageTiling::Linear,
-			usage: VK_IMAGE_USAGE_TRANSFER_SRC_BIT, sharingMode: VkSharingMode::Exclusive,
-			initialLayout: VkImageLayout::Preinitialized,
+			imageType: VkImageType::Dim2, format: format, extent: VkExtent3D(w, h, 1), mipLevels: 1, arrayLayers: 1,
+			samples: VK_SAMPLE_COUNT_1_BIT, tiling: VkImageTiling::Linear,
+			usage: VK_IMAGE_USAGE_TRANSFER_SRC_BIT, sharingMode: VkSharingMode::Exclusive, initialLayout: VkImageLayout::Preinitialized,
 			queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null()
-		}).map(|img| LinearImage2D { internal: img, size: size }).map_err(EngineError::from)
+		}).map(|o| LinearImage2D(o, size.clone())).map_err(From::from)
 	}
 }
-impl DescriptedImage for Image1D
+impl Image1D
 {
-	fn new<Engine: EngineCore>(engine: &Engine, desc: &VkImageCreateInfo) -> Result<Self, EngineError>
+	fn new(engine: &GraphicsInterface, desc: &VkImageCreateInfo) -> EngineResult<Self>
 	{
-		vk::Image::new(engine.get_device().get_internal(), &VkImageCreateInfo
+		vk::Image::new(engine.device(), &VkImageCreateInfo
 		{
-			usage: desc.usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-			.. *desc
-		}).map(|img| Image1D { internal: img, size: desc.extent.0 }).map_err(EngineError::from)
+			usage: desc.usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT, .. *desc
+		}).map(|o| Image1D(o, desc.extent.0)).map_err(From::from)
 	}
 }
-impl DescriptedImage for Image2D
+impl Image2D
 {
-	fn new<Engine: EngineCore>(engine: &Engine, desc: &VkImageCreateInfo) -> Result<Self, EngineError>
+	fn new(engine: &GraphicsInterface, desc: &VkImageCreateInfo) -> EngineResult<Self>
 	{
-		vk::Image::new(engine.get_device().get_internal(), &VkImageCreateInfo
+		vk::Image::new(engine.device(), &VkImageCreateInfo
 		{
-			usage: desc.usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-			.. *desc
-		}).map(|img| Image2D { internal: img, size: Size2(desc.extent.0, desc.extent.1) }).map_err(EngineError::from)
+			usage: desc.usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT, .. *desc
+		}).map(|o| Image2D(o, Size2(desc.extent.0, desc.extent.1))).map_err(From::from)
 	}
 }
-impl DescriptedImage for Image3D
+impl Image3D
 {
-	fn new<Engine: EngineCore>(engine: &Engine, desc: &VkImageCreateInfo) -> Result<Self, EngineError>
+	fn new(engine: &GraphicsInterface, desc: &VkImageCreateInfo) -> EngineResult<Self>
 	{
-		vk::Image::new(engine.get_device().get_internal(), &VkImageCreateInfo
+		vk::Image::new(engine.device(), &VkImageCreateInfo
 		{
-			usage: desc.usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-			.. *desc
-		}).map(|img| Image3D { internal: img, size: unsafe { std::mem::transmute(desc.extent) } }).map_err(EngineError::from)
+			usage: desc.usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT, .. *desc
+		}).map(|o| Image3D(o, desc.extent.into())).map_err(From::from)
 	}
 }
 #[repr(u32)] #[derive(Clone, Copy)]
@@ -108,73 +81,59 @@ pub enum SampleCount
 	Bit1 = VK_SAMPLE_COUNT_1_BIT, Bit2 = VK_SAMPLE_COUNT_2_BIT, Bit4 = VK_SAMPLE_COUNT_4_BIT, Bit8 = VK_SAMPLE_COUNT_8_BIT,
 	Bit16 = VK_SAMPLE_COUNT_16_BIT, Bit32 = VK_SAMPLE_COUNT_32_BIT, Bit64 = VK_SAMPLE_COUNT_64_BIT
 }
-pub struct ImageDescriptor1 { internal: VkImageCreateInfo, device_resource: bool }
-pub struct ImageDescriptor2 { internal: VkImageCreateInfo, device_resource: bool }
-pub struct ImageDescriptor3 { internal: VkImageCreateInfo }
+#[derive(Clone)]
+pub struct ImageDescriptor1(VkImageCreateInfo, bool);
+#[derive(Clone)]
+pub struct ImageDescriptor2(VkImageCreateInfo, bool);
+#[derive(Clone)]
+pub struct ImageDescriptor3(VkImageCreateInfo);
 impl ImageDescriptor1
 {
 	pub fn new(format: VkFormat, extent: u32, usage: VkImageUsageFlags) -> Self
 	{
-		ImageDescriptor1
+		ImageDescriptor1(VkImageCreateInfo
 		{
-			internal: VkImageCreateInfo
-			{
-				sType: VkStructureType::ImageCreateInfo, pNext: std::ptr::null(), flags: 0,
-				imageType: VkImageType::Dim1, format: format, extent: VkExtent3D(extent, 1, 1),
-				mipLevels: 1, arrayLayers: 1, samples: VK_SAMPLE_COUNT_1_BIT, tiling: VkImageTiling::Optimal,
-				usage: usage, sharingMode: VkSharingMode::Exclusive, initialLayout: VkImageLayout::Preinitialized,
-				queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null()
-			}, device_resource: false
-		}
+			sType: VkStructureType::ImageCreateInfo, pNext: std::ptr::null(), flags: 0,
+			imageType: VkImageType::Dim1, format: format, extent: VkExtent3D(extent, 1, 1),
+			mipLevels: 1, arrayLayers: 1, samples: VK_SAMPLE_COUNT_1_BIT, tiling: VkImageTiling::Optimal,
+			usage: usage, sharingMode: VkSharingMode::Exclusive, initialLayout: VkImageLayout::Preinitialized,
+			queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null()
+		}, false)
 	}
-	pub fn device_resource(mut self) -> Self { self.device_resource = true; self }
-	pub fn is_device_resource(&self) -> bool { self.device_resource }
+	pub fn device_local(mut self) -> Self { self.1 = true; self }
+	pub fn is_device_local(&self) -> bool { self.1 }
 }
 impl ImageDescriptor2
 {
 	pub fn new(format: VkFormat, extent: Size2, usage: VkImageUsageFlags) -> Self
 	{
 		let Size2(width, height) = extent;
-		ImageDescriptor2
+		ImageDescriptor2(VkImageCreateInfo
 		{
-			internal: VkImageCreateInfo
-			{
-				sType: VkStructureType::ImageCreateInfo, pNext: std::ptr::null(), flags: 0,
-				imageType: VkImageType::Dim2, format: format, extent: VkExtent3D(width, height, 1),
-				mipLevels: 1, arrayLayers: 1, samples: VK_SAMPLE_COUNT_1_BIT, tiling: VkImageTiling::Optimal,
-				usage: usage, sharingMode: VkSharingMode::Exclusive, initialLayout: VkImageLayout::Preinitialized,
-				queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null()
-			},
-			device_resource: false
-		}
+			sType: VkStructureType::ImageCreateInfo, pNext: std::ptr::null(), flags: 0,
+			imageType: VkImageType::Dim2, format: format, extent: VkExtent3D(width, height, 1),
+			mipLevels: 1, arrayLayers: 1, samples: VK_SAMPLE_COUNT_1_BIT, tiling: VkImageTiling::Optimal,
+			usage: usage, sharingMode: VkSharingMode::Exclusive, initialLayout: VkImageLayout::Preinitialized,
+			queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null()
+		}, false)
 	}
-	pub fn device_resource(mut self) -> Self
-	{
-		self.device_resource = true;
-		self
-	}
-	pub fn is_device_resource(&self) -> bool { self.device_resource }
+	pub fn device_local(mut self) -> Self { self.1 = true; self }
+	pub fn is_device_local(&self) -> bool { self.1 }
 }
 impl ImageDescriptor3
 {
 	pub fn new(format: VkFormat, extent: Size3, usage: VkImageUsageFlags) -> Self
 	{
-		ImageDescriptor3
+		ImageDescriptor3(VkImageCreateInfo
 		{
-			internal: VkImageCreateInfo
-			{
-				sType: VkStructureType::ImageCreateInfo, pNext: std::ptr::null(), flags: 0,
-				imageType: VkImageType::Dim3, format: format, extent: unsafe { std::mem::transmute(extent) },
-				mipLevels: 1, arrayLayers: 1, samples: VK_SAMPLE_COUNT_1_BIT, tiling: VkImageTiling::Optimal,
-				usage: usage, sharingMode: VkSharingMode::Exclusive, initialLayout: VkImageLayout::Preinitialized,
-				queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null()
-			}
-		}
+			sType: VkStructureType::ImageCreateInfo, pNext: std::ptr::null(), flags: 0,
+			imageType: VkImageType::Dim3, format: format, extent: unsafe { std::mem::transmute(extent) },
+			mipLevels: 1, arrayLayers: 1, samples: VK_SAMPLE_COUNT_1_BIT, tiling: VkImageTiling::Optimal,
+			usage: usage, sharingMode: VkSharingMode::Exclusive, initialLayout: VkImageLayout::Preinitialized,
+			queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null()
+		})
 	}
 }
-impl InternalExports<VkImageCreateInfo> for ImageDescriptor1 { fn get_internal(&self) -> &VkImageCreateInfo { &self.internal } }
-impl InternalExports<VkImageCreateInfo> for ImageDescriptor2 { fn get_internal(&self) -> &VkImageCreateInfo { &self.internal } }
-impl InternalExports<VkImageCreateInfo> for ImageDescriptor3 { fn get_internal(&self) -> &VkImageCreateInfo { &self.internal } }
 macro_rules! ImplImageDescriptorMutations
 {
 	(for $t: ty) =>
@@ -183,17 +142,17 @@ macro_rules! ImplImageDescriptorMutations
 		{
 			fn mip_levels(mut self, levels: u32) -> Self
 			{
-				self.internal.mipLevels = levels;
+				self.0.mipLevels = levels;
 				self
 			}
 			fn array_layers(mut self, layers: u32) -> Self
 			{
-				self.internal.arrayLayers = layers;
+				self.0.arrayLayers = layers;
 				self
 			}
 			fn sample_flags(mut self, samples: &[SampleCount]) -> Self
 			{
-				self.internal.samples = samples.into_iter().fold(0, |flags, &c| flags | (c as u32));
+				self.0.samples = samples.into_iter().fold(0, |flags, &c| flags | (c as u32));
 				self
 			}
 		}
@@ -248,150 +207,153 @@ impl std::convert::Into<VkImageSubresourceLayers> for ImageSubresourceLayers
 	}
 }
 
-#[derive(Clone, Copy)]
-pub enum BufferDataType
+// Content Type with size in bytes
+pub enum BufferContent
 {
-	Vertex, Index, Uniform, Storage, IndirectCallParam
+	Vertex(usize), Index(usize), Uniform(usize), Storage(usize), IndirectCallParam(usize)
 }
-pub struct BufferPreallocator
+impl BufferContent
 {
-	usage_flags: VkBufferUsageFlags, offsets: Vec<usize>
+	fn usage_bit(&self) -> VkBufferUsageFlags
+	{
+		match self
+		{
+			&BufferContent::Vertex(_) => VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			&BufferContent::Index(_) => VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			&BufferContent::Uniform(_) => VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			&BufferContent::Storage(_) => VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			&BufferContent::IndirectCallParam(_) => VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
+		}
+	}
 }
-pub trait BufferPreallocatorInternals
+/// BufferPreallocator: Calculate offsets of contents and Hold their
+pub struct BufferPreallocator<'a> { engine: &'a GraphicsInterface, usage_flags: VkBufferUsageFlags, offsets: Vec<usize> }
+pub struct BufferOffsets(Vec<usize>);
+impl<'a> BufferPreallocator<'a>
 {
-	fn new(usage: VkBufferUsageFlags, offsets: Vec<usize>) -> Self;
-	fn get_usage(&self) -> VkBufferUsageFlags;
-}
-impl BufferPreallocatorInternals for BufferPreallocator
-{
-	fn new(usage: VkBufferUsageFlags, offsets: Vec<usize>) -> Self { BufferPreallocator { usage_flags: usage, offsets: offsets } }
-	fn get_usage(&self) -> VkBufferUsageFlags { self.usage_flags }
-}
-impl BufferPreallocator
-{
+	pub fn new(engine: &'a GraphicsInterface, contents: &[BufferContent]) -> Self
+	{
+		fn alignment(v: usize, a: usize) -> usize { (v as f64 / a as f64).ceil() as usize * a }
+		let (alignment_u, alignment_s) =
+		(
+			engine.device_limits().minUniformBufferOffsetAlignment as usize,
+			engine.device_limits().minStorageBufferOffsetAlignment as usize
+		);
+		let usage_flags = contents.iter().map(BufferContent::usage_bit).fold(0, |a, d| a | d);
+		let offsets = contents.iter().chain(&[BufferContent::Vertex(0)]).scan(0usize, |a, d|
+		{
+			let (current, size) = match d
+			{
+				&BufferContent::Vertex(s) | &BufferContent::Index(s) | &BufferContent::IndirectCallParam(s) => (*a, s),
+				&BufferContent::Uniform(s) => (alignment(*a, alignment_u), s),
+				&BufferContent::Storage(s) => (alignment(*a, alignment_s), s)
+			};
+			*a = current + size;
+			Some(current)
+		}).collect();
+
+		info!(target: "Interlude::BufferPreallocator", "Preallocation: ");
+		info!(target: "Interlude::BufferPreallocator", "-- Minimum Alignment for: UniformBuffer={} bytes, StorageBuffer={} bytes", alignment_u, alignment_s);
+		info!(target: "Interlude::BufferPreallocator", "-- Offsets: {:?}", offsets);
+
+		BufferPreallocator { engine: engine, usage_flags: usage_flags, offsets: offsets }
+	}
 	pub fn offset(&self, index: usize) -> usize { self.offsets[index] }
 	pub fn total_size(&self) -> usize { self.offsets.last().map(|&x| x).unwrap_or(0) }
+	pub fn instantiate(&self) -> EngineResult<(DeviceBuffer, StagingBuffer)>
+	{
+		let d = DeviceBuffer::new(self.engine, self.total_size() as VkDeviceSize, self.usage_flags);
+		let s = StagingBuffer::new(self.engine, self.total_size() as VkDeviceSize, self.usage_flags);
+		(d, s).flatten()
+	}
+	pub fn independence(self) -> BufferOffsets { BufferOffsets(self.offsets) }
 }
-
-#[allow(non_snake_case)]
-pub mod ImageUsagePresets
+impl BufferOffsets
 {
-	#![allow(non_upper_case_globals)]
-	use vk::ffi::*;
-	
-	pub const AsColorTexture: VkImageUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	pub fn offset(&self, index: usize) -> usize { self.0[index] }
+	pub fn total_size(&self) -> usize { self.0.last().map(|&x| x).unwrap_or(0) }
 }
 
 pub struct ImagePreallocator<'a>
 {
-	dim1_images: Vec<&'a ImageDescriptor1>,
-	dim2_images: Vec<&'a ImageDescriptor2>,
-	dim3_images: Vec<&'a ImageDescriptor3>
+	engine: &'a GraphicsInterface,
+	dim1_images: Vec<&'a ImageDescriptor1>, dim2_images: Vec<&'a ImageDescriptor2>, dim3_images: Vec<&'a ImageDescriptor3>
 }
-impl <'a> ImagePreallocator<'a>
+impl<'a> ImagePreallocator<'a>
 {
-	pub fn new() -> Self
+	pub fn new(engine: &'a GraphicsInterface,
+		dim1_images: Vec<&'a ImageDescriptor1>, dim2_images: Vec<&'a ImageDescriptor2>, dim3_images: Vec<&'a ImageDescriptor3>) -> Self
 	{
-		ImagePreallocator { dim1_images: Vec::new(), dim2_images: Vec::new(), dim3_images: Vec::new() }
+		ImagePreallocator { engine: engine, dim1_images: dim1_images, dim2_images: dim2_images, dim3_images: dim3_images }
 	}
-	pub fn image_1d(mut self, i1ds: Vec<&'a ImageDescriptor1>) -> Self
+	pub fn instantiate(&self) -> EngineResult<(DeviceImage, Option<StagingImage>)>
 	{
-		self.dim1_images = i1ds;
-		self
+		let (i1, i2, i3) =
+		(
+			try!(self.dim1_images.iter().map(|&&ImageDescriptor1(ref d, _)| Image1D::new(self.engine, d)).collect::<Result<_, _>>()),
+			try!(self.dim2_images.iter().map(|&&ImageDescriptor2(ref d, _)| Image2D::new(self.engine, d)).collect::<Result<_, _>>()),
+			try!(self.dim3_images.iter().map(|&&ImageDescriptor3(ref d)| Image3D::new(self.engine, d)).collect::<Result<_, _>>())
+		);
+		let si = try!(self.dim1_images.iter().filter(|&&&ImageDescriptor1(_, dl)| dl == false).map(|&&ImageDescriptor1(ref d, _)| (Size2(d.extent.0, d.extent.1), d.format))
+			.chain(self.dim2_images.iter().filter(|&&&ImageDescriptor2(_, dl)| dl == false).map(|&&ImageDescriptor2(ref d, _)| (Size2(d.extent.0, d.extent.1), d.format)))
+			.map(|(s, f)| LinearImage2D::new(self.engine, &s, f)).collect::<Result<Vec<_>, _>>());
+		
+		let d = DeviceImage::new(self.engine, i1, i2, i3);
+		let s = if si.is_empty() { None } else { try!(StagingImage::new(self.engine, si).map(Some)) };
+		d.map(|d| (d, s))
 	}
-	pub fn image_2d(mut self, i2ds: Vec<&'a ImageDescriptor2>) -> Self
-	{
-		self.dim2_images = i2ds;
-		self
-	}
-	pub fn image_3d(mut self, i3ds: Vec<&'a ImageDescriptor3>) -> Self
-	{
-		self.dim3_images = i3ds;
-		self
-	}
-}
-pub trait ImagePreallocatorInternals<'a>
-{
-	fn dim1_images(&self) -> &[&'a ImageDescriptor1];
-	fn dim2_images(&self) -> &[&'a ImageDescriptor2];
-	fn dim3_images(&self) -> &[&'a ImageDescriptor3];
-}
-impl <'a> ImagePreallocatorInternals<'a> for ImagePreallocator<'a>
-{
-	fn dim1_images(&self) -> &[&'a ImageDescriptor1] { &self.dim1_images }
-	fn dim2_images(&self) -> &[&'a ImageDescriptor2] { &self.dim2_images }
-	fn dim3_images(&self) -> &[&'a ImageDescriptor3] { &self.dim3_images }
 }
 
 pub struct DeviceBuffer { buffer: vk::Buffer, memory: vk::DeviceMemory, size: VkDeviceSize }
-pub trait DeviceBufferInternals : Sized
+pub struct StagingBuffer { buffer: vk::Buffer, memory: vk::DeviceMemory, size: VkDeviceSize }
+impl DeviceBuffer
 {
-	fn new<Engine: EngineCore>(engine: &Engine, size: VkDeviceSize, usage: VkBufferUsageFlags) -> Result<Self, EngineError>;
-}
-impl DeviceBufferInternals for DeviceBuffer
-{
-	fn new<Engine: EngineCore>(engine: &Engine, size: VkDeviceSize, usage: VkBufferUsageFlags) -> Result<Self, EngineError>
+	fn new(engine: &GraphicsInterface, size: VkDeviceSize, usage: VkBufferUsageFlags) -> EngineResult<Self>
 	{
-		vk::Buffer::new(engine.get_device().get_internal(), &VkBufferCreateInfo
+		vk::Buffer::new(engine.device(), &VkBufferCreateInfo
 		{
 			sType: VkStructureType::BufferCreateInfo, pNext: std::ptr::null(), flags: 0,
 			size: size, usage: usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sharingMode: VkSharingMode::Exclusive,
-			queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null()
-		}).and_then(|buffer| vk::DeviceMemory::alloc(engine.get_device().get_internal(), &VkMemoryAllocateInfo
+			queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null()	
+		}).and_then(|b| vk::DeviceMemory::alloc(engine.device(), &VkMemoryAllocateInfo
 		{
 			sType: VkStructureType::MemoryAllocateInfo, pNext: std::ptr::null(),
-			allocationSize: buffer.get_memory_requirements().size, memoryTypeIndex: engine.get_memory_type_index_for_device_local()
-		}).map(move |memory| (buffer, memory))).and_then(|(buffer, memory)| memory.bind_buffer(&buffer, 0)
-			.map(move |()| DeviceBuffer { buffer: buffer, memory: memory, size: size }))
-		.map_err(EngineError::from)
+			allocationSize: b.get_memory_requirements().size, memoryTypeIndex: engine.memindex(MemoryIndexType::DeviceLocal)
+		}).map(|m| (b, m))).and_then(|(b, m)| m.bind_buffer(&b, 0).map(|_| DeviceBuffer { buffer: b, memory: m, size: size })).map_err(From::from)
+	}
+}
+impl StagingBuffer
+{
+	fn new(engine: &GraphicsInterface, size: VkDeviceSize, usage: VkBufferUsageFlags) -> EngineResult<Self>
+	{
+		vk::Buffer::new(engine.device(), &VkBufferCreateInfo
+		{
+			sType: VkStructureType::BufferCreateInfo, pNext: std::ptr::null(), flags: 0,
+			size: size, usage: usage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sharingMode: VkSharingMode::Exclusive,
+			queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null()
+		}).and_then(|b| vk::DeviceMemory::alloc(engine.device(), &VkMemoryAllocateInfo
+		{
+			sType: VkStructureType::MemoryAllocateInfo, pNext: std::ptr::null(),
+			allocationSize: b.get_memory_requirements().size, memoryTypeIndex: engine.memindex(MemoryIndexType::HostVisible)
+		}).map(|m| (b, m))).and_then(|(b, m)| m.bind_buffer(&b, 0).map(|_| StagingBuffer { buffer: b, memory: m, size: size })).map_err(From::from)
+	}
+
+	pub fn map(&self) -> EngineResult<MemoryMappedRange>
+	{
+		self.memory.map(0 .. self.size).map(|ptr| MemoryMappedRange { parent: self, ptr: ptr }).map_err(From::from)
 	}
 }
 impl BufferResource for DeviceBuffer { fn get_resource(&self) -> VkBuffer { *self.buffer } }
-pub struct StagingBuffer { buffer: vk::Buffer, memory: vk::DeviceMemory, size: VkDeviceSize }
-pub trait StagingBufferInternals : Sized
-{
-	fn new<Engine: EngineCore>(engine: &Engine, size: VkDeviceSize) -> Result<Self, EngineError>;
-}
-impl StagingBufferInternals for StagingBuffer
-{
-	fn new<Engine: EngineCore>(engine: &Engine, size: VkDeviceSize) -> Result<Self, EngineError>
-	{
-		vk::Buffer::new(engine.get_device().get_internal(), &VkBufferCreateInfo
-		{
-			sType: VkStructureType::BufferCreateInfo, pNext: std::ptr::null(), flags: 0,
-			size: size, usage: VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sharingMode: VkSharingMode::Exclusive,
-			queueFamilyIndexCount: 0, pQueueFamilyIndices: std::ptr::null()
-		}).and_then(|buffer| vk::DeviceMemory::alloc(engine.get_device().get_internal(), &VkMemoryAllocateInfo
-		{
-			sType: VkStructureType::MemoryAllocateInfo, pNext: std::ptr::null(),
-			allocationSize: buffer.get_memory_requirements().size, memoryTypeIndex: engine.get_memory_type_index_for_host_visible()
-		}).map(move |memory| (buffer, memory))).and_then(|(buffer, memory)| memory.bind_buffer(&buffer, 0)
-			.map(move |()| StagingBuffer { buffer: buffer, memory: memory, size: size }))
-		.map_err(EngineError::from)
-	}
-}
 impl BufferResource for StagingBuffer { fn get_resource(&self) -> VkBuffer { *self.buffer } }
-impl StagingBuffer
-{
-	pub fn map(&self) -> Result<MemoryMappedRange, EngineError>
-	{
-		self.memory.map(0 .. self.size).map(|ptr| MemoryMappedRange { parent: self, ptr: ptr }).map_err(EngineError::from)
-	}
-}
 
 pub struct DeviceImage
 {
 	dim1: Vec<Rc<Image1D>>, dim2: Vec<Rc<Image2D>>, dim3: Vec<Rc<Image3D>>,
 	memory: vk::DeviceMemory, size: VkDeviceSize
 }
-pub trait DeviceImageInternals : Sized
+impl DeviceImage
 {
-	fn new<Engine: EngineCore>(engine: &Engine, d1_images: Vec<Image1D>, d2_images: Vec<Image2D>, d3_images: Vec<Image3D>)
-		-> Result<Self, EngineError>;
-}
-impl DeviceImageInternals for DeviceImage
-{
-	fn new<Engine: EngineCore>(engine: &Engine, d1_images: Vec<Image1D>, d2_images: Vec<Image2D>, d3_images: Vec<Image3D>)
+	fn new(engine: &GraphicsInterface, d1_images: Vec<Image1D>, d2_images: Vec<Image2D>, d3_images: Vec<Image3D>)
 		-> Result<Self, EngineError>
 	{
 		let image_offsets = {
@@ -410,22 +372,21 @@ impl DeviceImageInternals for DeviceImage
 				}).collect::<Vec<_>>()
 		};
 		let memory_size = try!(image_offsets.last().map(|&(x, _)| x).ok_or(EngineError::AllocateMemoryWithEmptyResources));
-		let compatible_bits = image_offsets.last().map(|&(_, x)| x).unwrap();
-		info!(target: "Prelude::Resource", "Going to allocate image for device {} bytes", memory_size);
+		info!(target: "Interlude::Resource", "Going to allocate image for device {} bytes", memory_size);
 
-		vk::DeviceMemory::alloc(engine.get_device().get_internal(), &VkMemoryAllocateInfo
+		vk::DeviceMemory::alloc(engine.device(), &VkMemoryAllocateInfo
 		{
 			sType: VkStructureType::MemoryAllocateInfo, pNext: std::ptr::null(),
-			allocationSize: memory_size, memoryTypeIndex: try!(engine.get_compatible_memory_type_index(compatible_bits))
+			allocationSize: memory_size, memoryTypeIndex: engine.memindex(MemoryIndexType::DeviceLocal)
 		}).and_then(|memory|
 		{
-			let image_resources = d1_images.iter().map(|i| i as &InternalExports<vk::Image>)
-				.chain(d2_images.iter().map(|i| i as &InternalExports<vk::Image>))
-				.chain(d3_images.iter().map(|i| i as &InternalExports<vk::Image>));
+			let image_resources = d1_images.iter().map(|&Image1D(ref o, _)| o)
+				.chain(d2_images.iter().map(|&Image2D(ref o, _)| o))
+				.chain(d3_images.iter().map(|&Image3D(ref o, _)| o));
 			
 			for (&(offs, _), res) in image_offsets.iter().zip(image_resources)
 			{
-				try!(memory.bind_image(res.get_internal(), offs));
+				try!(memory.bind_image(res, offs));
 			}
 			Ok(memory)
 		}).map(move |memory| DeviceImage
@@ -434,7 +395,7 @@ impl DeviceImageInternals for DeviceImage
 			dim2: d2_images.into_iter().map(Rc::new).collect(),
 			dim3: d3_images.into_iter().map(Rc::new).collect(),
 			memory: memory, size: memory_size
-		}).map_err(EngineError::from)
+		}).map_err(From::from)
 	}
 }
 impl DeviceImage
@@ -453,13 +414,9 @@ pub struct StagingImage
 	linear_dim2_images: Vec<LinearImage2D>, linear_dim2_images_offset: Vec<VkDeviceSize>,
 	memory: vk::DeviceMemory, size: VkDeviceSize
 }
-pub trait StagingImageInternals : Sized
+impl StagingImage
 {
-	fn new<Engine: EngineCore>(engine: &Engine, ld2_images: Vec<LinearImage2D>) -> Result<Self, EngineError>;
-}
-impl StagingImageInternals for StagingImage
-{
-	fn new<Engine: EngineCore>(engine: &Engine, ld2_images: Vec<LinearImage2D>) -> Result<Self, EngineError>
+	fn new(engine: &GraphicsInterface, ld2_images: Vec<LinearImage2D>) -> Result<Self, EngineError>
 	{
 		let image_offsets =
 		{
@@ -476,22 +433,22 @@ impl StagingImageInternals for StagingImage
 		let memory_size = try!(image_offsets.last().map(|&x| x).ok_or(EngineError::AllocateMemoryWithEmptyResources));
 		info!(target: "Prelude::Resource", "Going to allocate buffer for host {} bytes", memory_size);
 
-		vk::DeviceMemory::alloc(engine.get_device().get_internal(), &VkMemoryAllocateInfo
+		vk::DeviceMemory::alloc(engine.device(), &VkMemoryAllocateInfo
 		{
 			sType: VkStructureType::MemoryAllocateInfo, pNext: std::ptr::null(),
-			allocationSize: memory_size, memoryTypeIndex: engine.get_memory_type_index_for_host_visible()
+			allocationSize: memory_size, memoryTypeIndex: engine.memindex(MemoryIndexType::HostVisible)
 		}).and_then(|memory|
 		{
-			for (&offs, res) in image_offsets.iter().zip(ld2_images.iter())
+			for (&offs, &LinearImage2D(ref o, _)) in image_offsets.iter().zip(ld2_images.iter())
 			{
-				try!(memory.bind_image(res.get_internal(), offs));
+				try!(memory.bind_image(o, offs));
 			}
 			Ok(memory)
 		}).map(move |memory| StagingImage
 		{
 			linear_dim2_images: ld2_images, linear_dim2_images_offset: image_offsets,
 			memory: memory, size: memory_size
-		}).map_err(EngineError::from)
+		}).map_err(From::from)
 	}
 }
 impl StagingImage
@@ -622,7 +579,7 @@ impl SamplerState
 		self
 	}
 }
-impl <'a> std::convert::Into<VkSamplerCreateInfo> for &'a SamplerState
+impl<'a> std::convert::Into<VkSamplerCreateInfo> for &'a SamplerState
 {
 	fn into(self) -> VkSamplerCreateInfo
 	{
@@ -639,24 +596,15 @@ impl <'a> std::convert::Into<VkSamplerCreateInfo> for &'a SamplerState
 	}
 }
 
-pub struct Sampler
+pub struct Sampler(vk::Sampler);
+impl Sampler
 {
-	internal: vk::Sampler
-}
-pub trait SamplerInternals : Sized
-{
-	fn new<Engine: EngineCore>(engine: &Engine, info: &VkSamplerCreateInfo) -> Result<Self, EngineError>;
-	fn get_native(&self) -> VkSampler;
-}
-impl SamplerInternals for Sampler
-{
-	fn new<Engine: EngineCore>(engine: &Engine, info: &VkSamplerCreateInfo) -> Result<Self, EngineError>
+	pub fn new(engine: &GraphicsInterface, info: &SamplerState) -> EngineResult<Self>
 	{
-		vk::Sampler::new(engine.get_device().get_internal(), info).map(|s| Sampler { internal: s })
-			.map_err(EngineError::from)
+		vk::Sampler::new(engine.device(), &info.into()).map(Sampler).map_err(From::from)
 	}
-	fn get_native(&self) -> VkSampler { *self.internal }
 }
+impl InternalExports for Sampler { type InternalT = vk::Sampler; fn get_internal(&self) -> &vk::Sampler { &self.0 } }
 
 #[derive(Clone, Copy, Debug)]
 pub enum ComponentSwizzle { R, G, B, A }
@@ -710,13 +658,13 @@ pub struct ImageView2D { parent: Rc<Image2D>, internal: vk::ImageView, format: V
 pub struct ImageView3D { parent: Rc<Image3D>, internal: vk::ImageView, format: VkFormat }
 pub trait ImageViewFactory<ResourceT: ImageResource>: Sized
 {
-	fn new<Engine: EngineCore>(engine: &Engine, res: &Rc<ResourceT>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> Result<Self, EngineError>;
+	fn make_from(res: &Rc<ResourceT>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> EngineResult<Self>;
 }
 impl ImageViewFactory<Image1D> for ImageView1D
 {
-	fn new<Engine: EngineCore>(engine: &Engine, res: &Rc<Image1D>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> Result<Self, EngineError>
+	fn make_from(res: &Rc<Image1D>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> EngineResult<Self>
 	{
-		vk::ImageView::new(engine.get_device().get_internal(), &VkImageViewCreateInfo
+		vk::ImageView::new(res.0.parent(), &VkImageViewCreateInfo
 		{
 			sType: VkStructureType::ImageViewCreateInfo, pNext: std::ptr::null(), flags: 0,
 			image: res.get_resource(), viewType: VkImageViewType::Dim1, format: format,
@@ -726,9 +674,9 @@ impl ImageViewFactory<Image1D> for ImageView1D
 }
 impl ImageViewFactory<Image2D> for ImageView2D
 {
-	fn new<Engine: EngineCore>(engine: &Engine, res: &Rc<Image2D>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> Result<Self, EngineError>
+	fn make_from(res: &Rc<Image2D>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> EngineResult<Self>
 	{
-		vk::ImageView::new(engine.get_device().get_internal(), &VkImageViewCreateInfo
+		vk::ImageView::new(res.0.parent(), &VkImageViewCreateInfo
 		{
 			sType: VkStructureType::ImageViewCreateInfo, pNext: std::ptr::null(), flags: 0,
 			image: res.get_resource(), viewType: VkImageViewType::Dim2, format: format,
@@ -738,9 +686,9 @@ impl ImageViewFactory<Image2D> for ImageView2D
 }
 impl ImageViewFactory<Image3D> for ImageView3D
 {
-	fn new<Engine: EngineCore>(engine: &Engine, res: &Rc<Image3D>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> Result<Self, EngineError>
+	fn make_from(res: &Rc<Image3D>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> EngineResult<Self>
 	{
-		vk::ImageView::new(engine.get_device().get_internal(), &VkImageViewCreateInfo
+		vk::ImageView::new(res.0.parent(), &VkImageViewCreateInfo
 		{
 			sType: VkStructureType::ImageViewCreateInfo, pNext: std::ptr::null(), flags: 0,
 			image: res.get_resource(), viewType: VkImageViewType::Dim3, format: format,

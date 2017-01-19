@@ -8,31 +8,37 @@ use {std, vk};
 use vk::ffi::*;
 use vk::traits::*;
 use std::rc::Rc;
+use {EngineResult, GraphicsInterface, PreciseRenderPass, Framebuffer, AttachmentClearValue};
+use std::ops::Deref;
 
 // Crate-level Object: Graphics, Transfer, TransientT, TransientG
-pub struct CommandPool(Rc<vk::CommandPool>, Rc<vk::CommandPool>, vk::CommandPool, vk::CommandPool);
+pub struct CommandPool
+{
+	graphics: Rc<vk::CommandPool>, transfer: Rc<vk::CommandPool>,
+	graphics_t: vk::CommandPool, transfer_t: vk::CommandPool
+}
 impl CommandPool
 {
-	pub fn new(device: &Device) -> Result<Self, EngineError>
+	pub fn new(device: &Device) -> EngineResult<Self>
 	{
-		Ok(CommandPool(
-			try!(vk::CommandPool::new(device, device.get_graphics_queue(), false).map(Rc::new)),
-			try!(vk::CommandPool::new(device, device.get_transfer_queue(), false).map(Rc::new)),
-			try!(vk::CommandPool::new(device, device.get_transfer_queue(), true)),
-			try!(vk::CommandPool::new(device, device.get_graphics_queue(), true))
-		))
-	}
+		let g = vk::CommandPool::new(device, &device.graphics_queue, false).map(Rc::new);
+		let t = vk::CommandPool::new(device, &device.transfer_queue, false).map(Rc::new);
+		let gt = vk::CommandPool::new(device, &device.graphics_queue, true);
+		let tt = vk::CommandPool::new(device, &device.transfer_queue, true);
 
-	pub fn graphics(&self) -> &Rc<vk::CommandPool> { &self.0 }
-	pub fn transfer(&self) -> &Rc<vk::CommandPool> { &self.1 }
-	pub fn transient(&self) -> &vk::CommandPool { &self.2 }
-	pub fn transient_graphics(&self) -> &vk::CommandPool { &self.3 }
+		(g, t, gt, tt).flatten().map(|(g,t, gt, tt)| CommandPool
+		{
+			graphics: g, transfer: t, graphics_t: gt, transfer_t: tt
+		}).map_err(From::from)
+	}
 }
 
 // Memory Barriers //
 /// Defines a Memory Barrier
+#[derive(Clone)]
 pub struct MemoryBarrier { pub src_mask: VkAccessFlags, pub dst_mask: VkAccessFlags }
 /// Defines a Buffer Memory Barrier
+#[derive(Clone)]
 pub struct BufferMemoryBarrier<'a>
 {
 	pub src_mask: VkAccessFlags, pub dst_mask: VkAccessFlags,
@@ -167,7 +173,8 @@ impl <'a> std::convert::Into<VkImageMemoryBarrier> for &'a ImageMemoryBarrier<'a
 }
 
 /// An element of Indirect Draw
-pub struct IndirectCallParameter(pub u32, pub u32, pub u32, pub u32);		// vertex_count, instance_count, first_vertex, first_instance
+/// (vertex_count, instance_count, first_vertex, first_instance)
+pub struct IndirectCallParameter(pub u32, pub u32, pub u32, pub u32);
 
 // Typedefs for BufferType and View //
 pub type GraphicsCommandBuffer = VkCommandBuffer;
@@ -186,12 +193,52 @@ pub struct TransferCommandBuffers(Vec<VkCommandBuffer>, Rc<vk::CommandPool>);
 pub struct TransientTransferCommandBuffers<'a>(Vec<VkCommandBuffer>, &'a vk::CommandPool, &'a vk::Queue);
 /// A set of command buffers which contains Graphics Commands and has to be sent once only.
 pub struct TransientGraphicsCommandBuffers<'a>(Vec<VkCommandBuffer>, &'a vk::CommandPool, &'a vk::Queue);
+impl GraphicsCommandBuffers
+{
+	pub fn allocate(engine: &GraphicsInterface, count: usize) -> EngineResult<Self>
+	{
+		engine.pools().graphics.allocate(VkCommandBufferLevel::Primary, count)
+			.map(|cs| GraphicsCommandBuffers(cs, engine.pools().graphics.clone())).map_err(From::from)
+	}
+}
+impl BundledCommandBuffers
+{
+	pub fn allocate(engine: &GraphicsInterface, count: usize) -> EngineResult<Self>
+	{
+		engine.pools().graphics.allocate(VkCommandBufferLevel::Secondary, count)
+			.map(|cs| BundledCommandBuffers(cs, engine.pools().graphics.clone())).map_err(From::from)
+	}
+}
+impl TransferCommandBuffers
+{
+	pub fn allocate(engine: &GraphicsInterface, count: usize) -> EngineResult<Self>
+	{
+		engine.pools().transfer.allocate(VkCommandBufferLevel::Primary, count)
+			.map(|cs| TransferCommandBuffers(cs, engine.pools().transfer.clone())).map_err(From::from)
+	}
+}
+impl<'a> TransientTransferCommandBuffers<'a>
+{
+	pub fn allocate(engine: &'a GraphicsInterface, count: usize) -> EngineResult<Self>
+	{
+		engine.pools().transfer_t.allocate(VkCommandBufferLevel::Primary, count)
+			.map(|cs| TransientTransferCommandBuffers(cs, &engine.pools().transfer_t, &engine.device().transfer_queue)).map_err(From::from)
+	}
+}
+impl<'a> TransientGraphicsCommandBuffers<'a>
+{
+	pub fn allocate(engine: &'a GraphicsInterface, count: usize) -> EngineResult<Self>
+	{
+		engine.pools().graphics_t.allocate(VkCommandBufferLevel::Primary, count)
+			.map(|cs| TransientGraphicsCommandBuffers(cs, &engine.pools().graphics_t, &engine.device().graphics_queue)).map_err(From::from)
+	}
+}
 // Dereferencing Operations(Provides slice of command buffers) //
-impl std::ops::Deref for GraphicsCommandBuffers { type Target = GraphicsCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
-impl std::ops::Deref for BundledCommandBuffers { type Target = BundledCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
-impl std::ops::Deref for TransferCommandBuffers { type Target = TransferCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
-impl<'a> std::ops::Deref for TransientTransferCommandBuffers<'a> { type Target = TransferCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
-impl<'a> std::ops::Deref for TransientGraphicsCommandBuffers<'a> { type Target = GraphicsCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
+impl Deref for GraphicsCommandBuffers { type Target = GraphicsCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
+impl Deref for BundledCommandBuffers { type Target = BundledCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
+impl Deref for TransferCommandBuffers { type Target = TransferCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
+impl<'a> Deref for TransientTransferCommandBuffers<'a> { type Target = TransferCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
+impl<'a> Deref for TransientGraphicsCommandBuffers<'a> { type Target = GraphicsCommandBuffersView; fn deref(&self) -> &Self::Target { &self.0 } }
 // Concurrency Supports //
 unsafe impl Sync for GraphicsCommandBuffers {}
 unsafe impl Send for GraphicsCommandBuffers {}
@@ -225,7 +272,7 @@ CommandBuffersNewImpl!([Transient] TransientGraphicsCommandBuffers);
 // Common Destroy Methods for all command buffers //
 fn bufobj_common_drop(bufs: &[VkCommandBuffer], par: &vk::CommandPool)
 {
-	unsafe { vkFreeCommandBuffers(**par.parent(), **par, bufs.len() as u32, bufs.as_ptr()) };
+	unsafe { vkFreeCommandBuffers(***par.parent(), **par, bufs.len() as u32, bufs.as_ptr()) };
 }
 impl Drop for GraphicsCommandBuffers { fn drop(&mut self) { bufobj_common_drop(&self.0, &self.1); } }
 impl Drop for BundledCommandBuffers { fn drop(&mut self) { bufobj_common_drop(&self.0, &self.1); } }
@@ -246,7 +293,7 @@ pub trait SecondaryCommandBuffers<'a>
 {
 	type Recorder: 'a;
 
-	fn begin(&'a self, index: usize, cont_rp: &RenderPass, subindex: u32, cont_fb: &Framebuffer) -> Result<Self::Recorder, EngineError>;
+	fn begin(&'a self, index: usize, cont_rp: PreciseRenderPass, cont_fb: &Framebuffer) -> Result<Self::Recorder, EngineError>;
 }
 impl<'a> PrimaryCommandBuffers<'a> for GraphicsCommandBuffers
 {
@@ -279,12 +326,12 @@ impl<'a> SecondaryCommandBuffers<'a> for BundledCommandBuffers
 {
 	type Recorder = BundleCommandRecorder<'a>;
 
-	fn begin(&'a self, index: usize, cont_rp: &RenderPass, subindex: u32, cont_fb: &Framebuffer) -> Result<BundleCommandRecorder, EngineError>
+	fn begin(&'a self, index: usize, cont_rp: PreciseRenderPass, cont_fb: &Framebuffer) -> Result<BundleCommandRecorder, EngineError>
 	{
 		let inheritance_info = VkCommandBufferInheritanceInfo
 		{
 			sType: VkStructureType::CommandBufferInheritanceInfo, pNext: std::ptr::null(),
-			renderPass: ***cont_rp.get_internal(), subpass: subindex, framebuffer: **cont_fb.get_internal(),
+			renderPass: **cont_rp.0.get_internal(), subpass: cont_rp.1, framebuffer: **cont_fb.get_internal(),
 			occlusionQueryEnable: false as VkBool32, queryFlags: 0, pipelineStatistics: 0
 		};
 		unsafe
@@ -424,7 +471,7 @@ pub trait DrawingCommandRecorder
 	fn bind_pipeline(self, pipeline: &GraphicsPipeline) -> Self;
 	fn bind_descriptor_sets(self, layout: &PipelineLayout, sets: &DescriptorSetArrayView) -> Self;
 	fn bind_descriptor_sets_partial(self, layout: &PipelineLayout, start_set: u32, sets: &DescriptorSetArrayView) -> Self;
-	fn push_constants(self, layout: &PipelineLayout, shader_stage: &[ShaderStage], range: std::ops::Range<u32>, data: &[f32]) -> Self;
+	fn push_constants(self, layout: &PipelineLayout, shader_stage: ShaderStage, range: std::ops::Range<u32>, data: &[f32]) -> Self;
 	fn bind_vertex_buffers(self, buffer_offsets: &[(&BufferResource, usize)]) -> Self;
 	fn bind_vertex_buffers_partial(self, start_binding: u32, buffer_offsets: &[(&BufferResource, usize)]) -> Self;
 	fn bind_index_buffer(self, buffer: &BufferResource, offset: usize) -> Self;
@@ -456,10 +503,9 @@ macro_rules! DrawingCommandRecorderDefaultImpl
 					start_set, sets.len() as u32, sets.as_ptr(), 0, std::ptr::null()) };
 				self
 			}
-			fn push_constants(self, layout: &PipelineLayout, shader_stage: &[ShaderStage], range: std::ops::Range<u32>, data: &[f32]) -> Self
+			fn push_constants(self, layout: &PipelineLayout, shader_stage: ShaderStage, range: std::ops::Range<u32>, data: &[f32]) -> Self
 			{
-				let stages = shader_stage.into_iter().fold(0, |acc, x| acc | Into::<VkShaderStageFlags>::into(*x));
-				unsafe { vkCmdPushConstants(*self.0, **layout.get_internal(), stages,
+				unsafe { vkCmdPushConstants(*self.0, **layout.get_internal(), shader_stage as VkShaderStageFlags,
 					range.start, range.len() as u32, data.as_ptr() as *const std::os::raw::c_void) };
 				self
 			}
@@ -529,10 +575,6 @@ impl<'a> GraphicsCommandRecorder<'a>
 			ibs_native.len() as u32, ibs_native.as_ptr()) };
 		self
 	}
-	pub fn end(self) -> Result<(), EngineError>
-	{
-		unsafe { vkEndCommandBuffer(*self.0) }.and_then(|| { std::mem::forget(self); Ok(()) }).map_err(EngineError::from)
-	}
 
 	pub fn begin_render_pass(self, framebuffer: &Framebuffer, clear_values: &[AttachmentClearValue], use_bundles: bool) -> Self
 	{
@@ -540,8 +582,8 @@ impl<'a> GraphicsCommandRecorder<'a>
 		let begin_info = VkRenderPassBeginInfo
 		{
 			sType: VkStructureType::RenderPassBeginInfo, pNext: std::ptr::null(),
-			renderPass: ***framebuffer.renderpass().get_internal(), framebuffer: **framebuffer.get_internal(),
-			renderArea: VkRect2D(VkOffset2D(0, 0), framebuffer.get_area()),
+			renderPass: **framebuffer.renderpass().get_internal(), framebuffer: **framebuffer.get_internal(),
+			renderArea: VkRect2D(VkOffset2D(0, 0), *framebuffer.area()),
 			clearValueCount: clear_values_native.len() as u32, pClearValues: clear_values_native.as_ptr()
 		};
 		unsafe { vkCmdBeginRenderPass(*self.0, &begin_info,
@@ -564,10 +606,6 @@ impl<'a> GraphicsCommandRecorder<'a>
 		unsafe { vkCmdExecuteCommands(*self.0, buffers.len() as u32, buffers.as_ptr()) };
 		self
 	}
-	pub fn inject_commands<F>(self, f: F) -> Self where F: FnOnce(Self) -> Self
-	{
-		f(self)
-	}
 	
 	pub fn blit_image(self, src: &ImageResource, dst: &ImageResource, src_layout: VkImageLayout, dst_layout: VkImageLayout,
 		regions: &[ImageBlitRegion], filter: Filter) -> Self
@@ -578,19 +616,7 @@ impl<'a> GraphicsCommandRecorder<'a>
 		self
 	}
 }
-impl <'a> BundleCommandRecorder<'a>
-{
-	pub fn end(self) -> Result<(), EngineError>
-	{
-		unsafe { vkEndCommandBuffer(*self.0) }.and_then(|| { std::mem::forget(self); Ok(()) }).map_err(EngineError::from)
-	}
-
-	pub fn inject_commands<F>(self, f: F) -> Self where F: FnOnce(Self) -> Self
-	{
-		f(self)
-	}
-}
-impl <'a> TransferCommandRecorder<'a>
+impl<'a> TransferCommandRecorder<'a>
 {
 	pub fn pipeline_barrier(self, src_stage_mask: VkPipelineStageFlags, dst_stage_mask: VkPipelineStageFlags,
 		depend_by_region: bool, memory_barriers: &[MemoryBarrier], buffer_barriers: &[BufferMemoryBarrier], image_barriers: &[ImageMemoryBarrier]) -> Self
@@ -606,10 +632,6 @@ impl <'a> TransferCommandRecorder<'a>
 			bbs_native.len() as u32, bbs_native.as_ptr(),
 			ibs_native.len() as u32, ibs_native.as_ptr()) };
 		self
-	}
-	pub fn end(self) -> Result<(), EngineError>
-	{
-		unsafe { vkEndCommandBuffer(*self.0) }.and_then(|| { std::mem::forget(self); Ok(()) }).map_err(EngineError::from)
 	}
 
 	pub fn copy_buffer(self, src: &BufferResource, dst: &BufferResource, regions: &[BufferCopyRegion]) -> Self
@@ -627,6 +649,26 @@ impl <'a> TransferCommandRecorder<'a>
 		self
 	}
 }
+macro_rules! RecorderCommon
+{
+	(for $t: ty) =>
+	{
+		impl<'a> $t
+		{
+			pub fn end(self) -> Result<(), EngineError>
+			{
+				unsafe { vkEndCommandBuffer(*self.0) }.and_then(|| { std::mem::forget(self); Ok(()) }).map_err(From::from)
+			}
+			pub fn inject_commands<F>(self, f: F) -> Self where F: FnOnce(Self) -> Self
+			{
+				f(self)
+			}
+		}
+	}
+}
+RecorderCommon!(for GraphicsCommandRecorder<'a>);
+RecorderCommon!(for BundleCommandRecorder<'a>);
+RecorderCommon!(for TransferCommandRecorder<'a>);
 
 #[derive(Clone, Copy)]
 pub struct BufferCopyRegion(pub usize, pub usize, pub usize);		// src, dst, size

@@ -4,6 +4,7 @@ use super::internals::*;
 use {std, vk};
 use vk::ffi::*;
 use std::rc::Rc;
+use std::ops::Deref;
 
 #[derive(Clone)]
 pub struct AttachmentDesc
@@ -26,7 +27,7 @@ impl std::default::Default for AttachmentDesc
 		}
 	}
 }
-impl <'a> std::convert::Into<VkAttachmentDescription> for &'a AttachmentDesc
+impl<'a> std::convert::Into<VkAttachmentDescription> for &'a AttachmentDesc
 {
 	fn into(self) -> VkAttachmentDescription
 	{
@@ -91,7 +92,7 @@ impl PassDesc
 		PassDesc { color_attachment_indices: vec![AttachmentRef::color(index)], .. Default::default() }
 	}
 }
-impl <'a> std::convert::Into<VkSubpassDescription> for &'a PassDesc
+impl<'a> std::convert::Into<VkSubpassDescription> for &'a PassDesc
 {
 	fn into(self) -> VkSubpassDescription
 	{
@@ -109,7 +110,7 @@ impl <'a> std::convert::Into<VkSubpassDescription> for &'a PassDesc
 		}
 	}
 }
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct PassDependency
 {
 	pub src: u32, pub dst: u32,
@@ -132,7 +133,7 @@ impl std::default::Default for PassDependency
 		}
 	}
 }
-impl <'a> std::convert::Into<VkSubpassDependency> for &'a PassDependency
+impl<'a> std::convert::Into<VkSubpassDependency> for &'a PassDependency
 {
 	fn into(self) -> VkSubpassDependency
 	{
@@ -158,12 +159,12 @@ impl PassDependency
 		}
 	}
 }
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum AttachmentClearValue
 {
 	Color(f32, f32, f32, f32), DepthStencil(f32, u32)
 }
-impl <'a> std::convert::Into<VkClearValue> for &'a AttachmentClearValue
+impl<'a> std::convert::Into<VkClearValue> for &'a AttachmentClearValue
 {
 	fn into(self) -> VkClearValue
 	{
@@ -178,27 +179,64 @@ impl <'a> std::convert::Into<VkClearValue> for &'a AttachmentClearValue
 	}
 }
 
-#[derive(Clone)]
-pub struct RenderPass(Rc<vk::RenderPass>);
-pub struct Framebuffer { mold: RenderPass, internal: vk::Framebuffer, area: VkExtent2D }
-impl InternalExports<Rc<vk::RenderPass>> for RenderPass { fn get_internal(&self) -> &Rc<vk::RenderPass> { &self.0 } }
-impl InternalExports<vk::Framebuffer> for Framebuffer { fn get_internal(&self) -> &vk::Framebuffer { &self.internal } }
-pub trait RenderPassInternals { fn new(o: vk::RenderPass) -> Self; }
-impl RenderPassInternals for RenderPass { fn new(o: vk::RenderPass) -> Self { RenderPass(Rc::new(o)) } }
-pub trait FramebufferInternals
+fn into_ref_of_ref<'a, T, U>(from: &[&'a T]) -> Vec<U> where &'a T: std::convert::Into<U>
 {
-	fn new(fb: vk::Framebuffer, mold: &RenderPass, area: VkExtent2D) -> Self;
-	fn get_area(&self) -> VkExtent2D;
+	from.into_iter().map(|&x| x.into()).collect()
 }
-impl FramebufferInternals for Framebuffer
+
+use ginterface::GraphicsInterface;
+use EngineResult;
+
+/// RenderPass: Determines how pixels in attachments are used.
+pub struct RenderPass(Rc<vk::RenderPass>);
+/// Framebuffer: A set of Attachments(ImageViews) and RenderPass
+pub struct Framebuffer { mold: RenderPass, internal: vk::Framebuffer, area: VkExtent2D }
+/// A pair of RenderPass and subpass index
+#[derive(Clone)]
+pub struct PreciseRenderPass<'a>(pub &'a RenderPass, pub u32);
+impl RenderPass
 {
-	fn new(fb: vk::Framebuffer, mold: &RenderPass, area: VkExtent2D) -> Self
+	pub fn new(engine: &GraphicsInterface, attachments: &[&AttachmentDesc], passes: &[&PassDesc], deps: &[&PassDependency]) -> EngineResult<Self>
 	{
-		Framebuffer { internal: fb, mold: mold.clone(), area: area }
+		let attachments = into_ref_of_ref(attachments);
+		let passes = into_ref_of_ref(passes);
+		let deps = into_ref_of_ref(deps);
+
+		vk::RenderPass::new(engine.device(), &VkRenderPassCreateInfo
+		{
+			sType: VkStructureType::RenderPassCreateInfo, pNext: std::ptr::null(), flags: 0,
+			attachmentCount: attachments.len() as u32, subpassCount: passes.len() as u32, dependencyCount: deps.len() as u32,
+			pAttachments: attachments.as_ptr(), pSubpasses: passes.as_ptr(), pDependencies: deps.as_ptr()
+		}).map(|x| RenderPass(Rc::new(x))).map_err(From::from)
 	}
-	fn get_area(&self) -> VkExtent2D { self.area }
 }
 impl Framebuffer
 {
+	pub fn new(engine: &GraphicsInterface, mold: &RenderPass, attachments: &[&ImageView], form: &Size3) -> EngineResult<Self>
+	{
+		let attachments = attachments.into_iter().map(|&x| x.get_native()).collect::<Vec<_>>();
+		let &Size3(w, h, l) = form;
+
+		vk::Framebuffer::new(engine.device(), &VkFramebufferCreateInfo
+		{
+			sType: VkStructureType::FramebufferCreateInfo, pNext: std::ptr::null(), flags: 0,
+			renderPass: **mold.0, attachmentCount: attachments.len() as u32, pAttachments: attachments.as_ptr(),
+			width: w, height: h, layers: l
+		}).map(|f| Framebuffer { internal: f, mold: RenderPass(mold.0.clone()), area: VkExtent2D(w, h) }).map_err(From::from)
+	}
+	pub fn new_for_presented<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3)
+		-> EngineResult<Self>
+	{
+		engine.presenting_renderpass(attachment.format(), clear_mode).and_then(|m| Self::new(engine, m, &[attachment], form))
+	}
+	pub fn new_with_default<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3)
+		-> EngineResult<Self>
+	{
+		engine.default_renderpass(attachment.format(), clear_mode).and_then(|m| Self::new(engine, m, &[attachment], form))
+	}
 	pub fn renderpass(&self) -> &RenderPass { &self.mold }
+	pub fn area(&self) -> &VkExtent2D { &self.area }
 }
+
+impl InternalExports for RenderPass { type InternalT = vk::RenderPass; fn get_internal(&self) -> &vk::RenderPass { &self.0 } }
+impl InternalExports for Framebuffer { type InternalT = vk::Framebuffer; fn get_internal(&self) -> &vk::Framebuffer { &self.internal } }

@@ -2,18 +2,23 @@
 
 #![allow(dead_code)]
 
+use {ApplicationState, Input};
 use super::internals::*;
-use {std, log, vk};
+use super::ginterface::*;
+use {std, log, RenderPass, AttachmentDesc, PassDesc, RenderWindow, render_surface};
 use vk::ffi::*;
 use ansi_term::*;
-use std::rc::Rc;
 use std::sync::{Arc, RwLock};
-use libc::size_t;
-use std::os::raw::*;
-use std::ffi::CStr;
-use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::hash::Hash;
+use std::borrow::Cow;
+use EngineResult;
+use std::ops::Deref;
+
+// Select WindowSystem and InputSystem
+#[cfg(windows)] use win32::NativeWindow;
+#[cfg(unix)] use linux::NativeWindowAndServerCon as NativeWindow;
 
 struct EngineLogger;
 impl log::Log for EngineLogger
@@ -35,6 +40,14 @@ impl log::Log for EngineLogger
 		}
 	}
 }
+impl EngineLogger
+{
+	fn setup()
+	{
+		log::set_logger(|max_log_level| { max_log_level.set(log::LogLevelFilter::Info); Box::new(EngineLogger) }).unwrap();
+		info!(target: "Interlude", "Initializing Engine...");
+	}
+}
 
 fn mtflags_decomposite(flags: VkMemoryPropertyFlags) -> Vec<&'static str>
 {
@@ -47,138 +60,48 @@ fn mtflags_decomposite(flags: VkMemoryPropertyFlags) -> Vec<&'static str>
 	temp
 }
 
-pub struct DeviceFeatures(VkPhysicalDeviceFeatures);
-impl DeviceFeatures
-{
-	pub fn new() -> Self
-	{
-		DeviceFeatures(VkPhysicalDeviceFeatures
-		{
-			geometryShader: true as VkBool32,
-			.. Default::default()
-		})
-	}
-	pub fn enable_multidraw_indirect(mut self) -> Self
-	{
-		self.0.multiDrawIndirect = true as VkBool32;
-		self
-	}
-	pub fn enable_draw_indirect_first_instance(mut self) -> Self
-	{
-		self.0.drawIndirectFirstInstance = true as VkBool32;
-		self
-	}
-	pub fn enable_block_texture_compression(mut self) -> Self
-	{
-		self.0.textureCompressionBC = true as VkBool32;
-		self
-	}
-	pub fn enable_nonsolid_fillmode(mut self) -> Self
-	{
-		self.0.fillModeNonSolid = true as VkBool32;
-		self
-	}
-}
-
-pub trait EngineExports<WS: WindowServer>
-{
-	fn get_window_server(&self) -> &Arc<WS>;
-}
 pub trait EngineCoreExports
 {
-	fn get_instance(&self) -> &Rc<vk::Instance>;
-	fn get_device(&self) -> &DeviceExports;
-	fn get_memory_type_index_for_device_local(&self) -> u32;
-	fn get_memory_type_index_for_host_visible(&self) -> u32;
-	fn get_compatible_memory_type_index(&self, bits: u32) -> Result<u32, EngineError>;
-	fn is_optimized_debug_render_support(&self) -> bool;
+	fn graphics(&self) -> &GraphicsInterface;
 }
-/// Core Operations in Engine
-pub trait EngineCore : EngineCoreExports + CommandSubmitter
+pub struct EngineBuilder<'a, InputNames: Eq + Copy + Hash>
 {
-	// Factory Methods //
-	/// Create a fence object which is used synchronizing between host(CPU) and device(GPU)
-	fn create_fence(&self) -> Result<Fence, EngineError>;
-	/// Create a queue fence(semaphore) object which is used synchronizing between queues
-	fn create_queue_fence(&self) -> Result<QueueFence, EngineError>;
-	/// Create a render pass which defines a rendering method to attachments
-	fn create_render_pass(&self, attachments: &[&AttachmentDesc], passes: &[&PassDesc], deps: &[&PassDependency]) -> Result<RenderPass, EngineError>;
-	/// Create a framebuffer which is collection of attachments(ImageViews) and a render pass
-	fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: &Size3) -> Result<Framebuffer, EngineError>;
-	/// Create a simple framebuffer which is with auto-generated render pass(Preserved Pixels to VRAM, Layout transition: ColorAttachmentOptimal -> ShaderReadOnlyOptimal).
-	/// Usable for rendering to single attachment which is used as Shader Input(Texture) 
-	fn create_simple_framebuffer(&self, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3) -> Result<Framebuffer, EngineError>;
-	/// Create a simple framebuffer which is with auto-generated render pass(Preserved Pixels to VRAM, Layout transition: ColorAttachmentOptimal -> PresentSrcKHR)
-	/// Usable for rendering to swapchain and no other subpasses are required.
-	fn create_presented_framebuffer(&self, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3) -> Result<Framebuffer, EngineError>;
-	/// Create a vertex shader from asset with Vertex Binding and Vertex Attribute inputs.
-	fn create_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str, vertex_bindings: &[VertexBinding], vertex_attributes: &[VertexAttribute])
-		-> Result<ShaderProgram, EngineError>;
-	/// Create a geometry shader from asset
-	fn create_geometry_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>;
-	/// Create a fragment shader from asset
-	fn create_fragment_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>;
-	/// Create a pipeline layout which defines layout of pipeline-shared data(shader uniforms)
-	fn create_pipeline_layout(&self, descriptor_sets: &[&DescriptorSetLayout], push_constants: &[PushConstantDesc]) -> Result<PipelineLayout, EngineError>;
-	/// Create graphics pipelines from Builder data
-	fn create_graphics_pipelines(&self, builders: &[&GraphicsPipelineBuilder]) -> Result<Vec<GraphicsPipeline>, EngineError>;
-	/// Create double-buffered(device-local and staging) buffer
-	fn create_double_buffer(&self, prealloc: &BufferPreallocator) -> Result<(DeviceBuffer, StagingBuffer), EngineError>;
-	/// Create double-buffered(device-local and staging) image
-	fn create_double_image(&self, prealloc: &ImagePreallocator) -> Result<(DeviceImage, Option<StagingImage>), EngineError>;
-	/// Create descriptor set layout which is group of shader inputs(uniform, texture, storage...)
-	fn create_descriptor_set_layout(&self, bindings: &[Descriptor]) -> Result<DescriptorSetLayout, EngineError>;
-	/// Create sampler object
-	fn create_sampler(&self, state: &SamplerState) -> Result<Sampler, EngineError>;
-	/// Create image view object for Image1D
-	fn create_image_view_1d(&self, res: &Rc<Image1D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange)
-		-> Result<ImageView1D, EngineError>;
-	/// Create image view object for Image2D
-	fn create_image_view_2d(&self, res: &Rc<Image2D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange)
-		-> Result<ImageView2D, EngineError>;
-	/// Create image view object for Image3D
-	fn create_image_view_3d(&self, res: &Rc<Image3D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange)
-		-> Result<ImageView3D, EngineError>;
-	/// Create vertex shader for post-processing
-	fn create_postprocess_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>;
+	app_name: Cow<'a, str>, app_version: u32, asset_base: Option<Cow<'a, Path>>, extra_features: DeviceFeatures,
+	caption: Cow<'a, str>, size: Size2, resizable: bool, ph: std::marker::PhantomData<InputNames>
+}
+impl<'a, InputNames: Eq + Copy + Hash> EngineBuilder<'a, InputNames>
+{
+	pub fn new(app_name: Cow<'a, str>, app_version: (u32, u32, u32), caption: Cow<'a, str>, size: &Size2) -> Self
+	{
+		EngineBuilder
+		{
+			app_name: app_name, app_version: VK_MAKE_VERSION!(app_version.0, app_version.1, app_version.2),
+			caption: caption, size: size.clone(), resizable: false,
+			asset_base: None, extra_features: DeviceFeatures::new(), ph: std::marker::PhantomData
+		}
+	}
+	pub fn asset_base(mut self, asset_base: Cow<'a, Path>) -> Self
+	{
+		self.asset_base = Some(asset_base);
+		self
+	}
+	pub fn device_feature_block_texture_compression(mut self) -> Self
+	{
+		self.extra_features.enable_block_texture_compression();
+		self
+	}
+	pub fn device_feature_nonsolid_fillmode(mut self) -> Self
+	{
+		self.extra_features.enable_nonsolid_fillmode();
+		self
+	}
+	pub fn resizable_window(mut self) -> Self
+	{
+		self.resizable = true;
+		self
+	}
 
-	// Allocation Methods //
-	/// Allocate graphics command buffers
-	fn allocate_graphics_command_buffers(&self, count: usize) -> Result<GraphicsCommandBuffers, EngineError>;
-	/// Allocate secondary graphics command buffers
-	fn allocate_bundled_command_buffers(&self, count: usize) -> Result<BundledCommandBuffers, EngineError>;
-	/// Allocate transfer command buffers
-	fn allocate_transfer_command_buffers(&self, count: usize) -> Result<TransferCommandBuffers, EngineError>;
-	/// Allocate graphics command buffers which is short-lived and only used once
-	fn allocate_transient_graphics_command_buffers(&self, count: usize) -> Result<TransientGraphicsCommandBuffers, EngineError>;
-	/// Allocate transfer command buffers which is short-lived and only used once
-	fn allocate_transient_transfer_command_buffers(&self, count: usize) -> Result<TransientTransferCommandBuffers, EngineError>;
-	/// Allocate all of descriptor set with corresponding layout
-	fn preallocate_all_descriptor_sets(&self, layouts: &[&DescriptorSetLayout]) -> Result<DescriptorSets, EngineError>;
-	/// Pre-allocate(alignment and calculate total size of buffer) buffer contents
-	fn buffer_preallocate(&self, structure_sizes: &[(usize, BufferDataType)]) -> BufferPreallocator;
-
-	// Asset Path //
-	/// Parse asset path with extension. Asset path is delimitered by "."
-	fn parse_asset(&self, asset_path: &str, extension: &str) -> std::ffi::OsString;
-	/// Implementation of parse_asset
-	fn _parse_asset(asset_base: &PathBuf, asset_path: &str, extension: &str) -> std::ffi::OsString;
-	/// Get default vertex shader for post-processing
-	fn postprocess_vsh(&self, require_uv: bool) -> Result<&ShaderProgram, EngineError>;
-
-	// Device Configurations/Operations //
-	/// Update descriptor sets
-	fn update_descriptors(&self, write_infos: &[DescriptorSetWriteInfo]);
-	/// Wait device operations
-	fn wait_device(&self) -> Result<(), EngineError>;
-	/// Submit transient command buffers to device
-	fn submit_transient_commands(&self, tt: Option<TransientTransferCommandBuffers>, gt: Option<TransientGraphicsCommandBuffers>) -> Result<(), EngineError>;
-
-	// Detached Functions //
-	/// Detach a command sender which can submit command buffers
-	fn new_command_sender(&self) -> CommandSender;
-	/// Get a reference to graphics queue
-	fn graphics_queue_ref(&self) -> &vk::Queue;
+	pub fn launch(self) -> Result<Engine<InputNames>, EngineError> { Engine::new(self) }
 }
 pub struct LazyLoadedResource<T>(Option<T>);
 impl<T> LazyLoadedResource<T>
@@ -198,172 +121,75 @@ pub struct EngineResources
 	postprocess_vsh: LazyLoadedResource<ShaderProgram>, postprocess_vsh_nouv: LazyLoadedResource<ShaderProgram>,
 	default_renderpass: HashMap<(Option<bool>, VkFormat), RenderPass>, presenting_renderpass: HashMap<(Option<bool>, VkFormat), RenderPass>
 }
-pub struct Engine<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
+pub struct Engine<InputNames: Eq + Copy + Hash>
 {
-	window_system: Arc<WS>, input_system: Arc<RwLock<IS>>,
-	instance: Rc<vk::Instance>, #[allow(dead_code)] debug_callback: vk::DebugReportCallback,
-	memory_types: VkPhysicalDeviceMemoryProperties,
-	device: Device, pools: CommandPool, pipeline_cache: Rc<vk::PipelineCache>,
-	asset_dir: std::path::PathBuf,
-	physical_device_limits: VkPhysicalDeviceLimits,
-	memory_type_index_for_device_local: u32, memory_type_index_for_host_visible: u32,
-	optimized_debug_render: bool, common_resources: EngineResources,
-	// Phantom Data //
-	ph: std::marker::PhantomData<InputNames>
+	window: Arc<RenderWindow>, input_system: Arc<RwLock<Input<InputNames>>>, gi: GraphicsInterface,
+	asset_dir: PathBuf, common_resources: EngineResources
 }
-unsafe impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
-	Send for Engine<WS, IS, InputNames> {}
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
-	Drop for Engine<WS, IS, InputNames>
+unsafe impl<InputNames: Eq + Copy + Hash> Send for Engine<InputNames> {}
+impl<InputNames: Eq + Copy + Hash> EngineCoreExports for Engine<InputNames>
 {
-	fn drop(&mut self) { self.device.wait_for_idle().unwrap(); }
+	fn graphics(&self) -> &GraphicsInterface { &self.gi }
 }
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
-	EngineExports<WS> for Engine<WS, IS, InputNames>
+impl<InputNames: Eq + Copy + Hash> Engine<InputNames>
 {
-	fn get_window_server(&self) -> &Arc<WS> { &self.window_system }
-}
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
-	EngineCoreExports for Engine<WS, IS, InputNames>
-{
-	fn get_instance(&self) -> &Rc<vk::Instance> { &self.instance }
-	fn get_device(&self) -> &DeviceExports { &self.device }
-	fn get_memory_type_index_for_device_local(&self) -> u32 { self.memory_type_index_for_device_local }
-	fn get_memory_type_index_for_host_visible(&self) -> u32 { self.memory_type_index_for_host_visible }
-	fn get_compatible_memory_type_index(&self, bits: u32) -> Result<u32, EngineError>
+	pub fn new(info: EngineBuilder<InputNames>) -> Result<Self, EngineError>
 	{
-		let least_index = bits.trailing_zeros();
-		if least_index >= self.memory_types.memoryTypeCount { Err(EngineError::GenericError("Argument does not contain any bits")) }
-		else { Ok(least_index as u32) }
+		EngineLogger::setup();
+
+		GraphicsInterface::new(&info.app_name, info.app_version, &info.extra_features).and_then(|gi|
+		{
+			let window = NativeWindow::new(&info.size, &info.caption, info.resizable).and_then(|n| render_surface::make_render_window(n, &gi, &info.size));
+			let ni = Input::new().map(RwLock::new).map(Arc::new);
+
+			(window, ni).flatten().map(move |(window, ni)| Engine
+			{
+				window: Arc::new(window), input_system: ni, gi: gi,
+				asset_dir: info.asset_base.map(Cow::into_owned)
+					.unwrap_or_else(|| std::env::current_exe().unwrap().parent().map(Path::to_path_buf).unwrap()).join("assets"),
+				common_resources: EngineResources::new()
+			})
+		})
 	}
-	fn is_optimized_debug_render_support(&self) -> bool { self.optimized_debug_render }
-}
-// For XServer
-#[cfg(unix)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
-	Engine<super::linux::XServer, super::input::UnixInputSystem<InputNames>, InputNames>
-{
-	pub fn new<StrT: AsRef<Path>>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures) -> Result<Self, EngineError>
-	{
-		Engine::new_with_window_system(app_name, app_version, asset_base, extra_features, "VK_KHR_xcb_surface", super::linux::connect_xserver)
-	}
-}
-// For Win32Server
-#[cfg(windows)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
-	Engine<super::win32::Win32Server, super::input::Win32InputSystem<InputNames>, InputNames>
-{
-	pub fn new<StrT: AsRef<Path>>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures) -> Result<Self, EngineError>
-	{
-		Engine::new_with_window_system(app_name, app_version, asset_base, extra_features, "VK_KHR_win32_surface", super::win32::connect_win32_server)
-	}
+
+	pub fn render_window(&self) -> &Arc<RenderWindow> { &self.window }
 }
 // For any WindowSystems
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash> Engine<WS, IS, InputNames>
+impl<InputNames: Eq + Copy + Hash> Engine<InputNames>
 {
-	pub fn window_system_ref(&self) -> &Arc<WS> { &self.window_system }
-	pub fn input_system_ref(&self) -> &Arc<RwLock<IS>> { &self.input_system }
+	pub fn input_system_ref(&self) -> &Arc<RwLock<Input<InputNames>>> { &self.input_system }
 
-	pub fn process_messages(&self) -> bool
+	pub fn process_messages(&self) -> bool { self.window.process_messages() == ApplicationState::Continue }
+	pub fn process_all_messages(&self) { self.window.process_all_messages() }
+	pub fn process_events_and_messages(&self, events: &[&Event]) -> ApplicationState { self.window.process_events_and_messages(events) }
+}
+/// Asset Provider
+pub trait AssetProvider
+{
+	fn parse_asset(&self, path: &str, extension: &str) -> std::ffi::OsString;
+
+	fn postprocess_vsh(&self, require_uv: bool) -> EngineResult<&ShaderProgram>;
+	fn default_renderpass(&self, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>;
+	fn presenting_renderpass(&self, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>;
+}
+impl<InputNames: Eq + Copy + Hash> AssetProvider for Engine<InputNames>
+{
+	fn parse_asset(&self, path: &str, extension: &str) -> std::ffi::OsString
 	{
-		self.window_system.process_events() == ApplicationState::Continue
+		self.asset_dir.join(path.replace(".", "/")).with_extension(extension).into()
 	}
-	pub fn process_all_messages(&self)
+
+	fn postprocess_vsh(&self, require_uv: bool) -> EngineResult<&ShaderProgram>
 	{
-		self.window_system.process_all_events()
+		if require_uv { self.common_resources.postprocess_vsh(self) } else { self.common_resources.postprocess_vsh_nouv(self) }
 	}
-	pub fn create_render_window(&self, size: &Size2, title: &str) -> Result<Box<RenderWindow>, EngineError>
+	fn default_renderpass(&self, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>
 	{
-		info!(target: "Interlude", "Creating Render Window \"{}\" ({}x{})", title, size.0, size.1);
-		Window::<WS::NativeWindowT>::create_unresizable(self, size, title).map(|x| x as Box<RenderWindow>)
+		self.common_resources.default_renderpass(&self.gi, format, clear_mode)
 	}
-
-	fn diagnose_adapter(server_con: &WS, adapter: &vk::PhysicalDevice, queue_index: u32)
+	fn presenting_renderpass(&self, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>
 	{
-		// Feature Check //
-		let features = adapter.features();
-		info!(target: "Interlude::DiagAdapter", "adapter features");
-		info!(target: "Interlude::DiagAdapter", "-- independentBlend: {}", bool_to_str(features.independentBlend));
-		info!(target: "Interlude::DiagAdapter", "-- geometryShader: {}", bool_to_str(features.geometryShader));
-		info!(target: "Interlude::DiagAdapter", "-- multiDrawIndirect: {}", bool_to_str(features.multiDrawIndirect));
-		info!(target: "Interlude::DiagAdapter", "-- drawIndirectFirstInstance: {}", bool_to_str(features.drawIndirectFirstInstance));
-		info!(target: "Interlude::DiagAdapter", "-- shaderTessellationAndGeometryPointSize: {}", bool_to_str(features.shaderTessellationAndGeometryPointSize));
-		info!(target: "Interlude::DiagAdapter", "-- depthClamp: {}", bool_to_str(features.depthClamp));
-		info!(target: "Interlude::DiagAdapter", "-- depthBiasClamp: {}", bool_to_str(features.depthBiasClamp));
-		info!(target: "Interlude::DiagAdapter", "-- wideLines: {}", bool_to_str(features.wideLines));
-		info!(target: "Interlude::DiagAdapter", "-- alphaToOne: {}", bool_to_str(features.alphaToOne));
-		info!(target: "Interlude::DiagAdapter", "-- multiViewport: {}", bool_to_str(features.multiViewport));
-		info!(target: "Interlude::DiagAdapter", "-- shaderCullDistance: {}", bool_to_str(features.shaderCullDistance));
-		info!(target: "Interlude::DiagAdapter", "-- shaderClipDistance: {}", bool_to_str(features.shaderClipDistance));
-		info!(target: "Interlude::DiagAdapter", "-- shaderResourceResidency: {}", bool_to_str(features.shaderResourceResidency));
-		// if features.depthClamp == false as VkBool32 { panic!("DepthClamp Feature is required in device"); }
-
-		// Vulkan and XCB Integration Check //
-		if !server_con.is_vk_presentation_support(adapter, queue_index) { panic!("Vulkan Presentation is not supported by window system"); }
-	}
-	fn new_with_window_system<ConF, StrT>(app_name: &str, app_version: u32, asset_base: Option<StrT>, extra_features: DeviceFeatures,
-		surface_ex_name: &str, connect_f: ConF) -> Result<Self, EngineError> where ConF: FnOnce() -> Result<Arc<WS>, EngineError>, StrT: AsRef<Path>
-	{
-		// Setup Engine Logger //
-		log::set_logger(|max_log_level| { max_log_level.set(log::LogLevelFilter::Info); Box::new(EngineLogger) }).unwrap();
-		info!(target: "Interlude", "Initializing Engine...");
-
-		let window_server = try!(connect_f());
-
-		let instance = try!(vk::Instance::new(app_name, app_version, "Interlude Computer-Graphics Engine", VK_MAKE_VERSION!(0, 0, 1),
-			&["VK_LAYER_LUNARG_standard_validation"], &["VK_KHR_surface", surface_ex_name, "VK_EXT_debug_report"]).map(|x| Rc::new(x)));
-		let dbg_callback = try!(vk::DebugReportCallback::new(&instance, device_report_callback));
-		let adapter = try!(instance.adapters().map_err(|e| EngineError::from(e))
-			.and_then(|aa| aa.into_iter().next().ok_or(EngineError::GenericError("PhysicalDevices are not found")))
-			.map(|a| Rc::new(vk::PhysicalDevice::from(a, &instance))));
-		let features = adapter.features();
-		let (odr, extra_features) = if features.multiDrawIndirect != 0 && features.drawIndirectFirstInstance != 0
-		{
-			// Required for optimized debug rendering
-			(true, extra_features.enable_multidraw_indirect().enable_draw_indirect_first_instance())
-		}
-		else
-		{
-			info!(target: "Interlude::DiagAdapter", "MultiDrawIndirect or DrawIndirectFirstInstance features are not available.");
-			(false, extra_features)
-		};
-		let device =
-		{
-			let queue_family_properties = adapter.queue_family_properties();
-			let graphics_qf = try!(queue_family_properties.iter().enumerate().find(|&(_, fp)| (fp.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
-				.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Unable to find Graphics Queue")));
-			let transfer_qf = queue_family_properties.iter().enumerate().filter(|&(i, _)| i as u32 != graphics_qf)
-				.find(|&(_, fp)| (fp.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0).map(|(i, _)| i as u32);
-			Self::diagnose_adapter(&*window_server, &adapter, graphics_qf);
-			let device_features = extra_features.0;
-			try!(Device::new(&adapter, device_features, graphics_qf, transfer_qf, &queue_family_properties[graphics_qf as usize]))
-		};
-		let pools = try!(CommandPool::new(&device));
-		let pipeline_cache = Rc::new(try!(vk::PipelineCache::new_empty(&device, &[])));
-
-		let memory_types = adapter.memory_properties();
-		let mt_index_for_device_local = try!(memory_types.memoryTypes[..memory_types.memoryTypeCount as usize].iter()
-			.enumerate().find(|&(_, &VkMemoryType(flags, _))| (flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0)
-			.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Device Local Memory is not found")));
-		let mt_index_for_host_visible = try!(memory_types.memoryTypes[..memory_types.memoryTypeCount as usize].iter()
-			.enumerate().find(|&(_, &VkMemoryType(flags, _))| (flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0)
-			.map(|(i, _)| i as u32).ok_or(EngineError::GenericError("Host Visible Memory is not found")));
-
-		info!(target: "Interlude", "MemoryType[Device Local] Index = {}: {:?}", mt_index_for_device_local, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_device_local as usize].0));
-		info!(target: "Interlude", "MemoryType[Host Visible] Index = {}: {:?}", mt_index_for_host_visible, mtflags_decomposite(memory_types.memoryTypes[mt_index_for_host_visible as usize].0));
-
-		let asset_base = asset_base.map(|b| b.as_ref().to_path_buf())
-			.unwrap_or(std::env::current_exe().unwrap().parent().map(|x| x.to_path_buf()).unwrap()).join("assets");
-		Ok(Engine
-		{
-			window_system: window_server, input_system: Arc::new(RwLock::new(try!(IS::new()))),
-			instance: instance, debug_callback: dbg_callback, device: device, pools: pools,
-			memory_types: memory_types,
-			pipeline_cache: pipeline_cache, asset_dir: asset_base,
-			physical_device_limits: adapter.properties().limits,
-			memory_type_index_for_device_local: mt_index_for_device_local,
-			memory_type_index_for_host_visible: mt_index_for_host_visible,
-			optimized_debug_render: odr, common_resources: EngineResources::new(),
-			ph: std::marker::PhantomData
-		})
+		self.common_resources.presenting_renderpass(&self.gi, format, clear_mode)
 	}
 }
 // Delayed Loaders for EngineResources
@@ -378,17 +204,17 @@ impl EngineResources
 		}
 	}
 
-	fn postprocess_vsh<E: EngineCore>(&self, context: &E) -> Result<&ShaderProgram, EngineError>
+	fn postprocess_vsh<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(&self, context: &Engine) -> EngineResult<&ShaderProgram>
 	{
-		self.postprocess_vsh.get(|| context.create_vertex_shader_from_asset("engine.shaders.PostProcessVertex", "main",
-				&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
+		self.postprocess_vsh.get(|| ShaderProgram::new_vertex_from_asset(context, "engine.shaders.PostProcessVertex", "main",
+			&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
 	}
-	fn postprocess_vsh_nouv<E: EngineCore>(&self, context: &E) -> Result<&ShaderProgram, EngineError>
+	fn postprocess_vsh_nouv<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(&self, context: &Engine) -> EngineResult<&ShaderProgram>
 	{
-		self.postprocess_vsh_nouv.get(|| context.create_vertex_shader_from_asset("engine.shaders.PostProcessVertexNoUV", "main",
-				&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
+		self.postprocess_vsh_nouv.get(|| ShaderProgram::new_vertex_from_asset(context, "engine.shaders.PostProcessVertexNoUV", "main",
+			&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
 	}
-	fn default_renderpass<E: EngineCore>(&self, context: &E, format: VkFormat, clear_mode: Option<bool>) -> Result<&RenderPass, EngineError>
+	fn default_renderpass(&self, context: &GraphicsInterface, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>
 	{
 		Ok(unsafe { &mut *std::mem::transmute::<_, *mut HashMap<(Option<bool>, VkFormat), RenderPass>>(&self.default_renderpass) }.entry((clear_mode, format)).or_insert({
 			let attachment = AttachmentDesc
@@ -398,10 +224,10 @@ impl EngineResources
 				.. Default::default()
 			};
 			let pass = PassDesc::single_fragment_output(0);
-			try!(context.create_render_pass(&[&attachment], &[&pass], &[]))
+			try!(RenderPass::new(context, &[&attachment], &[&pass], &[]))
 		}))
 	}
-	fn presenting_renderpass<E: EngineCore>(&self, context: &E, format: VkFormat, clear_mode: Option<bool>) -> Result<&RenderPass, EngineError>
+	fn presenting_renderpass(&self, context: &GraphicsInterface, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>
 	{
 		Ok(unsafe { &mut *std::mem::transmute::<_, *mut HashMap<(Option<bool>, VkFormat), RenderPass>>(&self.presenting_renderpass) }.entry((clear_mode, format)).or_insert({
 			let attachment = AttachmentDesc
@@ -411,308 +237,11 @@ impl EngineResources
 				.. Default::default()
 			};
 			let pass = PassDesc::single_fragment_output(0);
-			try!(context.create_render_pass(&[&attachment], &[&pass], &[]))
+			try!(RenderPass::new(context, &[&attachment], &[&pass], &[]))
 		}))
 	}
 }
-// For WindowServer independent parts
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
-	EngineCore for Engine<WS, IS, InputNames>
-{
-	fn create_fence(&self) -> Result<Fence, EngineError>
-	{
-		vk::Fence::new(&self.device).map(Fence::new).map_err(EngineError::from)
-	}
-	fn create_queue_fence(&self) -> Result<QueueFence, EngineError>
-	{
-		vk::Semaphore::new(&self.device).map(QueueFence::new).map_err(EngineError::from)
-	}
-	fn create_render_pass(&self, attachments: &[&AttachmentDesc], passes: &[&PassDesc], deps: &[&PassDependency]) -> Result<RenderPass, EngineError>
-	{
-		let attachments_native = attachments.iter().map(|&x| x.into()).collect::<Vec<_>>();
-		let subpasses_native = passes.iter().map(|&x| x.into()).collect::<Vec<_>>();
-		let deps_native = deps.iter().map(|&x| x.into()).collect::<Vec<_>>();
-		vk::RenderPass::new(&self.device, &VkRenderPassCreateInfo
-		{
-			sType: VkStructureType::RenderPassCreateInfo, pNext: std::ptr::null(), flags: 0,
-			attachmentCount: attachments_native.len() as u32, pAttachments: attachments_native.as_ptr(),
-			subpassCount: subpasses_native.len() as u32, pSubpasses: subpasses_native.as_ptr(),
-			dependencyCount: deps_native.len() as u32, pDependencies: deps_native.as_ptr()
-		}).map(RenderPass::new).map_err(EngineError::from)
-	}
-	fn create_framebuffer(&self, mold: &RenderPass, attachments: &[&ImageView], form: &Size3) -> Result<Framebuffer, EngineError>
-	{
-		let attachments_native: Vec<_> = attachments.into_iter().map(|x| x.get_native()).collect();
-		let &Size3(width, height, layers) = form;
-		let info = VkFramebufferCreateInfo
-		{
-			sType: VkStructureType::FramebufferCreateInfo, pNext: std::ptr::null(), flags: 0,
-			renderPass: ***mold.get_internal(),
-			attachmentCount: attachments_native.len() as u32, pAttachments: attachments_native.as_ptr(),
-			width: width, height: height, layers: layers
-		};
-		vk::Framebuffer::new(&self.device, &info).map(|f| Framebuffer::new(f, mold, VkExtent2D(width, height))).map_err(EngineError::from)
-	}
-	// Preserve Bitmaps to VRAM, Begins with VkImageLayout::ColorAttachmentOptimal and Ends with VkImageLayout::ShaderReadOnlyOptimal
-	fn create_simple_framebuffer(&self, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3) -> Result<Framebuffer, EngineError>
-	{
-		self.common_resources.default_renderpass(self, attachment.format(), clear_mode).and_then(|mold_ref|
-			self.create_framebuffer(mold_ref, &[attachment], form))
-	}
-	// Preserve Bitmaps to VRAM, Begins with VkImageLayout::ColorAttachmentOptimal and Ends with VkImageLayout::PresentSrcKHR
-	fn create_presented_framebuffer(&self, attachment: &ImageView, clear_mode: Option<bool>, form: &Size3) -> Result<Framebuffer, EngineError>
-	{
-		self.common_resources.presenting_renderpass(self, attachment.format(), clear_mode).and_then(|mold_ref|
-			self.create_framebuffer(mold_ref, &[attachment], form))
-	}
-	fn allocate_graphics_command_buffers(&self, count: usize) -> Result<GraphicsCommandBuffers, EngineError>
-	{
-		self.pools.graphics().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
-			.map(|v| GraphicsCommandBuffers::new(self.pools.graphics(), v))
-	}
-	fn allocate_bundled_command_buffers(&self, count: usize) -> Result<BundledCommandBuffers, EngineError>
-	{
-		self.pools.graphics().allocate(VkCommandBufferLevel::Secondary, count).map_err(EngineError::from)
-			.map(|v| BundledCommandBuffers::new(self.pools.graphics(), v))
-	}
-	fn allocate_transfer_command_buffers(&self, count: usize) -> Result<TransferCommandBuffers, EngineError>
-	{
-		self.pools.transfer().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
-			.map(|v| TransferCommandBuffers::new(self.pools.transfer(), v))
-	}
-	fn allocate_transient_transfer_command_buffers(&self, count: usize) -> Result<TransientTransferCommandBuffers, EngineError>
-	{
-		self.pools.transient().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
-			.map(|v| TransientTransferCommandBuffers::new(self.pools.transient(), self.device.get_transfer_queue(), v))
-	}
-	fn allocate_transient_graphics_command_buffers(&self, count: usize) -> Result<TransientGraphicsCommandBuffers, EngineError>
-	{
-		self.pools.transient_graphics().allocate(VkCommandBufferLevel::Primary, count).map_err(EngineError::from)
-			.map(|v| TransientGraphicsCommandBuffers::new(self.pools.transient_graphics(), self.device.get_graphics_queue(), v))
-	}
-	fn create_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str, vertex_bindings: &[VertexBinding], vertex_attributes: &[VertexAttribute])
-		-> Result<ShaderProgram, EngineError>
-	{
-		let entity_path = self.parse_asset(asset_path, "spv");
-		info!(target: "Interlude", "Loading Vertex Shader {:?}", entity_path);
-		std::fs::File::open(entity_path).map_err(EngineError::from).and_then(|mut fp|
-		{
-			let mut bin: Vec<u8> = Vec::new();
-			fp.read_to_end(&mut bin).map(move |_| bin).map_err(EngineError::from)
-		}).and_then(|b| vk::ShaderModule::new(self.device.get_internal(), &b).map_err(EngineError::from))
-		.map(|m| ShaderProgram::new_vertex(m, entry_point, vertex_bindings, vertex_attributes))
-	}
-	fn create_geometry_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>
-	{
-		let entity_path = self.parse_asset(asset_path, "spv");
-		info!(target: "Interlude", "Loading Geometry Shader {:?}", entity_path);
-		std::fs::File::open(entity_path).map_err(EngineError::from).and_then(|mut fp|
-		{
-			let mut bin: Vec<u8> = Vec::new();
-			fp.read_to_end(&mut bin).map(move |_| bin).map_err(EngineError::from)
-		}).and_then(|b| vk::ShaderModule::new(self.device.get_internal(), &b).map_err(EngineError::from))
-		.map(|m| ShaderProgram::new_geometry(m, entry_point))
-	}
-	fn create_fragment_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>
-	{
-		let entity_path = self.parse_asset(asset_path, "spv");
-		info!(target: "Interlude", "Loading Fragment Shader {:?}", entity_path);
-		std::fs::File::open(entity_path).map_err(EngineError::from).and_then(|mut fp|
-		{
-			let mut bin: Vec<u8> = Vec::new();
-			fp.read_to_end(&mut bin).map(|_| bin).map_err(EngineError::from)
-		}).and_then(|b| vk::ShaderModule::new(self.device.get_internal(), &b).map_err(EngineError::from))
-		.map(|m| ShaderProgram::new_fragment(m, entry_point))
-	}
-	fn create_pipeline_layout(&self, descriptor_sets: &[&DescriptorSetLayout], push_constants: &[PushConstantDesc]) -> Result<PipelineLayout, EngineError>
-	{
-		vk::PipelineLayout::new(self.device.get_internal(),
-			&descriptor_sets.into_iter().map(|x| **x.get_internal()).collect::<Vec<_>>(),
-			&push_constants.into_iter().map(|x| x.into()).collect::<Vec<_>>()).map(PipelineLayout::new).map_err(EngineError::from)
-	}
-	fn create_graphics_pipelines(&self, builders: &[&GraphicsPipelineBuilder]) -> Result<Vec<GraphicsPipeline>, EngineError>
-	{
-		let builder_into_natives = builders.into_iter().map(|&x| x.into()).collect::<Vec<IntoNativeGraphicsPipelineCreateInfoStruct>>();
-		vk::Pipeline::new_graphics(self.device.get_internal(), Some(&self.pipeline_cache),
-			&builder_into_natives.iter().map(|x| x.into()).collect::<Vec<_>>())
-			.map(|v| v.into_iter().map(GraphicsPipeline::new).collect::<Vec<_>>()).map_err(EngineError::from)
-	}
-	fn create_double_buffer(&self, prealloc: &BufferPreallocator) -> Result<(DeviceBuffer, StagingBuffer), EngineError>
-	{
-		(DeviceBuffer::new(self, prealloc.total_size() as VkDeviceSize, prealloc.get_usage()), StagingBuffer::new(self, prealloc.total_size() as VkDeviceSize)).flatten()
-	}
-	fn create_double_image(&self, prealloc: &ImagePreallocator) -> Result<(DeviceImage, Option<StagingImage>), EngineError>
-	{
-		let image1 = prealloc.dim1_images().iter().map(|desc| Image1D::new(self, desc.get_internal())).collect::<Result<Vec<_>, _>>();
-		let image2 = prealloc.dim2_images().iter().map(|desc| Image2D::new(self, desc.get_internal())).collect::<Result<Vec<_>, _>>();
-		let image3 = prealloc.dim3_images().iter().map(|desc| Image3D::new(self, desc.get_internal())).collect::<Result<Vec<_>, _>>();
-		let linear_image1 = prealloc.dim1_images().iter().filter(|desc| !desc.is_device_resource()).map(|desc| desc.get_internal())
-			.map(|desc| LinearImage2D::new(self, Size2(desc.extent.0, 1), desc.format)).collect::<Result<Vec<_>, EngineError>>();
-		let linear_image2 = prealloc.dim2_images().iter().filter(|desc| !desc.is_device_resource()).map(|desc| desc.get_internal())
-			.map(|desc| LinearImage2D::new(self, Size2(desc.extent.0, desc.extent.1), desc.format)).collect::<Result<Vec<_>, EngineError>>();
-		let linear_images = (linear_image1, linear_image2).flatten().map(|(l1, l2)| l1.into_iter().chain(l2.into_iter()).collect::<Vec<_>>());
-
-		(image1, image2, image3, linear_images).flatten().and_then(|(i1, i2, i3, l)| DeviceImage::new(self, i1, i2, i3).and_then(|dev| if !l.is_empty()
-		{
-			StagingImage::new(self, l).map(|stg| (dev, Some(stg)))
-		} else { Ok((dev, None)) }))
-	}
-	fn create_descriptor_set_layout(&self, bindings: &[Descriptor]) -> Result<DescriptorSetLayout, EngineError>
-	{
-		let native = bindings.into_iter().enumerate().map(|(i, x)| x.into_binding(i as u32)).collect::<Vec<_>>();
-		vk::DescriptorSetLayout::new(self.device.get_internal(), &native)
-			.map(|d| DescriptorSetLayout::new(d, bindings)).map_err(EngineError::from)
-	}
-	fn preallocate_all_descriptor_sets(&self, layouts: &[&DescriptorSetLayout]) -> Result<DescriptorSets, EngineError>
-	{
-		let set_count = layouts.len();
-		let (uniform_total, storage_total, combined_sampler_total, ia_total) =
-			layouts.iter().map(|x| x.descriptors().into_iter().fold((0, 0, 0, 0), |(u, s, cs, ia), desc| match desc
-			{
-				&Descriptor::Uniform(n, _) => (u + n, s, cs, ia),
-				&Descriptor::Storage(n, _) => (u, s + n, cs, ia),
-				&Descriptor::CombinedSampler(n, _) => (u, s, cs + n, ia),
-				&Descriptor::InputAttachment(n, _) => (u, s, cs, ia + n)
-			})).fold((0, 0, 0, 0), |(u, s, cs, ia), (u2, s2, cs2, ia2)| (u + u2, s + s2, cs + cs2, ia + ia2));
-		let pool_sizes = [
-			Descriptor::Uniform(uniform_total, vec![]), Descriptor::Storage(storage_total, vec![]),
-			Descriptor::CombinedSampler(combined_sampler_total, vec![]), Descriptor::InputAttachment(ia_total, vec![])
-		].into_iter().filter(|&desc| desc.count() != 0).map(|desc| desc.into_pool_size()).collect::<Vec<_>>();
-
-		vk::DescriptorPool::new(self.device.get_internal(), set_count, &pool_sizes).and_then(|pool|
-		pool.allocate(&layouts.into_iter().map(|x| **x.get_internal()).collect::<Vec<_>>())
-			.map(|sets| DescriptorSets::new(pool, sets))).map_err(EngineError::from)
-	}
-	fn create_sampler(&self, state: &SamplerState) -> Result<Sampler, EngineError>
-	{
-		Sampler::new(self, &state.into())
-	}
-	fn create_image_view_1d(&self, res: &Rc<Image1D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange) -> Result<ImageView1D, EngineError>
-	{
-		ImageView1D::new(self, res, format, c_map, subres)
-	}
-	fn create_image_view_2d(&self, res: &Rc<Image2D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange) -> Result<ImageView2D, EngineError>
-	{
-		ImageView2D::new(self, res, format, c_map, subres)
-	}
-	fn create_image_view_3d(&self, res: &Rc<Image3D>, format: VkFormat, c_map: ComponentMapping, subres: ImageSubresourceRange) -> Result<ImageView3D, EngineError>
-	{
-		ImageView3D::new(self, res, format, c_map, subres)
-	}
-	fn wait_device(&self) -> Result<(), EngineError> { self.device.get_internal().wait_for_idle().map_err(EngineError::from) }
-
-	fn create_postprocess_vertex_shader_from_asset(&self, asset_path: &str, entry_point: &str) -> Result<ShaderProgram, EngineError>
-	{
-		self.create_vertex_shader_from_asset(asset_path, entry_point,
-			&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)])
-	}
-
-	fn parse_asset(&self, asset_path: &str, extension: &str) -> std::ffi::OsString
-	{
-		Self::_parse_asset(&self.asset_dir, asset_path, extension)
-	}
-	fn _parse_asset(asset_base: &PathBuf, asset_path: &str, extension: &str) -> std::ffi::OsString
-	{
-		asset_base.join(asset_path.replace(".", "/")).with_extension(extension).into()
-	}
-
-	fn buffer_preallocate(&self, structure_sizes: &[(usize, BufferDataType)]) -> BufferPreallocator
-	{
-		let uniform_alignment = self.physical_device_limits.minUniformBufferOffsetAlignment as usize;
-		let storage_alignment = self.physical_device_limits.minStorageBufferOffsetAlignment as usize;
-		let usage_flags = structure_sizes.iter().fold(0, |flags_accum, &(_, data_type)| match data_type
-		{
-			BufferDataType::Vertex => flags_accum | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-			BufferDataType::Index => flags_accum | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-			BufferDataType::Uniform => flags_accum | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			BufferDataType::Storage => flags_accum | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-			BufferDataType::IndirectCallParam => flags_accum | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
-		});
-		let offsets = structure_sizes.into_iter().chain(&[(0, BufferDataType::Vertex)]).scan(0usize, |offset_accum, &(size, data_type)|
-		{
-			let current = match data_type
-			{
-				BufferDataType::Vertex | BufferDataType::Index | BufferDataType::IndirectCallParam => *offset_accum,
-				BufferDataType::Uniform => ((*offset_accum as f64 / uniform_alignment as f64).ceil() as usize) * uniform_alignment as usize,
-				BufferDataType::Storage => ((*offset_accum as f64 / storage_alignment as f64).ceil() as usize) * storage_alignment as usize
-			};
-			*offset_accum = current + size;
-			Some(current)
-		}).collect::<Vec<_>>();
-
-		info!(target: "Interlude::BufferPreallocator", "Preallocation Results: ");
-		info!(target: "Interlude::BufferPreallocator", "-- Minimum Alignment for Uniform Buffer: {} bytes", uniform_alignment);
-		info!(target: "Interlude::BufferPreallocator", "-- Preallocated Offsets: {:?}", offsets);
-
-		BufferPreallocator::new(usage_flags, offsets)
-	}
-	fn update_descriptors(&self, write_infos: &[DescriptorSetWriteInfo])
-	{
-		let write_infos_native_interp = write_infos.into_iter().map(|x| Into::<IntoWriteDescriptorSetNativeStruct>::into(x)).collect::<Vec<_>>();
-		let write_infos_native = write_infos_native_interp.iter().map(|x| Into::<VkWriteDescriptorSet>::into(x)).collect::<Vec<_>>();
-		unsafe { vkUpdateDescriptorSets(***self.device.get_internal(), write_infos_native.len() as u32, write_infos_native.as_ptr(),
-			0, std::ptr::null()) };
-	}
-
-	fn submit_transient_commands(&self, tt: Option<TransientTransferCommandBuffers>, gt: Option<TransientGraphicsCommandBuffers>) -> Result<(), EngineError>
-	{
-		if let &Some(ref t) = &tt
-		{
-			let sub = VkSubmitInfo
-			{
-				sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
-				commandBufferCount: t.len() as u32, pCommandBuffers: t.as_ptr(),
-				waitSemaphoreCount: 0, pWaitSemaphores: std::ptr::null(), pWaitDstStageMask: std::ptr::null(),
-				signalSemaphoreCount: 0, pSignalSemaphores: std::ptr::null()
-			};
-			try!(self.device.get_transfer_queue().submit(&[sub], None));
-		}
-		if let &Some(ref g) = &gt
-		{
-			let sub = VkSubmitInfo
-			{
-				sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
-				commandBufferCount: g.len() as u32, pCommandBuffers: g.as_ptr(),
-				waitSemaphoreCount: 0, pWaitSemaphores: std::ptr::null(), pWaitDstStageMask: std::ptr::null(),
-				signalSemaphoreCount: 0, pSignalSemaphores: std::ptr::null()
-			};
-			try!(self.device.get_graphics_queue().submit(&[sub], None));
-		}
-		if tt.is_some() { try!(self.device.get_transfer_queue().wait_for_idle()); }
-		if gt.is_some() { try!(self.device.get_graphics_queue().wait_for_idle()); }
-		Ok(())
-	}
-
-	fn new_command_sender(&self) -> CommandSender { CommandSender(&self.device) }
-	fn graphics_queue_ref(&self) -> &vk::Queue { self.device.get_graphics_queue() }
-
-	fn postprocess_vsh(&self, require_uv: bool) -> Result<&ShaderProgram, EngineError>
-	{
-		if require_uv { self.common_resources.postprocess_vsh(self) } else { self.common_resources.postprocess_vsh_nouv(self) }
-	}
-}
-
-unsafe extern "system" fn device_report_callback(flags: VkDebugReportFlagsEXT, object_type: VkDebugReportObjectTypeEXT, _: u64,
-	_: size_t, message_code: i32, _: *const c_char, message: *const c_char, _: *mut c_void) -> VkBool32
-{
-	if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) != 0
-	{
-		error!(target: format!("Vulkan DebugCall [{:?}]", object_type).as_str(), "({}){}", message_code, CStr::from_ptr(message).to_str().unwrap());
-	}
-	else if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) != 0
-	{
-		warn!(target: format!("Vulkan PerformanceDebug [{:?}]", object_type).as_str(), "({}){}", message_code, CStr::from_ptr(message).to_str().unwrap());
-	}
-	else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) != 0
-	{
-		warn!(target: format!("Vulkan DebugCall [{:?}]", object_type).as_str(), "({}){}", message_code, CStr::from_ptr(message).to_str().unwrap());
-	}
-	else
-	{
-		info!(target: format!("Vulkan DebugCall [{:?}]", object_type).as_str(), "({}){}", message_code, CStr::from_ptr(message).to_str().unwrap());
-	}
-	false as VkBool32
-}
+impl<InputNames: Eq + Copy + Hash> Deref for Engine<InputNames> { type Target = GraphicsInterface; fn deref(&self) -> &Self::Target { &self.gi } }
 
 pub trait CommandSubmitter
 {
@@ -721,8 +250,7 @@ pub trait CommandSubmitter
 	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>;
 }
-impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash>
-	CommandSubmitter for Engine<WS, IS, InputNames>
+impl<InputNames: Eq + Copy + Hash> CommandSubmitter for Engine<InputNames>
 {
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
@@ -739,7 +267,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: wait_stages.as_ptr(),
 			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
 		};
-		self.device.get_graphics_queue().submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
+		self.gi.device().graphics_queue.submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
 	}
 	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
@@ -756,7 +284,7 @@ impl<WS: WindowServer, IS: InputSystem<InputNames>, InputNames: PartialEq + Eq +
 			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: wait_stages.as_ptr(),
 			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
 		};
-		self.device.get_transfer_queue().submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
+		self.gi.device().transfer_queue.submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
 	}
 }
 pub struct CommandSender<'a>(&'a Device);
@@ -778,7 +306,7 @@ impl<'a> CommandSubmitter for CommandSender<'a>
 			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: wait_stages.as_ptr(),
 			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
 		};
-		self.0.get_graphics_queue().submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
+		self.0.graphics_queue.submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
 	}
 	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
@@ -795,6 +323,6 @@ impl<'a> CommandSubmitter for CommandSender<'a>
 			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: wait_stages.as_ptr(),
 			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
 		};
-		self.0.get_transfer_queue().submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
+		self.0.transfer_queue.submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
 	}
 }

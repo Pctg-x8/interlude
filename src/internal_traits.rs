@@ -1,6 +1,7 @@
 // Interlude: Common Traits
 
-pub trait InternalExports<InternalType>
+pub trait InternalExports
 {
-	fn get_internal(&self) -> &InternalType;
+	type InternalT;
+	fn get_internal(&self) -> &Self::InternalT;
 }

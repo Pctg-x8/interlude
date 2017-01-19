@@ -1,6 +1,7 @@
 // Interlude: Data Structures
 
 use std;
+use vk::ffi::*;
 
 // Vulkan DataType Exports
 /// Viewport: left, top, width, height, near, far
@@ -23,6 +24,17 @@ impl std::convert::From<Size3> for Size2
 	fn from(s: Size3) -> Size2 { let Size3(x, y, _) = s; Size2(x, y) }
 }
 impl std::convert::From<Size2> for Size3 { fn from(s: Size2) -> Size3 { let Size2(x, y) = s; Size3(x, y, 1) } }
+macro_rules! ConvertByTransmuting
+{
+	($f: ty => $t: ty) =>
+	{
+		impl std::convert::From<$f> for $t { fn from(s: $f) -> Self { unsafe { std::mem::transmute(s) } } }
+	}
+}
+ConvertByTransmuting!(VkExtent2D => Size2);
+ConvertByTransmuting!(VkExtent3D => Size3);
+ConvertByTransmuting!(VkOffset2D => Offset2);
+ConvertByTransmuting!(VkOffset3D => Offset3);
 
 // Extra Data Exports
 #[derive(Clone, Debug, PartialEq)] #[repr(C)] pub struct Size2F(pub f32, pub f32);

@@ -9,7 +9,7 @@ use std::rc::Rc;
 #[cfg(unix)] use xcb::ffi::*;
 use libc::size_t;
 
-fn empty_handle<T>() -> *mut T { std::ptr::null_mut() }
+pub fn empty_handle<T>() -> *mut T { std::ptr::null_mut() }
 type VkWrapResult<T> = Result<T, VkResult>;
 
 impl ResultValueToObject for VkResult
@@ -199,7 +199,7 @@ impl HasParent for Device { type Parent = PhysicalDevice; fn parent(&self) -> &P
 impl Device
 {
 	pub fn new<NameT: AsRef<str>>(adapter: &Rc<PhysicalDevice>, queue: &[VkDeviceQueueCreateInfo], layers: &[NameT], extensions: &[NameT],
-		enabled_features: VkPhysicalDeviceFeatures) -> Result<Self, VkResult>
+		enabled_features: &VkPhysicalDeviceFeatures) -> Result<Self, VkResult>
 	{
 		let (layers_c, extensions_c) = (
 			layers.into_iter().map(|x| CString::new(x.as_ref()).unwrap()).collect::<Vec<_>>(),
@@ -215,7 +215,7 @@ impl Device
 			queueCreateInfoCount: queue.len() as u32, pQueueCreateInfos: queue.as_ptr(),
 			enabledLayerCount: layers_ptr_c.len() as u32, ppEnabledLayerNames: layers_ptr_c.as_ptr(),
 			enabledExtensionCount: extensions_ptr_c.len() as u32, ppEnabledExtensionNames: extensions_ptr_c.as_ptr(),
-			pEnabledFeatures: &enabled_features
+			pEnabledFeatures: enabled_features
 		};
 		let mut dev = empty_handle();
 		unsafe { vkCreateDevice(adapter.0, &info, std::ptr::null(), &mut dev) }.map(|| Device(dev, adapter.clone()))
@@ -252,9 +252,9 @@ macro_rules! DeviceChildObject
 	($name: ident ($vkname: ident) : $df: path) =>
 	{
 		pub struct $name($vkname, Rc<Device>);
-		impl Drop for $name { fn drop(&mut self) { unsafe { $df(**self.parent(), **self, std::ptr::null()) }; } }
+		impl Drop for $name { fn drop(&mut self) { unsafe { $df(***self.parent(), **self, std::ptr::null()) }; } }
 		impl Deref for $name { type Target = $vkname; fn deref(&self) -> &Self::Target { &self.0 } }
-		impl HasParent for $name { type Parent = Device; fn parent(&self) -> &Device { &self.1 } }
+		impl HasParent for $name { type Parent = Rc<Device>; fn parent(&self) -> &Rc<Device> { &self.1 } }
 	}
 }
 macro_rules! DeviceChildDefaultNewMethod
@@ -283,9 +283,9 @@ impl Fence
 		let mut fence = empty_handle();
 		unsafe { vkCreateFence(***device, &info, std::ptr::null(), &mut fence) }.map(|| Fence(fence, device.clone()))
 	}
-	pub fn wait(&self) -> VkWrapResult<()> { unsafe { vkWaitForFences(**self.parent(), 1, &**self, true as VkBool32, std::u64::MAX) }.to_result() }
-	pub fn reset(&self) -> VkWrapResult<()> { unsafe { vkResetFences(**self.parent(), 1, &**self) }.to_result() }
-	pub fn get_status(&self) -> VkWrapResult<()> { unsafe { vkGetFenceStatus(**self.parent(), **self) }.to_result() }
+	pub fn wait(&self) -> VkWrapResult<()> { unsafe { vkWaitForFences(***self.parent(), 1, &**self, true as VkBool32, std::u64::MAX) }.to_result() }
+	pub fn reset(&self) -> VkWrapResult<()> { unsafe { vkResetFences(***self.parent(), 1, &**self) }.to_result() }
+	pub fn get_status(&self) -> VkWrapResult<()> { unsafe { vkGetFenceStatus(***self.parent(), **self) }.to_result() }
 }
 impl Semaphore
 {
@@ -312,16 +312,16 @@ impl DeviceMemory
 	pub fn map<T>(&self, range: std::ops::Range<VkDeviceSize>) -> VkWrapResult<*mut T>
 	{
 		let mut data_ptr = std::ptr::null_mut();
-		unsafe { vkMapMemory(**self.parent(), **self, range.start, range.end - range.start, 0, std::mem::transmute(&mut data_ptr)) }.map(|| data_ptr as *mut T)
+		unsafe { vkMapMemory(***self.parent(), **self, range.start, range.end - range.start, 0, std::mem::transmute(&mut data_ptr)) }.map(|| data_ptr as *mut T)
 	}
-	pub fn unmap(&self) { unsafe { vkUnmapMemory(**self.parent(), **self) } }
+	pub fn unmap(&self) { unsafe { vkUnmapMemory(***self.parent(), **self) } }
 	pub fn bind_buffer(&self, res: &Buffer, offset: VkDeviceSize) -> VkWrapResult<()>
 	{
-		unsafe { vkBindBufferMemory(**self.parent(), **res, **self, offset) }.to_result()
+		unsafe { vkBindBufferMemory(***self.parent(), **res, **self, offset) }.to_result()
 	}
 	pub fn bind_image(&self, res: &Image, offset: VkDeviceSize) -> VkWrapResult<()>
 	{
-		unsafe { vkBindImageMemory(**self.parent(), **res, **self, offset) }.to_result()
+		unsafe { vkBindImageMemory(***self.parent(), **res, **self, offset) }.to_result()
 	}
 }
 DeviceChildDefaultNewMethod!(Buffer: VkBufferCreateInfo > vkCreateBuffer);
@@ -329,11 +329,11 @@ DeviceChildDefaultNewMethod!(Image: VkImageCreateInfo > vkCreateImage);
 DeviceChildDefaultNewMethod!(ImageView: VkImageViewCreateInfo > vkCreateImageView);
 impl MemoryAllocationRequired for Buffer
 {
-	fn get_memory_requirements(&self) -> VkMemoryRequirements { DeviceDataGetter!(**self.parent(), **self => vkGetBufferMemoryRequirements) }
+	fn get_memory_requirements(&self) -> VkMemoryRequirements { DeviceDataGetter!(***self.parent(), **self => vkGetBufferMemoryRequirements) }
 }
 impl MemoryAllocationRequired for Image
 {
-	fn get_memory_requirements(&self) -> VkMemoryRequirements { DeviceDataGetter!(**self.parent(), **self => vkGetImageMemoryRequirements) }
+	fn get_memory_requirements(&self) -> VkMemoryRequirements { DeviceDataGetter!(***self.parent(), **self => vkGetImageMemoryRequirements) }
 }
 
 // RenderPass and Framebuffer //
@@ -365,7 +365,7 @@ impl CommandPool
 			commandPool: **self, level: buffer_level, commandBufferCount: count as u32
 		};
 		let mut bufs = vec![empty_handle(); count];
-		unsafe { vkAllocateCommandBuffers(**self.parent(), &info, bufs.as_mut_ptr()) }.map(|| bufs)
+		unsafe { vkAllocateCommandBuffers(***self.parent(), &info, bufs.as_mut_ptr()) }.map(|| bufs)
 	}
 }
 
@@ -404,6 +404,7 @@ impl PipelineLayout
 }
 impl PipelineCache
 {
+	#[allow(dead_code)]
 	pub fn new_empty(device: &Rc<Device>, initial_data: &[u8]) -> VkWrapResult<Self>
 	{
 		let info = VkPipelineCacheCreateInfo
@@ -461,7 +462,7 @@ impl DescriptorPool
 			descriptorPool: **self, descriptorSetCount: layouts.len() as u32, pSetLayouts: layouts.as_ptr()
 		};
 		let mut objs = vec![empty_handle(); layouts.len()];
-		unsafe { vkAllocateDescriptorSets(**self.parent(), &info, objs.as_mut_ptr()) }.map(|| objs)
+		unsafe { vkAllocateDescriptorSets(***self.parent(), &info, objs.as_mut_ptr()) }.map(|| objs)
 	}
 }
 

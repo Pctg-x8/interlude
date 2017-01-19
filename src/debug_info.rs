@@ -12,6 +12,8 @@ use freetype_sys::*;
 use std::ffi::CString;
 use unicode_normalization::*;
 use nalgebra::*;
+use {EngineResult, GraphicsInterface, PreciseRenderPass, RenderPass};
+use std::ops::Deref;
 
 const TEXTURE_SIZE: u32 = 512;
 const DEBUG_LEFT_OFFSET: f32 = 6.0;
@@ -41,7 +43,7 @@ pub struct TypefaceProvider
 }
 impl TypefaceProvider
 {
-	fn new<Engine: EngineCore>(engine: &Engine) -> Result<Self, EngineError>
+	fn new<Engine: AssetProvider>(engine: &Engine) -> EngineResult<Self>
 	{
 		let ftl = unsafe { let mut ptr: FT_Library = std::mem::uninitialized(); try!(FT_Init_FreeType(&mut ptr).map(|| ptr)) };
 		let face = unsafe
@@ -176,73 +178,67 @@ pub trait DebugInfoInternals
 {
 	fn get_transfer_completion_qfence(&self) -> &QueueFence;
 }
-impl <'a> DebugInfoInternals for DebugInfo<'a>
+impl<'a> DebugInfoInternals for DebugInfo<'a>
 {
 	fn get_transfer_completion_qfence(&self) -> &QueueFence
 	{
 		&self.transfer_completion
 	}
 }
-impl <'a> std::ops::Drop for DebugInfo<'a>
+impl<'a> std::ops::Drop for DebugInfo<'a>
 {
 	fn drop(&mut self)
 	{
 		unsafe { MemoryMappedRange::from_raw(&self.sres_buf, self.buffer_mapped_ptr) };
 	}
 }
-impl <'a> DebugInfo<'a>
+impl<'a> DebugInfo<'a>
 {
-	pub fn new<Engine: EngineCore>(engine: &Engine, lines: &[DebugLine<'a>],
+	pub fn new<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, lines: &[DebugLine<'a>],
 		rendered_pass: &RenderPass, subindex: u32, framebuffer_size: &Viewport) -> Result<Box<Self>, EngineError>
 	{
 		info!(target: "Interlude::DebugInfo", "Starting Visual Debugger...");
 
 		let max_instance_count = lines.iter().fold(0usize, |acc, x| if x.has_unit() { acc + 2 + 8 } else { acc + 1 + 8 });
-		let rendering_params_prealloc = engine.buffer_preallocate(&[
-			(std::mem::size_of::<[Position; 4]>(), BufferDataType::Vertex),
-			(std::mem::size_of::<IndirectCallParameter>() * lines.len(), BufferDataType::IndirectCallParam),
-			(std::mem::size_of::<StrRenderInstanceData>() * max_instance_count, BufferDataType::Vertex),
-			(std::mem::size_of::<CMatrix4>(), BufferDataType::Uniform)
+		let rendering_params_prealloc = BufferPreallocator::new(engine, &[
+			BufferContent::Vertex(std::mem::size_of::<[Position; 4]>()),
+			BufferContent::IndirectCallParam(std::mem::size_of::<IndirectCallParameter>() * lines.len()),
+			BufferContent::Vertex(std::mem::size_of::<StrRenderInstanceData>() * max_instance_count),
+			BufferContent::Uniform(std::mem::size_of::<CMatrix4>())
 		]);
 		let texture_atlas_desc = ImageDescriptor2::new(VkFormat::R8_UNORM, Size2(TEXTURE_SIZE, TEXTURE_SIZE),
-			ImageUsagePresets::AsColorTexture);
-		let image_prealloc = ImagePreallocator::new()
-			.image_2d(vec![&texture_atlas_desc]);
-		let (bdev, bstage) = try!(engine.create_double_buffer(&rendering_params_prealloc));
-		let (idev, istage) = try!(engine.create_double_image(&image_prealloc));
-		let (idev, istage) = (idev, istage.unwrap());
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		let (bdev, bstage) = try!(rendering_params_prealloc.instantiate());
+		let (idev, istage) = try!(ImagePreallocator::new(engine, Vec::new(), vec![&texture_atlas_desc], Vec::new()).instantiate());
+		let istage = istage.unwrap();
 		let sampler_state = SamplerState::new();
 		let (image_view, sampler) = (
-			try!(engine.create_image_view_2d(idev.dim2(0), VkFormat::R8_UNORM,
-				ComponentMapping::single_swizzle(ComponentSwizzle::R), ImageSubresourceRange::base_color())),
-			try!(engine.create_sampler(&sampler_state))
+			try!(ImageView2D::make_from(idev.dim2(0), VkFormat::R8_UNORM, ComponentMapping::single_swizzle(ComponentSwizzle::R), ImageSubresourceRange::base_color())),
+			try!(Sampler::new(engine, &sampler_state))
 		);
 
-		let (vshader, fshader) = (
-			try!(engine.create_vertex_shader_from_asset("engine.shaders.DebugInfoV", "main", &[
-				VertexBinding::PerVertex(std::mem::size_of::<Position>() as u32),
-				VertexBinding::PerInstance(std::mem::size_of::<StrRenderInstanceData>() as u32)
-			], &[
+		let vshader = try!(ShaderProgram::new_vertex_from_asset(engine, "engine.shaders.DebugInfoV", "main",
+			&[VertexBinding::PerVertex(std::mem::size_of::<Position>() as u32), VertexBinding::PerInstance(std::mem::size_of::<StrRenderInstanceData>() as u32)],
+			&[
 				VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0),
 				VertexAttribute(1, VkFormat::R32G32B32A32_SFLOAT, 0),
 				VertexAttribute(1, VkFormat::R32G32B32A32_SFLOAT, std::mem::size_of::<f32>() as u32 * 4)
-			])),
-			try!(engine.create_fragment_shader_from_asset("engine.shaders.DebugInfoF", "main"))
-		);
-		let ds_layout = try!(engine.create_descriptor_set_layout(&[
-			Descriptor::Uniform(1, vec![ShaderStage::Vertex]),
-			Descriptor::CombinedSampler(1, vec![ShaderStage::Fragment])
-		]));
-		let playout = try!(engine.create_pipeline_layout(&[&ds_layout], &[]));
+			]));
+		let fshader = try!(ShaderProgram::new_fragment_from_asset(engine, "engine.shaders.DebugInfoF", "main"));
+		let ds_layout = try!(DescriptorSetLayout::new(engine, vec![
+			Descriptor::Uniform(1, ShaderStage::Vertex),
+			Descriptor::CombinedSampler(1, ShaderStage::Fragment)
+		].into()));
+		let playout = try!(PipelineLayout::new(engine, &[&ds_layout], &[]));
 		let pipeline = {
-			let pipeline_builder = GraphicsPipelineBuilder::new(&playout, rendered_pass, subindex)
+			let pipeline_builder = GraphicsPipelineBuilder::new(&playout, PreciseRenderPass(rendered_pass, subindex))
 				.vertex_shader(PipelineShaderProgram::unspecialized(&vshader)).fragment_shader(PipelineShaderProgram::unspecialized(&fshader))
 				.primitive_topology(PrimitiveTopology::TriangleStrip(false))
 				.viewport_scissors(&[ViewportWithScissorRect::default_scissor(framebuffer_size)])
 				.blend_state(&[AttachmentBlendState::PremultipliedAlphaBlend]);
-			try!(engine.create_graphics_pipelines(&[&pipeline_builder])).remove(0)
+			try!(GraphicsPipelines::new(engine, &[&pipeline_builder])).swap_remove(0)
 		};
-		let descriptor_sets = try!(engine.preallocate_all_descriptor_sets(&[&ds_layout]));
+		let descriptor_sets = try!(DescriptorSets::preallocate(engine, &[&ds_layout]));
 		engine.update_descriptors(&[
 			DescriptorSetWriteInfo::UniformBuffer(descriptor_sets[0], 0,
 				vec![BufferInfo(&bdev, rendering_params_prealloc.offset(3) .. rendering_params_prealloc.offset(4))]),
@@ -298,7 +294,8 @@ impl <'a> DebugInfo<'a>
 			let call_params = mapped_buf.range_mut::<IndirectCallParameter>(rendering_params_prealloc.offset(1), lines.len());
 			let mut rp_current_index = 0;
 			let mut top = 4u32;
-			let offset_mult = if engine.is_optimized_debug_render_support() { 1 } else { 0 };
+			// let offset_mult = if engine.is_optimized_debug_render_support() { 1 } else { 0 };
+			let offset_mult = 1;
 			for (n, line) in lines.into_iter().enumerate()
 			{
 				let base = top as f32 + typeface.baseline as f32;
@@ -365,75 +362,83 @@ impl <'a> DebugInfo<'a>
 		}));
 
 		// setup updating commands //
-		let update_commands = try!(engine.allocate_transfer_command_buffers(1));
-		try!(update_commands.begin(0).and_then(|recorder|
+		let update_commands = try!
 		{
-			let update_start_offs = rendering_params_prealloc.offset(1);
-			let update_end_offs = rendering_params_prealloc.offset(3);
-			let imb_stage_template = ImageMemoryBarrier::template(istage.dim2(0), ImageSubresourceRange::base_color());
-			let imb_dev_template = ImageMemoryBarrier::template(&**idev.dim2(0), ImageSubresourceRange::base_color());
-			let image_memory_barriers = [
-				imb_stage_template.hold_ownership(VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VkImageLayout::General, VkImageLayout::TransferSrcOptimal),
-				imb_dev_template.hold_ownership(VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VkImageLayout::ShaderReadOnlyOptimal, VkImageLayout::TransferDestOptimal)
-			];
-			let image_memory_barriers_ret = [
-				imb_stage_template.hold_ownership(VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_HOST_WRITE_BIT, VkImageLayout::TransferSrcOptimal, VkImageLayout::General),
-				imb_dev_template.hold_ownership(VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VkImageLayout::TransferDestOptimal, VkImageLayout::ShaderReadOnlyOptimal)
-			];
-			let buffer_memory_barriers = [
-				BufferMemoryBarrier::hold_ownership(&bstage, update_start_offs .. update_end_offs, VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
-				BufferMemoryBarrier::hold_ownership(&bdev, update_start_offs .. update_end_offs, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT)
-			];
-			let buffer_memory_barriers_ret = [
-				BufferMemoryBarrier::hold_ownership(&bstage, update_start_offs .. update_end_offs, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_HOST_WRITE_BIT),
-				BufferMemoryBarrier::hold_ownership(&bdev, update_start_offs .. update_end_offs, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT)
-			];
+			TransferCommandBuffers::allocate(engine, 1).and_then(|cb|
+			{
+				try!(cb.begin(0).and_then(|recorder|
+				{
+					let update_start_offs = rendering_params_prealloc.offset(1);
+					let update_end_offs = rendering_params_prealloc.offset(3);
+					let imb_stage_template = ImageMemoryBarrier::template(istage.dim2(0), ImageSubresourceRange::base_color());
+					let imb_dev_template = ImageMemoryBarrier::template(&**idev.dim2(0), ImageSubresourceRange::base_color());
+					let image_memory_barriers = [
+						imb_stage_template.hold_ownership(VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VkImageLayout::General, VkImageLayout::TransferSrcOptimal),
+						imb_dev_template.hold_ownership(VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VkImageLayout::ShaderReadOnlyOptimal, VkImageLayout::TransferDestOptimal)
+					];
+					let image_memory_barriers_ret = [
+						imb_stage_template.hold_ownership(VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_HOST_WRITE_BIT, VkImageLayout::TransferSrcOptimal, VkImageLayout::General),
+						imb_dev_template.hold_ownership(VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VkImageLayout::TransferDestOptimal, VkImageLayout::ShaderReadOnlyOptimal)
+					];
+					let buffer_memory_barriers = [
+						BufferMemoryBarrier::hold_ownership(&bstage, update_start_offs .. update_end_offs, VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
+						BufferMemoryBarrier::hold_ownership(&bdev, update_start_offs .. update_end_offs, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT)
+					];
+					let buffer_memory_barriers_ret = [
+						BufferMemoryBarrier::hold_ownership(&bstage, update_start_offs .. update_end_offs, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_HOST_WRITE_BIT),
+						BufferMemoryBarrier::hold_ownership(&bdev, update_start_offs .. update_end_offs, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT)
+					];
 
-			recorder
-				.pipeline_barrier(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false,
-					&[], &buffer_memory_barriers, &image_memory_barriers)
-				.copy_image(istage.dim2(0), &**idev.dim2(0), &[ImageCopyRegion::entire_colorbits(VkExtent3D(TEXTURE_SIZE, TEXTURE_SIZE, 1))])
-				.copy_buffer(&bstage, &bdev, &[BufferCopyRegion(update_start_offs, update_start_offs, (update_end_offs - update_start_offs) as usize)])
-				.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, false,
-					&[], &buffer_memory_barriers_ret, &image_memory_barriers_ret)
-			.end()
-		}));
+					recorder
+						.pipeline_barrier(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false,
+							&[], &buffer_memory_barriers, &image_memory_barriers)
+						.copy_image(istage.dim2(0), &**idev.dim2(0), &[ImageCopyRegion::entire_colorbits(VkExtent3D(TEXTURE_SIZE, TEXTURE_SIZE, 1))])
+						.copy_buffer(&bstage, &bdev, &[BufferCopyRegion(update_start_offs, update_start_offs, (update_end_offs - update_start_offs) as usize)])
+						.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, false,
+							&[], &buffer_memory_barriers_ret, &image_memory_barriers_ret)
+					.end()
+				}));
+				Ok(cb)
+			})
+		};
 
 		// initial update //
+		try!
 		{
-			let setup_commands = try!(engine.allocate_transient_transfer_command_buffers(1));
-
-			try!(setup_commands.begin(0).and_then(|recorder|
+			TransientTransferCommandBuffers::allocate(engine, 1).and_then(|c|
 			{
-				let imb_stage_template = ImageMemoryBarrier::template(istage.dim2(0), ImageSubresourceRange::base_color());
-				let imb_dev_template = ImageMemoryBarrier::template(&**idev.dim2(0), ImageSubresourceRange::base_color());
-				let image_memory_barriers = [
-					imb_stage_template.hold_ownership(VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VkImageLayout::Preinitialized, VkImageLayout::TransferSrcOptimal),
-					imb_dev_template.hold_ownership(VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VkImageLayout::Preinitialized, VkImageLayout::TransferDestOptimal)
-				];
-				let image_memory_barriers_ret = [
-					imb_stage_template.hold_ownership(VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_HOST_WRITE_BIT, VkImageLayout::TransferSrcOptimal, VkImageLayout::General),
-					imb_dev_template.hold_ownership(VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VkImageLayout::TransferDestOptimal, VkImageLayout::ShaderReadOnlyOptimal)
-				];
-				let buffer_memory_barriers = [
-					BufferMemoryBarrier::hold_ownership(&bstage, 0 .. rendering_params_prealloc.total_size(), VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
-					BufferMemoryBarrier::hold_ownership(&bdev, 0 .. rendering_params_prealloc.total_size(), VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT)
-				];
-				let buffer_memory_barriers_ret = [
-					BufferMemoryBarrier::hold_ownership(&bstage, 0 .. rendering_params_prealloc.total_size(), VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_HOST_WRITE_BIT),
-					BufferMemoryBarrier::hold_ownership(&bdev, 0 .. rendering_params_prealloc.total_size(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT)
-				];
+				try!(c.begin(0).and_then(|recorder|
+				{
+					let imb_stage_template = ImageMemoryBarrier::template(istage.dim2(0), ImageSubresourceRange::base_color());
+					let imb_dev_template = ImageMemoryBarrier::template(&**idev.dim2(0), ImageSubresourceRange::base_color());
+					let image_memory_barriers = [
+						imb_stage_template.hold_ownership(VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VkImageLayout::Preinitialized, VkImageLayout::TransferSrcOptimal),
+						imb_dev_template.hold_ownership(VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VkImageLayout::Preinitialized, VkImageLayout::TransferDestOptimal)
+					];
+					let image_memory_barriers_ret = [
+						imb_stage_template.hold_ownership(VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_HOST_WRITE_BIT, VkImageLayout::TransferSrcOptimal, VkImageLayout::General),
+						imb_dev_template.hold_ownership(VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VkImageLayout::TransferDestOptimal, VkImageLayout::ShaderReadOnlyOptimal)
+					];
+					let buffer_memory_barriers = [
+						BufferMemoryBarrier::hold_ownership(&bstage, 0 .. rendering_params_prealloc.total_size(), VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
+						BufferMemoryBarrier::hold_ownership(&bdev, 0 .. rendering_params_prealloc.total_size(), VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT)
+					];
+					let buffer_memory_barriers_ret = [
+						BufferMemoryBarrier::hold_ownership(&bstage, 0 .. rendering_params_prealloc.total_size(), VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_HOST_WRITE_BIT),
+						BufferMemoryBarrier::hold_ownership(&bdev, 0 .. rendering_params_prealloc.total_size(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT)
+					];
 
-				recorder
-					.pipeline_barrier(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false,
-						&[], &buffer_memory_barriers, &image_memory_barriers)
-					.copy_image(istage.dim2(0), &**idev.dim2(0), &[ImageCopyRegion::entire_colorbits(VkExtent3D(TEXTURE_SIZE, TEXTURE_SIZE, 1))])
-					.copy_buffer(&bstage, &bdev, &[BufferCopyRegion(0, 0, rendering_params_prealloc.total_size() as usize)])
-					.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, false,
-						&[], &buffer_memory_barriers_ret, &image_memory_barriers_ret)
-				.end()
-			}));
-			try!(setup_commands.execute());
+					recorder
+						.pipeline_barrier(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, false,
+							&[], &buffer_memory_barriers, &image_memory_barriers)
+						.copy_image(istage.dim2(0), &**idev.dim2(0), &[ImageCopyRegion::entire_colorbits(VkExtent3D(TEXTURE_SIZE, TEXTURE_SIZE, 1))])
+						.copy_buffer(&bstage, &bdev, &[BufferCopyRegion(0, 0, rendering_params_prealloc.total_size() as usize)])
+						.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, false,
+							&[], &buffer_memory_barriers_ret, &image_memory_barriers_ret)
+					.end()
+				}));
+				c.execute()
+			})
 		}
 
 		let buffer_mapped_ptr = try!(bstage.map().map(|x| unsafe { x.into_raw() }));
@@ -453,8 +458,9 @@ impl <'a> DebugInfo<'a>
 			baseline: typeface.baseline,
 			rendering_params_count: max_instance_count,
 			num_glyph_data: num_glyph_data,
-			transfer_completion: try!(engine.create_queue_fence()),
-			use_optimized_render: engine.is_optimized_debug_render_support()
+			transfer_completion: try!(QueueFence::new(engine)),
+			// use_optimized_render: engine.is_optimized_debug_render_support()
+			use_optimized_render: true
 		}))
 	}
 	fn allocate_rect(horizons: &mut LinkedList<Horizon>, rect: VkExtent2D) -> Option<TextureRegion>

@@ -5,13 +5,12 @@ use vk::ffi::*;
 use std::ffi::CString;
 use super::internals::*;
 use libc::size_t;
+use {EngineResult, GraphicsInterface, PreciseRenderPass, RenderPass};
+use std::ops::Deref;
+use std::io::prelude::*;
 
-pub struct VertexInputState(Vec<VertexBinding>, Vec<VertexAttribute>);
 #[derive(Clone)]
-pub enum VertexBinding
-{
-	PerVertex(u32), PerInstance(u32)
-}
+pub enum VertexBinding { PerVertex(u32), PerInstance(u32) }
 #[derive(Clone)]
 pub struct VertexAttribute(pub u32, pub VkFormat, pub u32);
 pub struct IntoNativeVertexInputState
@@ -19,7 +18,7 @@ pub struct IntoNativeVertexInputState
 	bindings: Vec<VkVertexInputBindingDescription>,
 	attributes: Vec<VkVertexInputAttributeDescription>
 }
-impl <'a> std::convert::Into<VkPipelineVertexInputStateCreateInfo> for &'a IntoNativeVertexInputState
+impl<'a> std::convert::Into<VkPipelineVertexInputStateCreateInfo> for &'a IntoNativeVertexInputState
 {
 	fn into(self) -> VkPipelineVertexInputStateCreateInfo
 	{
@@ -34,22 +33,15 @@ impl <'a> std::convert::Into<VkPipelineVertexInputStateCreateInfo> for &'a IntoN
 
 pub enum ShaderProgram
 {
-	Vertex { internal: vk::ShaderModule, entry_point: CString, vertex_input: VertexInputState },
+	Vertex { internal: vk::ShaderModule, entry_point: CString, vertex_input: IntoNativeVertexInputState },
 	#[allow(dead_code)] TessControl { internal: vk::ShaderModule, entry_point: CString },
 	#[allow(dead_code)] TessEvaluate { internal: vk::ShaderModule, entry_point: CString },
 	Geometry { internal: vk::ShaderModule, entry_point: CString },
 	Fragment { internal: vk::ShaderModule, entry_point: CString }
 }
-pub trait ShaderProgramInternals
+impl InternalExports for ShaderProgram
 {
-	fn new_vertex(module: vk::ShaderModule, entry_point: &str, vbindings: &[VertexBinding], vattributes: &[VertexAttribute]) -> Self;
-	fn new_geometry(module: vk::ShaderModule, entry_point: &str) -> Self;
-	fn new_fragment(module: vk::ShaderModule, entry_point: &str) -> Self;
-	fn get_entry_point(&self) -> &CString;
-	fn into_native_vertex_input_state(&self) -> IntoNativeVertexInputState;
-}
-impl InternalExports<vk::ShaderModule> for ShaderProgram
-{
+	type InternalT = vk::ShaderModule;
 	fn get_internal(&self) -> &vk::ShaderModule
 	{
 		match self
@@ -62,57 +54,70 @@ impl InternalExports<vk::ShaderModule> for ShaderProgram
 		}
 	}
 }
-impl ShaderProgramInternals for ShaderProgram
+impl ShaderProgram
 {
-	fn new_vertex(module: vk::ShaderModule, entry_point: &str, vbindings: &[VertexBinding], vattributes: &[VertexAttribute]) -> Self
+	fn build_module_from_file(engine: &GraphicsInterface, path: std::ffi::OsString) -> EngineResult<vk::ShaderModule>
 	{
-		ShaderProgram::Vertex
+		std::fs::File::open(path).and_then(|mut fp| { let mut vb = Vec::new(); fp.read_to_end(&mut vb).map(|_| vb) }).map_err(From::from)
+			.and_then(|b| vk::ShaderModule::new(engine.device(), &b).map_err(From::from))
+	}
+	pub fn new_vertex_from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine,
+		path: &str, entry_point: &str, bindings: &[VertexBinding], attributes: &[VertexAttribute]) -> EngineResult<Self>
+	{
+		let os_path = engine.parse_asset(path, "spv");
+		info!(target: "Interlude::ShaderProgram", "Loading Vertex Shader from {:?}...", os_path);
+		Self::build_module_from_file(engine, os_path).map(|m| ShaderProgram::Vertex
 		{
-			internal: module, entry_point: CString::new(entry_point).unwrap(),
-			vertex_input: VertexInputState(Vec::from(vbindings), Vec::from(vattributes))
-		}
-	}
-	fn new_geometry(module: vk::ShaderModule, entry_point: &str) -> Self
-	{
-		ShaderProgram::Geometry { internal: module, entry_point: CString::new(entry_point).unwrap() }
-	}
-	fn new_fragment(module: vk::ShaderModule, entry_point: &str) -> Self
-	{
-		ShaderProgram::Fragment { internal: module, entry_point: CString::new(entry_point).unwrap() }
-	}
-	fn get_entry_point(&self) -> &CString
-	{
-		match self
-		{
-			&ShaderProgram::Vertex { internal: _, entry_point: ref e, vertex_input: _ } => e,
-			&ShaderProgram::Geometry { internal: _, entry_point: ref e } => e,
-			&ShaderProgram::Fragment { internal: _, entry_point: ref e } => e,
-			&ShaderProgram::TessControl { internal: _, entry_point: ref e } => e,
-			&ShaderProgram::TessEvaluate { internal: _, entry_point: ref e } => e
-		}
-	}
-	fn into_native_vertex_input_state(&self) -> IntoNativeVertexInputState
-	{
-		if let &ShaderProgram::Vertex { internal: _, entry_point: _, vertex_input: VertexInputState(ref vb, ref va) } = self
-		{
-			IntoNativeVertexInputState
+			internal: m, entry_point: CString::new(entry_point).unwrap(),
+			vertex_input: IntoNativeVertexInputState
 			{
-				bindings: vb.iter().enumerate().map(|(i, x)| match x
+				bindings: bindings.iter().enumerate().map(|(i, x)| match x
 				{
 					&VertexBinding::PerVertex(stride) => VkVertexInputBindingDescription(i as u32, stride, VkVertexInputRate::Vertex),
 					&VertexBinding::PerInstance(stride) => VkVertexInputBindingDescription(i as u32, stride, VkVertexInputRate::Instance)
 				}).collect(),
-				attributes: va.iter().enumerate()
+				attributes: attributes.iter().enumerate()
 					.map(|(i, &VertexAttribute(binding, format, offset))| VkVertexInputAttributeDescription(i as u32, binding, format, offset))
 					.collect()
 			}
+		})
+	}
+	pub fn new_postprocess_vertex_from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str)
+		-> EngineResult<Self>
+	{
+		Self::new_vertex_from_asset(engine, path, entry_point,
+			&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)])
+	}
+	pub fn new_geometry_from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Self>
+	{
+		let os_path = engine.parse_asset(path, "spv");
+		info!(target: "Interlude::ShaderProgram", "Loading Geometry Shader from {:?}...", os_path);
+		Self::build_module_from_file(engine, os_path).map(|m| ShaderProgram::Geometry
+		{
+			internal: m, entry_point: CString::new(entry_point).unwrap()
+		})
+	}
+	pub fn new_fragment_from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Self>
+	{
+		let os_path = engine.parse_asset(path, "spv");
+		info!(target: "Interlude::ShaderProgram", "Loading Fragment Shader from {:?}...", os_path);
+		Self::build_module_from_file(engine, os_path).map(|m| ShaderProgram::Fragment
+		{
+			internal: m, entry_point: CString::new(entry_point).unwrap()
+		})
+	}
+
+	fn entry_point(&self) -> &CString
+	{
+		match self
+		{
+			&ShaderProgram::Vertex { ref entry_point, .. } | &ShaderProgram::Fragment { ref entry_point, .. } | &ShaderProgram::Geometry { ref entry_point, .. } |
+			&ShaderProgram::TessControl { ref entry_point, .. } | &ShaderProgram::TessEvaluate { ref entry_point, .. } => entry_point
 		}
-		else { panic!("Unable to create vertex input state from the exception of vertex shader") }
 	}
 }
 
-#[derive(Clone)]
-pub struct PushConstantDesc(pub VkShaderStageFlags, pub std::ops::Range<u32>);
+#[derive(Clone)] pub struct PushConstantDesc(pub VkShaderStageFlags, pub std::ops::Range<u32>);
 impl <'a> std::convert::Into<VkPushConstantRange> for &'a PushConstantDesc
 {
 	fn into(self) -> VkPushConstantRange
@@ -122,16 +127,18 @@ impl <'a> std::convert::Into<VkPushConstantRange> for &'a PushConstantDesc
 	}
 }
 
-pub struct PipelineLayout { internal: vk::PipelineLayout }
-pub trait PipelineLayoutInternals { fn new(pl: vk::PipelineLayout) -> Self; }
-impl PipelineLayoutInternals for PipelineLayout
+pub struct PipelineLayout(vk::PipelineLayout);
+impl PipelineLayout
 {
-	fn new(pl: vk::PipelineLayout) -> Self { PipelineLayout { internal: pl } }
+	pub fn new(engine: &GraphicsInterface, descriptor_set_layouts: &[&DescriptorSetLayout], push_constants: &[&PushConstantDesc]) -> EngineResult<Self>
+	{
+		let dsl = descriptor_set_layouts.into_iter().map(|&dsl| **dsl.get_internal()).collect::<Vec<_>>();
+		let pc = push_constants.into_iter().map(|&pcd| pcd.into()).collect::<Vec<_>>();
+		
+		vk::PipelineLayout::new(engine.device(), &dsl, &pc).map(PipelineLayout).map_err(From::from)
+	}
 }
-impl InternalExports<vk::PipelineLayout> for PipelineLayout
-{
-	fn get_internal(&self) -> &vk::PipelineLayout { &self.internal }
-}
+impl InternalExports for PipelineLayout { type InternalT = vk::PipelineLayout; fn get_internal(&self) -> &vk::PipelineLayout { &self.0 } }
 
 // Primitive Topology + With-Adjacency flag
 #[derive(Clone, Copy)]
@@ -281,7 +288,7 @@ impl<'a> std::convert::Into<IntoNativeShaderStageCreateInfoStruct> for &'a Pipel
 				&ShaderProgram::TessControl { .. } => VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
 				&ShaderProgram::TessEvaluate { .. } => VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
 			},
-			module: **self.0.get_internal(), entry_point: self.0.get_entry_point().as_ptr(),
+			module: **self.0.get_internal(), entry_point: self.0.entry_point().as_ptr(),
 			specialization_structure: if map_entries.is_empty() { None } else { Some(VkSpecializationInfo
 			{
 				mapEntryCount: map_entries.len() as u32, pMapEntries: map_entries.as_ptr(),
@@ -309,13 +316,13 @@ pub struct GraphicsPipelineBuilder<'a>
 	primitive_topology: PrimitiveTopology, vp_sc: Vec<ViewportWithScissorRect>,
 	rasterizer_state: RasterizerState, use_alpha_to_coverage: bool, attachment_blend_states: Vec<AttachmentBlendState>
 }
-impl <'a> GraphicsPipelineBuilder<'a>
+impl<'a> GraphicsPipelineBuilder<'a>
 {
-	pub fn new(layout: &'a PipelineLayout, render_pass: &'a RenderPass, subpass_index: u32) -> Self
+	pub fn new(layout: &'a PipelineLayout, render_pass: PreciseRenderPass<'a>) -> Self
 	{
 		GraphicsPipelineBuilder
 		{
-			layout: layout, render_pass: render_pass, subpass_index: subpass_index,
+			layout: layout, render_pass: render_pass.0, subpass_index: render_pass.1,
 			vertex_shader: None, geometry_shader: None, fragment_shader: None,
 			primitive_topology: PrimitiveTopology::TriangleList(false),
 			vp_sc: Vec::new(), rasterizer_state: RasterizerState { wired_render: false, cull_side: None },
@@ -332,12 +339,12 @@ impl <'a> GraphicsPipelineBuilder<'a>
 			use_alpha_to_coverage: base.use_alpha_to_coverage, attachment_blend_states: base.attachment_blend_states.clone()
 		}
 	}
-	pub fn for_postprocess<Engine: EngineCore>(engine: &'a Engine, layout: &'a PipelineLayout, render_pass: &'a RenderPass, subpass_index: u32,
-		fragment_shader: PipelineShaderProgram<'a>, processing_viewport: &Viewport) -> Result<Self, EngineError>
+	pub fn for_postprocess<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &'a Engine, layout: &'a PipelineLayout,
+		render_pass: PreciseRenderPass<'a>, fragment_shader: PipelineShaderProgram<'a>, processing_viewport: &Viewport) -> Result<Self, EngineError>
 	{
 		Ok(GraphicsPipelineBuilder
 		{
-			layout: layout, render_pass: render_pass, subpass_index: subpass_index,
+			layout: layout, render_pass: render_pass.0, subpass_index: render_pass.1,
 			vertex_shader: Some(PipelineShaderProgram::unspecialized(try!{engine.postprocess_vsh(true)})), geometry_shader: None, fragment_shader: Some(fragment_shader),
 			primitive_topology: PrimitiveTopology::TriangleStrip(false),
 			vp_sc: vec![ViewportWithScissorRect::default_scissor(processing_viewport)],
@@ -406,7 +413,6 @@ pub struct IntoNativeGraphicsPipelineCreateInfoStruct<'a>
 	base: &'a GraphicsPipelineBuilder<'a>,
 	#[allow(dead_code)] viewports: Vec<VkViewport>, #[allow(dead_code)] scissors: Vec<VkRect2D>,
 	#[allow(dead_code)] attachment_blend_states: Vec<VkPipelineColorBlendAttachmentState>,
-	#[allow(dead_code)] into_vertex_input_state: IntoNativeVertexInputState,
 	#[allow(dead_code)] into_shader_stage: Vec<IntoNativeShaderStageCreateInfoStruct>,
 	shader_stage: Vec<VkPipelineShaderStageCreateInfo>,
 	vertex_input_state: VkPipelineVertexInputStateCreateInfo,
@@ -416,7 +422,7 @@ pub struct IntoNativeGraphicsPipelineCreateInfoStruct<'a>
 	multisample_state: VkPipelineMultisampleStateCreateInfo,
 	color_blend_state: VkPipelineColorBlendStateCreateInfo
 }
-impl <'a> std::convert::Into<IntoNativeGraphicsPipelineCreateInfoStruct<'a>> for &'a GraphicsPipelineBuilder<'a>
+impl<'a> std::convert::Into<IntoNativeGraphicsPipelineCreateInfoStruct<'a>> for &'a GraphicsPipelineBuilder<'a>
 {
 	fn into(self) -> IntoNativeGraphicsPipelineCreateInfoStruct<'a>
 	{
@@ -425,7 +431,7 @@ impl <'a> std::convert::Into<IntoNativeGraphicsPipelineCreateInfoStruct<'a>> for
 		if let Some(ref gs) = self.geometry_shader { shader_stage_vec.push(Into::into(gs)); }
 		if let Some(ref fs) = self.fragment_shader { shader_stage_vec.push(Into::into(fs)); }
 		let shader_stage = shader_stage_vec.iter().map(Into::into).collect();
-		let into_input_state = vshader.0.into_native_vertex_input_state();
+		let into_input_state = match vshader.0 { &ShaderProgram::Vertex { ref vertex_input, .. } => vertex_input, _ => unreachable!() };
 		let (vports, scissors): (Vec<_>, Vec<_>) = self.vp_sc.iter().map(|&ViewportWithScissorRect(ref vp, ref sc)|
 			unsafe { (std::mem::transmute::<_, VkViewport>(vp.clone()), std::mem::transmute::<_, VkRect2D>(sc.clone())) }).unzip();
 		let attachment_blend_states = self.attachment_blend_states.iter().map(|&x| x.into()).collect::<Vec<_>>();
@@ -433,7 +439,7 @@ impl <'a> std::convert::Into<IntoNativeGraphicsPipelineCreateInfoStruct<'a>> for
 		{
 			into_shader_stage: shader_stage_vec,
 			shader_stage: shader_stage,
-			vertex_input_state: (&into_input_state).into(),
+			vertex_input_state: into_input_state.into(),
 			input_assembly_state: VkPipelineInputAssemblyStateCreateInfo
 			{
 				sType: VkStructureType::Pipeline_InputAssemblyStateCreateInfo, pNext: std::ptr::null(), flags: 0,
@@ -469,12 +475,12 @@ impl <'a> std::convert::Into<IntoNativeGraphicsPipelineCreateInfoStruct<'a>> for
 				attachmentCount: attachment_blend_states.len() as u32, pAttachments: attachment_blend_states.as_ptr(),
 				blendConstants: [0.0f32; 4]
 			},
-			into_vertex_input_state: into_input_state, attachment_blend_states: attachment_blend_states,
+			attachment_blend_states: attachment_blend_states,
 			viewports: vports, scissors: scissors, base: self
 		}
 	}
 }
-impl <'a> std::convert::Into<VkGraphicsPipelineCreateInfo> for &'a IntoNativeGraphicsPipelineCreateInfoStruct<'a>
+impl<'a> std::convert::Into<VkGraphicsPipelineCreateInfo> for &'a IntoNativeGraphicsPipelineCreateInfoStruct<'a>
 {
 	fn into(self) -> VkGraphicsPipelineCreateInfo
 	{
@@ -487,19 +493,30 @@ impl <'a> std::convert::Into<VkGraphicsPipelineCreateInfo> for &'a IntoNativeGra
 			pRasterizationState: &self.rasterization_state, pMultisampleState: &self.multisample_state,
 			pDepthStencilState: std::ptr::null(), pColorBlendState: &self.color_blend_state,
 			pDynamicState: std::ptr::null(),
-			layout: *self.base.layout.internal, renderPass: ***self.base.render_pass.get_internal(), subpass: self.base.subpass_index,
+			layout: *self.base.layout.0, renderPass: **self.base.render_pass.get_internal(), subpass: self.base.subpass_index,
 			basePipelineHandle: std::ptr::null_mut(), basePipelineIndex: 0
 		}
 	}
 }
 
-pub struct GraphicsPipeline { internal: vk::Pipeline }
-pub trait GraphicsPipelineInternals { fn new(p: vk::Pipeline) -> Self; }
-impl GraphicsPipelineInternals for GraphicsPipeline
+pub struct GraphicsPipeline(vk::Pipeline);
+pub struct GraphicsPipelines(Vec<GraphicsPipeline>);
+impl GraphicsPipelines
 {
-	fn new(p: vk::Pipeline) -> Self { GraphicsPipeline { internal: p } }
+	pub fn new(engine: &GraphicsInterface, builders: &[&GraphicsPipelineBuilder]) -> EngineResult<Self>
+	{
+		let builders_n = builders.into_iter().map(|&x| x.into()).collect::<Vec<_>>();
+		vk::Pipeline::new_graphics(engine.device(), None, &builders_n.iter().map(Into::into).collect::<Vec<_>>())
+			.map(|v| GraphicsPipelines(v.into_iter().map(GraphicsPipeline).collect())).map_err(From::from)
+	}
 }
-impl InternalExports<vk::Pipeline> for GraphicsPipeline
+impl Deref for GraphicsPipelines
 {
-	fn get_internal(&self) -> &vk::Pipeline { &self.internal }
+	type Target = Vec<GraphicsPipeline>;
+	fn deref(&self) -> &Self::Target { &self.0 }
 }
+impl std::ops::DerefMut for GraphicsPipelines
+{
+	fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+impl InternalExports for GraphicsPipeline { type InternalT = vk::Pipeline; fn get_internal(&self) -> &vk::Pipeline { &self.0 } }

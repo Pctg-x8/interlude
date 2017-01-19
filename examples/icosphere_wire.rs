@@ -9,44 +9,49 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use nalgebra::*;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)] enum InputNames { A }
+#[derive(Clone, Copy, PartialEq, Eq, Hash)] enum InputNames { }
 
 fn main()
 {
-	let engine = Engine::new("com.cterm2.interlude.examples.icosphere_wire", 0x01,
-		Some(std::env::current_dir().unwrap()), DeviceFeatures::new().enable_nonsolid_fillmode()).or_crash();
-	let target = engine.create_render_window(&Size2(640, 480), "Rendering Icosphere[Wireframe]").or_crash();
+	let engine = EngineBuilder::<InputNames>::new("com.cterm2.interlude.examples.icosphere_wire".into(), (0, 1, 0),
+		"Rendering Icosphere[Wireframe]".into(), &Size2(640, 480))
+		.asset_base(std::env::current_dir().unwrap().into()).device_feature_nonsolid_fillmode().launch().or_crash();
 
 	// make framebuffer
-	let Size2(w, h) = target.size();
-	let vport = Viewport::from(target.size());
-	let fb = target.get_back_images().iter().map(|&v| engine.create_presented_framebuffer(v, Some(true), &Size3(w, h, 1))).collect::<Result<Vec<_>, _>>().or_crash();
+	let &Size2(w, h) = engine.render_window().size();
+	let vport = Viewport::from(engine.render_window().size().clone());
+	let fb = engine.render_window().render_targets().iter().map(|v| Framebuffer::new_for_presented(&engine, v, Some(true), &Size3(w, h, 1)))
+		.collect::<Result<Vec<_>, _>>().or_crash();
 
-	let (v, i) = generate_icosphere();
-	let (v, i) = index_triangles(subdiv_icosahedron(associate_vertex_indices(&v, &i)));
-	let bp = engine.buffer_preallocate(&[
-		(std::mem::size_of::<[CMatrix4; 2]>(), BufferDataType::Uniform),
-		(std::mem::size_of::<CVector4>() * v.len(), BufferDataType::Vertex),
-		(std::mem::size_of::<u16>() * i.len(), BufferDataType::Index)
-		// (std::mem::size_of::<[[CVector4; 3]; 80]>(), BufferDataType::Vertex)
-	]);
-	let (dev, stg) = engine.create_double_buffer(&bp).or_crash();
-	stg.map().map(|m|
+	let (bp, stg, dev) =
 	{
-		m.range_mut::<CVector4>(bp.offset(1), v.len()).copy_from_slice(&v[..]);
-		m.range_mut::<u16>(bp.offset(2), i.len()).copy_from_slice(&i[..]);
-		let proj = PerspectiveMatrix3::new(w as f32 / h as f32, 30.0f32.to_radians(), 0.1, 100.0).to_matrix() *
-			view_matrix(Vector3::new(5.0, 2.0, 30.0), Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
-		*m.map_mut::<[CMatrix4; 2]>(bp.offset(0)) = [*proj.as_ref(), *Rotation3::new(Vector3::new(0.0, 1.0, 0.0).normalize() * 0.0).submatrix().to_homogeneous().as_ref()];
-	}).or_crash();
+		let (v, i) = generate_icosphere();
+		let (v, i) = index_triangles(subdiv_icosahedron(associate_vertex_indices(&v, &i)));
+		let bp = BufferPreallocator::new(&engine, &[
+			BufferContent::Uniform(std::mem::size_of::<[CMatrix4; 2]>()),
+			BufferContent::Vertex(std::mem::size_of::<CVector4>() * v.len()),
+			BufferContent::Index(std::mem::size_of::<u16>() * i.len())
+			// (std::mem::size_of::<[[CVector4; 3]; 80]>(), BufferDataType::Vertex)
+		]);
+		let (dev, stg) = bp.instantiate().or_crash();
+		stg.map().map(|m|
+		{
+			m.range_mut::<CVector4>(bp.offset(1), v.len()).copy_from_slice(&v[..]);
+			m.range_mut::<u16>(bp.offset(2), i.len()).copy_from_slice(&i[..]);
+			let proj = PerspectiveMatrix3::new(w as f32 / h as f32, 30.0f32.to_radians(), 0.1, 100.0).to_matrix() *
+				view_matrix(Vector3::new(5.0, 2.0, 30.0), Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
+			*m.map_mut::<[CMatrix4; 2]>(bp.offset(0)) = [*proj.as_ref(), *Rotation3::new(Vector3::new(0.0, 1.0, 0.0).normalize() * 0.0).submatrix().to_homogeneous().as_ref()];
+		}).or_crash();
+		(bp.independence(), stg, dev)
+	};
 
 	// load shaders and build pipeline state
-	let vshader = engine.create_vertex_shader_from_asset("examples.icosphere.vert", "main",
+	let vshader = ShaderProgram::new_vertex_from_asset(&engine, "examples.icosphere.vert", "main",
 		&[VertexBinding::PerVertex(std::mem::size_of::<CVector4>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]).or_crash();
-	let fshader = engine.create_fragment_shader_from_asset("examples.icosphere.frag", "main").or_crash();
-	let dsl_cam = engine.create_descriptor_set_layout(&[Descriptor::Uniform(1, vec![ShaderStage::Vertex])]).or_crash();
-	let psl = engine.create_pipeline_layout(&[&dsl_cam], &[]).or_crash();
-	let ps_mold = GraphicsPipelineBuilder::new(&psl, fb[0].renderpass(), 0)
+	let fshader = ShaderProgram::new_fragment_from_asset(&engine, "examples.icosphere.frag", "main").or_crash();
+	let dsl_cam = DescriptorSetLayout::new(&engine, vec![Descriptor::Uniform(1, ShaderStage::Vertex)].into()).or_crash();
+	let psl = PipelineLayout::new(&engine, &[&dsl_cam], &[]).or_crash();
+	let ps_mold = GraphicsPipelineBuilder::new(&psl, PreciseRenderPass(fb[0].renderpass(), 0))
 		.primitive_topology(PrimitiveTopology::TriangleList(false))
 		.vertex_shader(PipelineShaderProgram::unspecialized(&vshader))
 		.rasterizer_enable_wired_mode()
@@ -58,15 +63,15 @@ fn main()
 			(3, ConstantEntry::Float(1.0))
 		]))
 		.blend_state(&[AttachmentBlendState::Disabled]);
-	let ps = engine.create_graphics_pipelines(&[&ps_mold]).or_crash().pop().unwrap();
+	let ps = GraphicsPipelines::new(&engine, &[&ps_mold]).or_crash().pop().unwrap();
 
 	// create descriptor sets
-	let descriptor_sets = engine.preallocate_all_descriptor_sets(&[&dsl_cam]).or_crash();
+	let descriptor_sets = DescriptorSets::preallocate(&engine, &[&dsl_cam]).or_crash();
 	let ubuf_info = BufferInfo(&dev, bp.offset(0) .. bp.offset(1));
 	engine.update_descriptors(&[DescriptorSetWriteInfo::UniformBuffer(descriptor_sets[0], 0, vec![ubuf_info])]);
 
 	// transfer data / setting image layout
-	engine.allocate_transient_transfer_command_buffers(1).and_then(|setup_commands|
+	TransientTransferCommandBuffers::allocate(&engine, 1).and_then(|setup_commands|
 	{
 		let bmbarriers = [
 			BufferMemoryBarrier::hold_ownership(&stg, 0 .. bp.total_size(), 0, VK_ACCESS_TRANSFER_READ_BIT),
@@ -74,7 +79,7 @@ fn main()
 		];
 		let bmbarrier_ret = BufferMemoryBarrier::hold_ownership(&dev, 0 .. bp.total_size(), VK_ACCESS_TRANSFER_WRITE_BIT,
 			VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_INDEX_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT);
-		let imbarriers = target.get_back_images().iter().map(|&x|
+		let imbarriers = engine.render_window().render_targets().iter().map(|x|
 			ImageMemoryBarrier::hold_ownership(x, ImageSubresourceRange::base_color(), 0, VK_ACCESS_MEMORY_READ_BIT, VkImageLayout::Undefined, VkImageLayout::PresentSrcKHR)
 		).collect::<Vec<_>>();
 
@@ -87,12 +92,12 @@ fn main()
 	}).or_crash();
 
 	// Draw commands and submit it
-	let cb = engine.allocate_graphics_command_buffers(target.backimage_count()).or_crash();
+	let cb = GraphicsCommandBuffers::allocate(&engine, engine.render_window().render_targets().len()).or_crash();
 	for (n, recorder) in cb.begin_all().or_crash()
 	{
 		let clear_value = AttachmentClearValue::Color(0.0, 0.0, 0.0, 1.0);
-		let imbarrier_rt = ImageMemoryBarrier::hold_ownership(target.get_back_images()[n], ImageSubresourceRange::base_color(), VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-			VkImageLayout::PresentSrcKHR, VkImageLayout::ColorAttachmentOptimal);
+		let imbarrier_rt = ImageMemoryBarrier::hold_ownership(&engine.render_window().render_targets()[n], ImageSubresourceRange::base_color(),
+			VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VkImageLayout::PresentSrcKHR, VkImageLayout::ColorAttachmentOptimal);
 		recorder
 			.pipeline_barrier(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, true, &[], &[], &[imbarrier_rt])
 			.begin_render_pass(&fb[n], &[clear_value], false)
@@ -107,7 +112,7 @@ fn main()
 	}
 
 	// Update commands
-	let ucb = engine.allocate_transfer_command_buffers(1).or_crash();
+	let ucb = TransferCommandBuffers::allocate(&engine, 1).or_crash();
 	ucb.begin(0).and_then(|recorder|
 	{
 		let bmbarrier = [
@@ -122,25 +127,19 @@ fn main()
 		.end()
 	}).or_crash();
 
-	// dummy key setting
-	if let Ok(mut isw) = engine.input_system_ref().write()
-	{
-		isw.add_input(InputNames::A, InputType::Key(InputKeys::Character('z')));
-	}
-
 	// Process Loop(Saving CPU usage)
 	{
-		let window_system = engine.window_system_ref().clone();
-		let ordersem = engine.create_queue_fence().or_crash();
-		let copy_completion = engine.create_fence().or_crash();
-		let render_completion = engine.create_fence().or_crash();
+		let window_system = engine.render_window().clone();
+		let ordersem = QueueFence::new(&engine).or_crash();
+		let copy_completion = Fence::new(&engine).or_crash();
+		let render_completion = Fence::new(&engine).or_crash();
 		let exit_signal = Arc::new(AtomicBool::new(false));
 		let exit_signal_uo = exit_signal.clone();
-		let update_event = Arc::new(Event::new("Update Event").or_crash());
+		let update_event = Event::new("Update Event").or_crash();
 		let update_event_uo = update_event.clone();
 		let update_observer = unsafe { thread_scoped::scoped(move ||
 		{
-			let mut frame_index = target.acquire_next_backbuffer_index(&ordersem).and_then(|f|
+			let mut frame_index = engine.render_window().acquire_next_target_index(&ordersem).and_then(|f|
 				engine.submit_graphics_commands(&[cb[f as usize]], &[(&ordersem, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)],
 					None, Some(&render_completion)).map(|_| f)
 				).or_crash();
@@ -150,8 +149,8 @@ fn main()
 				engine.submit_transfer_commands(&ucb[..], &[], None, Some(&copy_completion)).or_crash();
 				copy_completion.wait().and_then(|()| copy_completion.clear()).or_crash();
 				update_event_uo.set();
-				frame_index = target.present(engine.graphics_queue_ref(), frame_index, None).and_then(|_|
-					target.acquire_next_backbuffer_index(&ordersem).and_then(|f|
+				frame_index = engine.render_window().present(&engine, frame_index, None).and_then(|_|
+					engine.render_window().acquire_next_target_index(&ordersem).and_then(|f|
 						engine.submit_graphics_commands(&[cb[f as usize]], &[(&ordersem, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)],
 							None, Some(&render_completion)).map(|_| f)
 						)
