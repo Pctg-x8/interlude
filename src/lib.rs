@@ -56,7 +56,7 @@ pub use self::ginterface::GraphicsInterface;
 pub use self::framebuffer::{AttachmentDesc, AttachmentRef, PassDesc, PassDependency, AttachmentClearValue, PreciseRenderPass};
 pub use self::command::{MemoryBarrier, BufferMemoryBarrier, ImageMemoryBarrier, IndirectCallParameter, BufferCopyRegion, ImageCopyRegion, ImageBlitRegion};
 pub use self::resource::{
-	ImageSubresourceRange, ImageSubresourceLayers, BufferContent,
+	ImageSubresourceRange, ImageSubresourceLayers, BufferContent, BufferOffsets,
 	ImageDescriptor1, ImageDescriptor2, ImageDescriptor3, ImagePreallocator,
 	SamplerState, ComponentSwizzle, ComponentMapping, Filter
 };
