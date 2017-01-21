@@ -21,7 +21,6 @@ extern crate ansi_term;
 // Interlude
 mod error;
 mod engine;
-mod ginterface;
 mod device;
 mod command;
 mod resource;
@@ -35,6 +34,9 @@ mod data;
 mod internal_traits;
 mod concurrent;
 mod tuple_tools;
+
+// Feature dependents
+mod ginterface;
 
 // platform dependents
 #[cfg(unix)] mod linux;
