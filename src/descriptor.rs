@@ -130,13 +130,13 @@ impl std::ops::Deref for DescriptorSets
 }
 
 #[derive(Clone)]
-pub struct BufferInfo<'a>(pub &'a BufferResource, pub std::ops::Range<usize>);
+pub struct BufferInfo<'a>(pub &'a Resource<Type = VkBuffer>, pub std::ops::Range<usize>);
 impl<'a> std::convert::Into<VkDescriptorBufferInfo> for &'a BufferInfo<'a>
 {
 	fn into(self) -> VkDescriptorBufferInfo
 	{
 		let &BufferInfo(res, ref range) = self;
-		VkDescriptorBufferInfo(res.get_resource(), range.start as VkDeviceSize, (range.end - range.start) as VkDeviceSize)
+		VkDescriptorBufferInfo(res.resource(), range.start as VkDeviceSize, (range.end - range.start) as VkDeviceSize)
 	}
 }
 #[derive(Clone)]

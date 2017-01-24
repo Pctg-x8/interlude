@@ -43,11 +43,11 @@ pub struct BufferMemoryBarrier<'a>
 {
 	pub src_mask: VkAccessFlags, pub dst_mask: VkAccessFlags,
 	pub src_queue_family_index: u32, pub dst_queue_family_index: u32,
-	pub buffer: &'a BufferResource, pub range: std::ops::Range<usize>
+	pub buffer: &'a Resource<Type = VkBuffer>, pub range: std::ops::Range<usize>
 }
 impl<'a> BufferMemoryBarrier<'a>
 {
-	pub fn hold_ownership(buf: &'a BufferResource, range: std::ops::Range<usize>, src_mask: VkAccessFlags, dst_mask: VkAccessFlags)
+	pub fn hold_ownership(buf: &'a Resource<Type = VkBuffer>, range: std::ops::Range<usize>, src_mask: VkAccessFlags, dst_mask: VkAccessFlags)
 		-> Self
 	{
 		BufferMemoryBarrier
@@ -73,15 +73,15 @@ pub struct ImageMemoryBarrier<'a>
 	src_mask: VkAccessFlags, dst_mask: VkAccessFlags,
 	src_layout: VkImageLayout, dst_layout: VkImageLayout,
 	src_queue_family_index: u32, dst_queue_family_index: u32,
-	image: &'a ImageResource, subresource_range: ImageSubresourceRange
+	image: &'a Resource<Type = VkImage>, subresource_range: ImageSubresourceRange
 }
 impl<'a> ImageMemoryBarrier<'a>
 {
-	pub fn template(img: &'a ImageResource, subresource_range: ImageSubresourceRange) -> ImageMemoryBarrierTemplate<'a>
+	pub fn template(img: &'a Resource<Type = VkImage>, subresource_range: ImageSubresourceRange) -> ImageMemoryBarrierTemplate<'a>
 	{
 		ImageMemoryBarrierTemplate(img, subresource_range)
 	}
-	pub fn hold_ownership(img: &'a ImageResource, subresource_range: ImageSubresourceRange,
+	pub fn hold_ownership(img: &'a Resource<Type = VkImage>, subresource_range: ImageSubresourceRange,
 		src_mask: VkAccessFlags, dst_mask: VkAccessFlags, src_layout: VkImageLayout, dst_layout: VkImageLayout) -> Self
 	{
 		ImageMemoryBarrier
@@ -91,7 +91,7 @@ impl<'a> ImageMemoryBarrier<'a>
 			image: img, subresource_range: subresource_range
 		}
 	}
-	pub fn initialize(img: &'a ImageResource, subresource_range: ImageSubresourceRange, dst_mask: VkAccessFlags, dst_layout: VkImageLayout) -> Self
+	pub fn initialize(img: &'a Resource<Type = VkImage>, subresource_range: ImageSubresourceRange, dst_mask: VkAccessFlags, dst_layout: VkImageLayout) -> Self
 	{
 		ImageMemoryBarrier
 		{
@@ -103,7 +103,7 @@ impl<'a> ImageMemoryBarrier<'a>
 }
 /// A Template for constructing Image Memory Barrier.
 /// This holds a reference of ImageResource and a ImageSubresourceRange
-pub struct ImageMemoryBarrierTemplate<'a>(&'a ImageResource, ImageSubresourceRange);
+pub struct ImageMemoryBarrierTemplate<'a>(&'a Resource<Type = VkImage>, ImageSubresourceRange);
 impl<'a> ImageMemoryBarrierTemplate<'a>
 {
 	pub fn hold_ownership(&self, src_mask: VkAccessFlags, dst_mask: VkAccessFlags, src_layout: VkImageLayout, dst_layout: VkImageLayout)
@@ -153,7 +153,7 @@ impl<'a> std::convert::Into<VkBufferMemoryBarrier> for &'a BufferMemoryBarrier<'
 			sType: VkStructureType::BufferMemoryBarrier, pNext: std::ptr::null(),
 			srcAccessMask: self.src_mask, dstAccessMask: self.dst_mask,
 			srcQueueFamilyIndex: self.src_queue_family_index, dstQueueFamilyIndex: self.dst_queue_family_index,
-			buffer: self.buffer.get_resource(), offset: self.range.start as VkDeviceSize, size: (self.range.end - self.range.start) as VkDeviceSize
+			buffer: self.buffer.resource(), offset: self.range.start as VkDeviceSize, size: (self.range.end - self.range.start) as VkDeviceSize
 		}
 	}
 }
@@ -167,7 +167,7 @@ impl <'a> std::convert::Into<VkImageMemoryBarrier> for &'a ImageMemoryBarrier<'a
 			srcAccessMask: self.src_mask, dstAccessMask: self.dst_mask,
 			oldLayout: self.src_layout, newLayout: self.dst_layout,
 			srcQueueFamilyIndex: self.src_queue_family_index, dstQueueFamilyIndex: self.dst_queue_family_index,
-			image: self.image.get_resource(), subresourceRange: (&self.subresource_range).into()
+			image: self.image.resource(), subresourceRange: (&self.subresource_range).into()
 		}
 	}
 }
@@ -472,15 +472,15 @@ pub trait DrawingCommandRecorder
 	fn bind_descriptor_sets(self, layout: &PipelineLayout, sets: &DescriptorSetArrayView) -> Self;
 	fn bind_descriptor_sets_partial(self, layout: &PipelineLayout, start_set: u32, sets: &DescriptorSetArrayView) -> Self;
 	fn push_constants(self, layout: &PipelineLayout, shader_stage: ShaderStage, range: std::ops::Range<u32>, data: &[f32]) -> Self;
-	fn bind_vertex_buffers(self, buffer_offsets: &[(&BufferResource, usize)]) -> Self;
-	fn bind_vertex_buffers_partial(self, start_binding: u32, buffer_offsets: &[(&BufferResource, usize)]) -> Self;
-	fn bind_index_buffer(self, buffer: &BufferResource, offset: usize) -> Self;
+	fn bind_vertex_buffers(self, buffer_offsets: &[(&Resource<Type = VkBuffer>, usize)]) -> Self;
+	fn bind_vertex_buffers_partial(self, start_binding: u32, buffer_offsets: &[(&Resource<Type = VkBuffer>, usize)]) -> Self;
+	fn bind_index_buffer(self, buffer: &Resource<Type = VkBuffer>, offset: usize) -> Self;
 	
 	fn draw(self, vertex_count: u32, instance_count: u32) -> Self;
 	fn draw_with_voffs(self, vertex_count: u32, vertex_offset: u32, instance_count: u32) -> Self;
 	fn draw_indexed(self, index_count: u32, instance_count: u32, index_offset: u32) -> Self;
-	fn draw_indirect(self, param_buffer: &BufferResource, param_offs: usize) -> Self;
-	fn draw_indirect_mult(self, param_buffer: &BufferResource, param_offs: usize, param_count: u32) -> Self;
+	fn draw_indirect(self, param_buffer: &Resource<Type = VkBuffer>, param_offs: usize) -> Self;
+	fn draw_indirect_mult(self, param_buffer: &Resource<Type = VkBuffer>, param_offs: usize, param_count: u32) -> Self;
 }
 macro_rules! DrawingCommandRecorderDefaultImpl
 {
@@ -509,20 +509,20 @@ macro_rules! DrawingCommandRecorderDefaultImpl
 					range.start, range.len() as u32, data.as_ptr() as *const std::os::raw::c_void) };
 				self
 			}
-			fn bind_vertex_buffers(self, buffer_offsets: &[(&BufferResource, usize)]) -> Self
+			fn bind_vertex_buffers(self, buffer_offsets: &[(&Resource<Type = VkBuffer>, usize)]) -> Self
 			{
 				self.bind_vertex_buffers_partial(0, buffer_offsets)
 			}
-			fn bind_vertex_buffers_partial(self, start_binding: u32, buffer_offsets: &[(&BufferResource, usize)]) -> Self
+			fn bind_vertex_buffers_partial(self, start_binding: u32, buffer_offsets: &[(&Resource<Type = VkBuffer>, usize)]) -> Self
 			{
 				let (buffer_native, offsets_native): (Vec<_>, Vec<_>) = buffer_offsets.into_iter()
-					.map(|&(b, v)| (b.get_resource(), v as VkDeviceSize)).unzip();
+					.map(|&(b, v)| (b.resource(), v as VkDeviceSize)).unzip();
 				unsafe { vkCmdBindVertexBuffers(*self.0, start_binding, buffer_native.len() as u32, buffer_native.as_ptr(), offsets_native.as_ptr()) };
 				self
 			}
-			fn bind_index_buffer(self, buffer: &BufferResource, offset: usize) -> Self
+			fn bind_index_buffer(self, buffer: &Resource<Type = VkBuffer>, offset: usize) -> Self
 			{
-				unsafe { vkCmdBindIndexBuffer(*self.0, buffer.get_resource(), offset as VkDeviceSize, VkIndexType::U16) };
+				unsafe { vkCmdBindIndexBuffer(*self.0, buffer.resource(), offset as VkDeviceSize, VkIndexType::U16) };
 				self
 			}
 			
@@ -541,14 +541,14 @@ macro_rules! DrawingCommandRecorderDefaultImpl
 				unsafe { vkCmdDrawIndexed(*self.0, index_count, instance_count, 0, index_offset, 0) };
 				self
 			}
-			fn draw_indirect(self, param_buffer: &BufferResource, param_offs: usize) -> Self
+			fn draw_indirect(self, param_buffer: &Resource<Type = VkBuffer>, param_offs: usize) -> Self
 			{
-				unsafe { vkCmdDrawIndirect(*self.0, param_buffer.get_resource(), param_offs as VkDeviceSize, 1, 0) };
+				unsafe { vkCmdDrawIndirect(*self.0, param_buffer.resource(), param_offs as VkDeviceSize, 1, 0) };
 				self
 			}
-			fn draw_indirect_mult(self, param_buffer: &BufferResource, param_offs: usize, param_count: u32) -> Self
+			fn draw_indirect_mult(self, param_buffer: &Resource<Type = VkBuffer>, param_offs: usize, param_count: u32) -> Self
 			{
-				unsafe { vkCmdDrawIndirect(*self.0, param_buffer.get_resource(), param_offs as VkDeviceSize,
+				unsafe { vkCmdDrawIndirect(*self.0, param_buffer.resource(), param_offs as VkDeviceSize,
 					param_count, std::mem::size_of::<VkDrawIndirectCommand>() as u32) };
 				self
 			}
@@ -607,11 +607,11 @@ impl<'a> GraphicsCommandRecorder<'a>
 		self
 	}
 	
-	pub fn blit_image(self, src: &ImageResource, dst: &ImageResource, src_layout: VkImageLayout, dst_layout: VkImageLayout,
+	pub fn blit_image(self, src: &Resource<Type = VkImage>, dst: &Resource<Type = VkImage>, src_layout: VkImageLayout, dst_layout: VkImageLayout,
 		regions: &[ImageBlitRegion], filter: Filter) -> Self
 	{
 		let regions_native = regions.into_iter().map(|&x| x.into()).collect::<Vec<_>>();
-		unsafe { vkCmdBlitImage(*self.0, src.get_resource(), src_layout, dst.get_resource(), dst_layout,
+		unsafe { vkCmdBlitImage(*self.0, src.resource(), src_layout, dst.resource(), dst_layout,
 			regions_native.len() as u32, regions_native.as_ptr(), filter.into()) };
 		self
 	}
@@ -634,18 +634,18 @@ impl<'a> TransferCommandRecorder<'a>
 		self
 	}
 
-	pub fn copy_buffer(self, src: &BufferResource, dst: &BufferResource, regions: &[BufferCopyRegion]) -> Self
+	pub fn copy_buffer(self, src: &Resource<Type = VkBuffer>, dst: &Resource<Type = VkBuffer>, regions: &[BufferCopyRegion]) -> Self
 	{
 		let regions_native = regions.into_iter().map(|&x| x.into()).collect::<Vec<_>>();
-		unsafe { vkCmdCopyBuffer(*self.0, src.get_resource(), dst.get_resource(),
+		unsafe { vkCmdCopyBuffer(*self.0, src.resource(), dst.resource(),
 			regions_native.len() as u32, regions_native.as_ptr()) };
 		self
 	}
-	pub fn copy_image(self, src: &ImageResource, dst: &ImageResource, regions: &[ImageCopyRegion]) -> Self
+	pub fn copy_image(self, src: &Resource<Type = VkImage>, dst: &Resource<Type = VkImage>, regions: &[ImageCopyRegion]) -> Self
 	{
 		let regions_native = regions.into_iter().map(|&x| x.into()).collect::<Vec<_>>();
-		unsafe { vkCmdCopyImage(*self.0, src.get_resource(), VkImageLayout::TransferSrcOptimal,
-			dst.get_resource(), VkImageLayout::TransferDestOptimal, regions_native.len() as u32, regions_native.as_ptr()) };
+		unsafe { vkCmdCopyImage(*self.0, src.resource(), VkImageLayout::TransferSrcOptimal,
+			dst.resource(), VkImageLayout::TransferDestOptimal, regions_native.len() as u32, regions_native.as_ptr()) };
 		self
 	}
 }

@@ -2,7 +2,6 @@
 
 use std;
 use error::EngineError;
-use epoll::*;
 use std::hash::Hash;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -13,6 +12,11 @@ use std::ops::Index;
 use input::{InputType, InputKeys, InputAxis};
 use Event as EventFd;
 use EngineResult;
+use mio;
+use mio::unix::EventedFd;
+
+const T_UDEV: mio::Token = mio::Token(std::usize::MAX - 1);
+const T_PARENT: mio::Token = mio::Token(std::usize::MAX - 2);
 
 pub struct NativeInput<InputNames: Eq + Hash + Copy>
 {
@@ -41,7 +45,7 @@ impl<InputNames: Eq + Hash + Copy> NativeInput<InputNames>
 		}
 		recursive(device)
 	}
-	fn insert_device(input_devices: &mut HashMap<u32, InputDevice>, polling: &mut EpollInstance, device: UserspaceDevice)
+	fn insert_device(input_devices: &mut HashMap<u32, InputDevice>, polling: &mut mio::Poll, device: UserspaceDevice)
 	{
 		let name = Self::search_device_name(&device);
 		let node_path = device.device_node().expect("Unable to get Device Node Path").to_str().unwrap();
@@ -52,7 +56,7 @@ impl<InputNames: Eq + Hash + Copy> NativeInput<InputNames>
 		{
 			info!(target: "Interlude::Input", "Initializing for {} Input: {} [{}]", if joystick_device { "Joystick" } else { "Keyboard" }, name, node_path);
 			let idev = InputDevice::new(node_path).unwrap();
-			polling.add_interest(Interest::new(idev.as_raw_fd(), EPOLLIN, node_number as u64)).unwrap();
+			polling.register(&EventedFd(&idev.as_raw_fd()), mio::Token(node_number as usize), mio::Ready::readable(), mio::PollOpt::edge()).unwrap();
 			input_devices.insert(node_number, idev);
 		}
 	}
@@ -70,7 +74,7 @@ impl<InputNames: Eq + Hash + Copy> NativeInput<InputNames>
 			let mut input_devices = HashMap::new();
 			info!(target: "Interlude::Input", "Starting udev...");
 			let udev = UserspaceDeviceManager::new().unwrap();
-			let mut polling = EpollInstance::new().expect("Unable to create polling object");
+			let mut polling = mio::Poll::new().expect("Unable to create polling object");
 			
 			info!(target: "Interlude::Input", "Listing Event Devices...");
 			let enumerator = udev.new_enumerator().unwrap().filter_match_subsystem("input");
@@ -83,44 +87,46 @@ impl<InputNames: Eq + Hash + Copy> NativeInput<InputNames>
 			}
 
 			let udev_monitor = udev.new_monitor().unwrap().add_filter_subsystem("input").enable_receiving();
-			polling.add_interest(Interest::new(udev_monitor.as_raw_fd(), EPOLLIN, std::u64::MAX)).unwrap();
-			polling.add_interest(Interest::new(term_event_th.as_raw_fd(), EPOLLIN, std::u64::MAX - 1)).unwrap();
-			'entire: while let Ok(events) = polling.wait(-1, input_devices.len())
+			polling.register(&EventedFd(&udev_monitor.as_raw_fd()), T_UDEV, mio::Ready::readable(), mio::PollOpt::edge()).unwrap();
+			polling.register(&EventedFd(&term_event_th.as_raw_fd()), T_PARENT, mio::Ready::readable(), mio::PollOpt::edge()).unwrap();
+			let mut events = mio::Events::with_capacity(256);
+			'entire: loop
 			{
-				let (mut aks, mut aas) = (aks_thread.write().unwrap(), aas_thread.write().unwrap());
-				for event in events
+				let event_count = polling.poll(&mut events, None).expect("Failed to wait polling");
+				if event_count > 0
 				{
-					if event.data() == std::u64::MAX
+					let (mut aks, mut aas) = (aks_thread.write().unwrap(), aas_thread.write().unwrap());
+					for event in events.iter().take(event_count)
 					{
-						if let Ok(dev) = udev_monitor.receive_device()
+						match event.token()
 						{
-							let node_name = dev.device_node().map(|d| d.to_string_lossy().into_owned());
-							if node_name.as_ref().map(|d| d.starts_with("/dev/input/event")).unwrap_or(false)
+							T_UDEV => if let Ok(dev) = udev_monitor.receive_device()
 							{
-								// event device
-								let node_number = node_name.and_then(|s| s["/dev/input/event".len()..].parse().ok()).unwrap_or(std::u32::MAX);
-								match dev.action().and_then(|a| a.to_str().ok())
+								let node_name = dev.device_node().map(|d| d.to_string_lossy().into_owned());
+								if node_name.as_ref().map(|d| d.starts_with("/dev/input/event")).unwrap_or(false)
 								{
-									Some("remove") => if let Some(removed_device) = input_devices.remove(&node_number)
+									// event device
+									let node_number = node_name.and_then(|s| s["/dev/input/event".len()..].parse().ok()).unwrap_or(std::u32::MAX);
+									match dev.action().and_then(|a| a.to_str().ok())
 									{
-										info!(target: "Interlude::Input", "Removed Device {}", removed_device.dev.name());
-										polling.del_interest(&Interest::new(removed_device.as_raw_fd(), EPOLLIN, node_number as u64)).unwrap();
-										removed_device.unplug(&mut aks_thread.write().unwrap(), &mut aas_thread.write().unwrap());
-									},
-									Some("add") => Self::insert_device(&mut input_devices, &mut polling, dev),
-									_ => ()
+										Some("remove") => if let Some(removed_device) = input_devices.remove(&node_number)
+										{
+											info!(target: "Interlude::Input", "Removed Device {}", removed_device.dev.name());
+											polling.deregister(&EventedFd(&removed_device.as_raw_fd())).unwrap();
+											removed_device.unplug(&mut aks_thread.write().unwrap(), &mut aas_thread.write().unwrap());
+										},
+										Some("add") => Self::insert_device(&mut input_devices, &mut polling, dev),
+										_ => ()
+									}
 								}
-							}
+							},
+							T_PARENT => 
+							{
+								term_event_th.reset();
+								break 'entire;
+							},
+							mio::Token(devindex) => input_devices.get_mut(&(devindex as u32)).unwrap().update(&mut aks, &mut aas)
 						}
-					}
-					else if event.data() == std::u64::MAX - 1
-					{
-						term_event_th.reset();
-						break 'entire;
-					}
-					else
-					{
-						input_devices.get_mut(&(event.data() as u32)).unwrap().update(&mut aks, &mut aas);
 					}
 				}
 			}

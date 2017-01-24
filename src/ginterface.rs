@@ -52,12 +52,11 @@ impl DeviceFeatures
 // QueryTypes
 pub enum MemoryIndexType { DeviceLocal, HostVisible }
 
-pub struct PhysicalDeviceProperties { memory: VkPhysicalDeviceMemoryProperties, limits: VkPhysicalDeviceLimits }
 pub struct MemoryTypeIndices { device_local: u32, host_visible: u32 }
 pub struct GraphicsInterface
 {
 	instance: (Rc<vk::Instance>, vk::DebugReportCallback), device: Device, pools: CommandPool,
-	device_props: PhysicalDeviceProperties, memory_types: MemoryTypeIndices
+	pub device_limits: VkPhysicalDeviceLimits, memory_types: MemoryTypeIndices
 }
 impl GraphicsInterface
 {
@@ -92,8 +91,7 @@ impl GraphicsInterface
 		Ok(GraphicsInterface
 		{
 			instance: (instance, debug_report_callback), device: device, pools: pools,
-			device_props: PhysicalDeviceProperties { memory: memory_types, limits: pdev.properties().limits },
-			memory_types: mt_indices
+			device_limits: pdev.properties().limits, memory_types: mt_indices
 		})
 	}
 	pub fn apicontext(&self) -> &Rc<vk::Instance> { &self.instance.0 }
@@ -152,7 +150,6 @@ impl GraphicsInterface
 			MemoryIndexType::HostVisible => self.memory_types.host_visible
 		}
 	}
-	pub fn device_limits(&self) -> &VkPhysicalDeviceLimits { &self.device_props.limits }
 }
 impl Drop for GraphicsInterface
 {

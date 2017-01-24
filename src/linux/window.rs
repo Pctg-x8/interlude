@@ -7,8 +7,8 @@ use super::super::ffi::*;
 use std::os::raw::*;
 use super::super::internals::*;
 use std::rc::Rc;
-use epoll::*;
 use std::os::unix::io::*;
+use mio;
 
 // xcb_window_t and server connection
 pub struct NativeWindowAndServerCon(xcb_window_t, XServer, xcb_atom_t);
@@ -90,6 +90,7 @@ impl <'a> XInternAtom<'a>
 }
 
 // XCB(X11) Server
+const T_SERVER: mio::Token = mio::Token(std::usize::MAX - 1);
 struct XServer
 {
 	ptr: *mut xcb_connection_t, root_visual: xcb_visualid_t, root_window: xcb_window_t
@@ -200,17 +201,20 @@ impl XServer
 	}
 	fn process_events_and_messages(&self, events: &[&Event], atom_delete_window: xcb_atom_t) -> ApplicationState
 	{
-		let mut polling = EpollInstance::new().unwrap();
-		polling.add_interest(Interest::new(self.as_raw_fd(), EPOLLIN, std::u64::MAX)).unwrap();
-		for (n, &ev) in events.into_iter().enumerate() { polling.add_interest(Interest::new(ev.as_raw_fd(), EPOLLIN, n as u64)).unwrap(); }
-		if let Ok(events) = polling.wait(-1, 1)
+		use mio::*;
+		use mio::unix::EventedFd;
+
+		let polling = Poll::new().unwrap();
+		polling.register(&EventedFd(&self.as_raw_fd()), T_SERVER, Ready::readable(), PollOpt::edge()).unwrap();
+		for (n, &ev) in events.into_iter().enumerate() { polling.register(&EventedFd(&ev.as_raw_fd()), Token(n), Ready::readable(), PollOpt::edge()).unwrap(); }
+		let mut events = Events::with_capacity(1);
+		if let Ok(1) = polling.poll(&mut events, None)
 		{
-			if events[0].data() == std::u64::MAX
+			match events.get(0).unwrap().token()
 			{
-				// xcb events
-				self.process_events(atom_delete_window)
+				T_SERVER => self.process_events(atom_delete_window),
+				Token(v) => ApplicationState::EventArrived(v as u32)
 			}
-			else { ApplicationState::EventArrived(events[0].data() as u32) }
 		}
 		else { ApplicationState::Exited }
 	}

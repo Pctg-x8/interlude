@@ -11,25 +11,41 @@ use std::rc::Rc;
 use ginterface::{GraphicsInterface, MemoryIndexType};
 use EngineResult;
 
-pub trait Resource { fn get_memory_requirements(&self) -> VkMemoryRequirements; }
-pub trait BufferResource { fn get_resource(&self) -> VkBuffer; }
-pub trait ImageResource { fn get_resource(&self) -> VkImage; }
-
-pub struct Buffer { internal: vk::Buffer, size: VkDeviceSize }
-impl Resource for Buffer { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.internal.get_memory_requirements() } }
-impl BufferResource for Buffer { fn get_resource(&self) -> VkBuffer { *self.internal } }
+// Resource DataType //
+pub struct Buffer(vk::Buffer, VkDeviceSize);
 pub struct Image1D(vk::Image, u32);
 pub struct Image2D(vk::Image, Size2);
 pub struct Image3D(vk::Image, Size3);
 pub struct LinearImage2D(vk::Image, Size2);
-impl Resource for Image1D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
-impl Resource for Image2D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
-impl Resource for LinearImage2D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
-impl Resource for Image3D { fn get_memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
-impl ImageResource for Image1D { fn get_resource(&self) -> VkImage { *self.0 } }
-impl ImageResource for Image2D { fn get_resource(&self) -> VkImage { *self.0 } }
-impl ImageResource for LinearImage2D { fn get_resource(&self) -> VkImage { *self.0 } }
-impl ImageResource for Image3D { fn get_resource(&self) -> VkImage { *self.0 } }
+
+/// The trait indicates that type is a resource.
+pub trait Resource
+{
+	type Type;
+	fn resource(&self) -> Self::Type;
+}
+impl Resource for Buffer { type Type = VkBuffer; fn resource(&self) -> VkBuffer { *self.0 } }
+impl Resource for Image1D { type Type = VkImage; fn resource(&self) -> VkImage { *self.0 } }
+impl Resource for Image2D { type Type = VkImage; fn resource(&self) -> VkImage { *self.0 } }
+impl Resource for Image3D { type Type = VkImage; fn resource(&self) -> VkImage { *self.0 } }
+impl Resource for LinearImage2D { type Type = VkImage; fn resource(&self) -> VkImage { *self.0 } }
+
+/// The trait indicates that type has a memory requirements
+pub trait MemoryRequirements { fn memory_requirements(&self) -> VkMemoryRequirements; }
+impl MemoryRequirements for Buffer { fn memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
+impl MemoryRequirements for Image1D { fn memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
+impl MemoryRequirements for Image2D { fn memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
+impl MemoryRequirements for Image3D { fn memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
+impl MemoryRequirements for LinearImage2D { fn memory_requirements(&self) -> VkMemoryRequirements { self.0.get_memory_requirements() } }
+
+pub trait BufferResource : Resource { fn size(&self) -> VkDeviceSize; }
+pub trait ImageResource : Resource { type Size; fn size(&self) -> &Self::Size; }
+impl BufferResource for Buffer { fn size(&self) -> VkDeviceSize { self.1 } }
+impl ImageResource for Image1D { type Size = u32; fn size(&self) -> &u32 { &self.1 } }
+impl ImageResource for Image2D { type Size = Size2; fn size(&self) -> &Size2 { &self.1 } }
+impl ImageResource for Image3D { type Size = Size3; fn size(&self) -> &Size3 { &self.1 } }
+impl ImageResource for LinearImage2D { type Size = Size2; fn size(&self) -> &Size2 { &self.1 } }
+
 impl LinearImage2D
 {
 	fn new(engine: &GraphicsInterface, size: &Size2, format: VkFormat) -> EngineResult<Self>
@@ -175,7 +191,7 @@ impl std::convert::Into<VkImageSubresourceRange> for ImageSubresourceRange
 {
 	fn into(self) -> VkImageSubresourceRange { (&self).into() }
 }
-impl <'a> std::convert::Into<VkImageSubresourceRange> for &'a ImageSubresourceRange
+impl<'a> std::convert::Into<VkImageSubresourceRange> for &'a ImageSubresourceRange
 {
 	fn into(self) -> VkImageSubresourceRange
 	{
@@ -236,8 +252,8 @@ impl<'a> BufferPreallocator<'a>
 		fn alignment(v: usize, a: usize) -> usize { (v as f64 / a as f64).ceil() as usize * a }
 		let (alignment_u, alignment_s) =
 		(
-			engine.device_limits().minUniformBufferOffsetAlignment as usize,
-			engine.device_limits().minStorageBufferOffsetAlignment as usize
+			engine.device_limits.minUniformBufferOffsetAlignment as usize,
+			engine.device_limits.minStorageBufferOffsetAlignment as usize
 		);
 		let usage_flags = contents.iter().map(BufferContent::usage_bit).fold(0, |a, d| a | d);
 		let offsets = contents.iter().chain(&[BufferContent::Vertex(0)]).scan(0usize, |a, d|
@@ -343,8 +359,8 @@ impl StagingBuffer
 		self.memory.map(0 .. self.size).map(|ptr| MemoryMappedRange { parent: self, ptr: ptr }).map_err(From::from)
 	}
 }
-impl BufferResource for DeviceBuffer { fn get_resource(&self) -> VkBuffer { *self.buffer } }
-impl BufferResource for StagingBuffer { fn get_resource(&self) -> VkBuffer { *self.buffer } }
+impl Resource for DeviceBuffer { type Type = VkBuffer; fn resource(&self) -> VkBuffer { *self.buffer } }
+impl Resource for StagingBuffer { type Type = VkBuffer; fn resource(&self) -> VkBuffer { *self.buffer } }
 
 pub struct DeviceImage
 {
@@ -357,9 +373,9 @@ impl DeviceImage
 		-> Result<Self, EngineError>
 	{
 		let image_offsets = {
-			let d1_image_requirements = d1_images.iter().map(|b| b.get_memory_requirements());
-			let d2_image_requirements = d2_images.iter().map(|b| b.get_memory_requirements());
-			let d3_image_requirements = d3_images.iter().map(|b| b.get_memory_requirements());
+			let d1_image_requirements = d1_images.iter().map(MemoryRequirements::memory_requirements);
+			let d2_image_requirements = d2_images.iter().map(MemoryRequirements::memory_requirements);
+			let d3_image_requirements = d3_images.iter().map(MemoryRequirements::memory_requirements);
 			
 			d1_image_requirements.chain(d2_image_requirements).chain(d3_image_requirements)
 				.chain([VkMemoryRequirements { size: 0, alignment: 1, memoryTypeBits: 0 }].into_iter().map(|&x| x)).scan((0, 0), |tup, req|
@@ -420,7 +436,7 @@ impl StagingImage
 	{
 		let image_offsets =
 		{
-			let ld2_image_requirements = ld2_images.iter().map(|b| b.get_memory_requirements());
+			let ld2_image_requirements = ld2_images.iter().map(MemoryRequirements::memory_requirements);
 
 			ld2_image_requirements.chain([VkMemoryRequirements { size: 0, alignment: 1, memoryTypeBits: 0 }].into_iter().map(|&x| x))
 				.scan(0, |offs, req|
@@ -656,42 +672,38 @@ impl std::convert::Into<VkComponentMapping> for ComponentMapping
 pub struct ImageView1D { parent: Rc<Image1D>, internal: vk::ImageView, format: VkFormat }
 pub struct ImageView2D { parent: Rc<Image2D>, internal: vk::ImageView, format: VkFormat }
 pub struct ImageView3D { parent: Rc<Image3D>, internal: vk::ImageView, format: VkFormat }
-pub trait ImageViewFactory<ResourceT: ImageResource>: Sized
+impl ImageView1D
 {
-	fn make_from(res: &Rc<ResourceT>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> EngineResult<Self>;
-}
-impl ImageViewFactory<Image1D> for ImageView1D
-{
-	fn make_from(res: &Rc<Image1D>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> EngineResult<Self>
+	pub fn make_from(res: &Rc<Image1D>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> EngineResult<Self>
 	{
 		vk::ImageView::new(res.0.parent(), &VkImageViewCreateInfo
 		{
 			sType: VkStructureType::ImageViewCreateInfo, pNext: std::ptr::null(), flags: 0,
-			image: res.get_resource(), viewType: VkImageViewType::Dim1, format: format,
+			image: res.resource(), viewType: VkImageViewType::Dim1, format: format,
 			components: cm.into(), subresourceRange: subrange.into()	
 		}).map(|v| ImageView1D { parent: res.clone(), internal: v, format: format }).map_err(EngineError::from)
 	}
 }
-impl ImageViewFactory<Image2D> for ImageView2D
+impl ImageView2D
 {
-	fn make_from(res: &Rc<Image2D>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> EngineResult<Self>
+	pub fn make_from(res: &Rc<Image2D>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> EngineResult<Self>
 	{
 		vk::ImageView::new(res.0.parent(), &VkImageViewCreateInfo
 		{
 			sType: VkStructureType::ImageViewCreateInfo, pNext: std::ptr::null(), flags: 0,
-			image: res.get_resource(), viewType: VkImageViewType::Dim2, format: format,
+			image: res.resource(), viewType: VkImageViewType::Dim2, format: format,
 			components: cm.into(), subresourceRange: subrange.into()	
 		}).map(|v| ImageView2D { parent: res.clone(), internal: v, format: format }).map_err(EngineError::from)
 	}
 }
-impl ImageViewFactory<Image3D> for ImageView3D
+impl ImageView3D
 {
-	fn make_from(res: &Rc<Image3D>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> EngineResult<Self>
+	pub fn make_from(res: &Rc<Image3D>, format: VkFormat, cm: ComponentMapping, subrange: ImageSubresourceRange) -> EngineResult<Self>
 	{
 		vk::ImageView::new(res.0.parent(), &VkImageViewCreateInfo
 		{
 			sType: VkStructureType::ImageViewCreateInfo, pNext: std::ptr::null(), flags: 0,
-			image: res.get_resource(), viewType: VkImageViewType::Dim3, format: format,
+			image: res.resource(), viewType: VkImageViewType::Dim3, format: format,
 			components: cm.into(), subresourceRange: subrange.into()	
 		}).map(|v| ImageView3D { parent: res.clone(), internal: v, format: format }).map_err(EngineError::from)
 	}
@@ -699,9 +711,6 @@ impl ImageViewFactory<Image3D> for ImageView3D
 impl std::ops::Deref for ImageView1D { type Target = Image1D; fn deref(&self) -> &Image1D { self.parent.deref() } }
 impl std::ops::Deref for ImageView2D { type Target = Image2D; fn deref(&self) -> &Image2D { self.parent.deref() } }
 impl std::ops::Deref for ImageView3D { type Target = Image3D; fn deref(&self) -> &Image3D { self.parent.deref() } }
-impl ImageResource for ImageView1D { fn get_resource(&self) -> VkImage { self.parent.get_resource() } }
-impl ImageResource for ImageView2D { fn get_resource(&self) -> VkImage { self.parent.get_resource() } }
-impl ImageResource for ImageView3D { fn get_resource(&self) -> VkImage { self.parent.get_resource() } }
 pub trait ImageView
 {
 	fn get_native(&self) -> VkImageView;

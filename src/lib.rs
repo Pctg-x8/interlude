@@ -13,7 +13,7 @@ extern crate freetype_sys;
 extern crate unicode_normalization;
 extern crate ansi_term;
 #[cfg(unix)] extern crate xcb;
-#[cfg(unix)] extern crate epoll;
+extern crate mio;
 
 // LowLevel APIs
 #[macro_use] mod vk;
@@ -43,7 +43,7 @@ mod tuple_tools;
 #[cfg(windows)] pub use win32::NativeInput as Input;
 
 /// Application State(has exited?)
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum ApplicationState { Continue, EventArrived(u32), Exited }
 
 // Extra Objects
@@ -80,7 +80,6 @@ pub use self::command::{GraphicsCommandRecorder, TransferCommandRecorder};
 pub use self::engine::{AssetProvider, CommandSubmitter};
 pub use self::command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
 pub use self::resource::{ImageView, BufferResource, ImageResource};
-pub use self::resource::{ImageViewFactory};
 pub use self::tuple_tools::{TupleFlatR};
 // exported objects
 pub use self::engine::Engine;

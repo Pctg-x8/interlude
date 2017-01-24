@@ -23,7 +23,7 @@ pub fn make_render_window(under: NativeWindow, g: &GraphicsInterface, size: &Siz
 }
 
 pub struct WindowRenderTargetView(VkImage, vk::ImageView, VkFormat);
-impl ImageResource for WindowRenderTargetView { fn get_resource(&self) -> VkImage { self.0 } }
+impl Resource for WindowRenderTargetView { type Type = VkImage; fn resource(&self) -> VkImage { self.0 } }
 impl ImageView for WindowRenderTargetView
 {
 	fn get_native(&self) -> VkImageView { *self.1 }
