@@ -531,7 +531,7 @@ impl VkComponentMapping
 	pub sType: VkStructureType, pub pNext: *const c_void,
 	pub flags: VkSemaphoreCreateFlags
 }
-#[repr(C)] pub struct VkSubmitInfo
+#[repr(C)] #[derive(Debug)] pub struct VkSubmitInfo
 {
 	pub sType: VkStructureType, pub pNext: *const c_void,
 	pub waitSemaphoreCount: u32, pub pWaitSemaphores: *const VkSemaphore, pub pWaitDstStageMask: *const VkPipelineStageFlags,

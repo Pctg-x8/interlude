@@ -106,11 +106,11 @@ impl RenderWindow
 	pub fn size(&self) -> &Size2 { &self.extent }
 	pub fn acquire_next_target_index(&self, wait_semaphore: &QueueFence) -> EngineResult<u32>
 	{
-		self.swapchain.acquire_next(wait_semaphore.get_internal()).map_err(EngineError::from)
+		self.swapchain.acquire_next(qfence_raw(wait_semaphore)).map_err(EngineError::from)
 	}
 	pub fn present(&self, engine: &GraphicsInterface, index: u32, wait_semaphore: Option<&QueueFence>) -> EngineResult<()>
 	{
-		let sem = wait_semaphore.map(|s| **s.get_internal());
+		let sem = wait_semaphore.map(qfence_raw);
 		self.swapchain.present(&engine.device().graphics_queue, index, &if let Some(s) = sem { vec![s] } else { Vec::new() }).map_err(EngineError::from)
 	}
 }

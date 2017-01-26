@@ -443,7 +443,7 @@ impl<'a> TransientGraphicsCommandBuffers<'a>
 {
 	pub fn execute(self, wait_semaphore: Option<(&QueueFence, VkPipelineStageFlags)>) -> Result<(), EngineError>
 	{
-		let (wsem, stage) = wait_semaphore.map(|(x, w)| (vec![**x.get_internal()], vec![w])).unwrap_or((Vec::new(), Vec::new()));
+		let (wsem, stage) = wait_semaphore.map(|(x, w)| (vec![qfence_raw(x)], vec![w])).unwrap_or_else(|| (Vec::new(), Vec::new()));
 		let subcmd = VkSubmitInfo
 		{
 			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),

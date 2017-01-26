@@ -4,7 +4,6 @@ use {std, vk};
 use vk::ffi::*;
 use std::ffi::CString;
 use super::internals::*;
-use libc::size_t;
 use {EngineResult, GraphicsInterface, PreciseRenderPass, RenderPass};
 use std::ops::Deref;
 use std::io::prelude::*;
@@ -17,18 +16,6 @@ pub struct IntoNativeVertexInputState
 {
 	bindings: Vec<VkVertexInputBindingDescription>,
 	attributes: Vec<VkVertexInputAttributeDescription>
-}
-impl<'a> std::convert::Into<VkPipelineVertexInputStateCreateInfo> for &'a IntoNativeVertexInputState
-{
-	fn into(self) -> VkPipelineVertexInputStateCreateInfo
-	{
-		VkPipelineVertexInputStateCreateInfo
-		{
-			sType: VkStructureType::Pipeline_VertexInputStateCreateInfo, pNext: std::ptr::null(), flags: 0,
-			vertexBindingDescriptionCount: self.bindings.len() as u32, pVertexBindingDescriptions: self.bindings.as_ptr(),
-			vertexAttributeDescriptionCount: self.attributes.len() as u32, pVertexAttributeDescriptions: self.attributes.as_ptr()
-		}
-	}
 }
 
 pub enum ShaderProgram
@@ -115,6 +102,17 @@ impl ShaderProgram
 			&ShaderProgram::TessControl { ref entry_point, .. } | &ShaderProgram::TessEvaluate { ref entry_point, .. } => entry_point
 		}
 	}
+	fn as_stage_flags(&self) -> VkShaderStageFlags
+	{
+		match self
+		{
+			&ShaderProgram::Vertex { .. } => VK_SHADER_STAGE_VERTEX_BIT,
+			&ShaderProgram::Fragment { .. } => VK_SHADER_STAGE_FRAGMENT_BIT,
+			&ShaderProgram::TessControl { .. } => VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
+			&ShaderProgram::TessEvaluate { .. } => VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+			&ShaderProgram::Geometry { .. } => VK_SHADER_STAGE_GEOMETRY_BIT
+		}
+	}
 }
 
 #[derive(Clone)] pub struct PushConstantDesc(pub VkShaderStageFlags, pub std::ops::Range<u32>);
@@ -197,44 +195,23 @@ pub enum AttachmentBlendState
 {
 	Disabled, AlphaBlend, PremultipliedAlphaBlend
 }
-impl std::convert::Into<VkPipelineColorBlendAttachmentState> for AttachmentBlendState
-{
-	fn into(self) -> VkPipelineColorBlendAttachmentState
-	{
-		match self
-		{
-			AttachmentBlendState::Disabled => VkPipelineColorBlendAttachmentState
-			{
-				blendEnable: false as VkBool32,
-				srcColorBlendFactor: VkBlendFactor::One, dstColorBlendFactor: VkBlendFactor::One,
-				srcAlphaBlendFactor: VkBlendFactor::One, dstAlphaBlendFactor: VkBlendFactor::One,
-				colorBlendOp: VkBlendOp::Add, alphaBlendOp: VkBlendOp::Add,
-				colorWriteMask: VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-			},
-			AttachmentBlendState::AlphaBlend => VkPipelineColorBlendAttachmentState
-			{
-				blendEnable: true as VkBool32,
-				srcColorBlendFactor: VkBlendFactor::SrcAlpha, dstColorBlendFactor: VkBlendFactor::OneMinusSrcAlpha,
-				srcAlphaBlendFactor: VkBlendFactor::One, dstAlphaBlendFactor: VkBlendFactor::OneMinusSrcAlpha,
-				colorBlendOp: VkBlendOp::Add, alphaBlendOp: VkBlendOp::Add,
-				colorWriteMask: VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-			},
-			AttachmentBlendState::PremultipliedAlphaBlend => VkPipelineColorBlendAttachmentState
-			{
-				blendEnable: true as VkBool32,
-				srcColorBlendFactor: VkBlendFactor::One, dstColorBlendFactor: VkBlendFactor::OneMinusSrcAlpha,
-				srcAlphaBlendFactor: VkBlendFactor::One, dstAlphaBlendFactor: VkBlendFactor::OneMinusSrcAlpha,
-				colorBlendOp: VkBlendOp::Add, alphaBlendOp: VkBlendOp::Add,
-				colorWriteMask: VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-			}
-		}
-	}
-}
 
 #[derive(Clone)]
 pub enum ConstantEntry
 {
 	Float(f32), Uint(u32)
+}
+impl ConstantEntry
+{
+	fn _sizeof(&self) -> usize { match self { &ConstantEntry::Float(_) | &ConstantEntry::Uint(_) => 4 } }
+	fn as_bytes(&self) -> Vec<u8>
+	{
+		match self
+		{
+			&ConstantEntry::Float(v) => Vec::from(&unsafe { std::mem::transmute::<_, [u8; 4]>(v) }[..]),
+			&ConstantEntry::Uint(v) => Vec::from(&unsafe { std::mem::transmute::<_, [u8; 4]>(v) }[..])
+		}
+	}
 }
 #[derive(Clone)]
 pub struct PipelineShaderProgram<'a>(pub &'a ShaderProgram, pub Vec<(usize, ConstantEntry)>);
@@ -248,66 +225,6 @@ pub struct IntoNativeShaderStageCreateInfoStruct
 	#[allow(dead_code)] specialization_entry: Vec<VkSpecializationMapEntry>,
 	#[allow(dead_code)] specialization_values: Vec<u8>,
 	specialization_structure: Option<VkSpecializationInfo>
-}
-impl<'a> std::convert::Into<IntoNativeShaderStageCreateInfoStruct> for &'a PipelineShaderProgram<'a>
-{
-	fn into(self) -> IntoNativeShaderStageCreateInfoStruct
-	{
-		let (map_entries, const_values) = if self.1.is_empty() { (Vec::new(), Vec::new()) } else
-		{
-			let map_entries = self.1.iter().scan(0usize, |acc, &(ref id, ref v)|
-			{
-				let size = match v
-				{
-					&ConstantEntry::Float(_) | &ConstantEntry::Uint(_) => 4usize
-				};
-				let rval = VkSpecializationMapEntry(*id as u32, *acc as u32, size as size_t);
-				*acc += size;
-				Some(rval)
-			}).collect::<Vec<_>>();
-			let const_size = map_entries.last().map(|&VkSpecializationMapEntry(_, o, s)| o + s as u32).unwrap();
-			let mut const_values = Vec::with_capacity(const_size as usize);
-			for &(_, ref v) in &self.1
-			{
-				const_values.append(&mut match v
-				{
-					&ConstantEntry::Float(v) => Vec::from(&unsafe { std::mem::transmute::<_, [u8; 4]>(v) }[..]),
-					&ConstantEntry::Uint(v) => Vec::from(&unsafe { std::mem::transmute::<_, [u8; 4]>(v) }[..])
-				});
-			}
-			(map_entries, const_values)
-		};
-
-		IntoNativeShaderStageCreateInfoStruct
-		{
-			stage_bits: match self.0
-			{
-				&ShaderProgram::Vertex { .. } => VK_SHADER_STAGE_VERTEX_BIT,
-				&ShaderProgram::Geometry { .. } => VK_SHADER_STAGE_GEOMETRY_BIT,
-				&ShaderProgram::Fragment { .. } => VK_SHADER_STAGE_FRAGMENT_BIT,
-				&ShaderProgram::TessControl { .. } => VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
-				&ShaderProgram::TessEvaluate { .. } => VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-			},
-			module: **self.0.get_internal(), entry_point: self.0.entry_point().as_ptr(),
-			specialization_structure: if map_entries.is_empty() { None } else { Some(VkSpecializationInfo
-			{
-				mapEntryCount: map_entries.len() as u32, pMapEntries: map_entries.as_ptr(),
-				dataSize: const_values.len() as size_t, pData: const_values.as_ptr() as *const std::os::raw::c_void
-			})},
-			specialization_entry: map_entries, specialization_values: const_values
-		}
-	}
-}
-impl<'a> std::convert::Into<VkPipelineShaderStageCreateInfo> for &'a IntoNativeShaderStageCreateInfoStruct
-{
-	fn into(self) -> VkPipelineShaderStageCreateInfo
-	{
-		VkPipelineShaderStageCreateInfo
-		{
-			sType: VkStructureType::Pipeline_ShaderStageCreateInfo, pNext: std::ptr::null(), flags: 0,
-			stage: self.stage_bits, module: self.module, pName: self.entry_point, pSpecializationInfo: self.specialization_structure.as_ref().map(|n| n as *const VkSpecializationInfo).unwrap_or(std::ptr::null())
-		}
-	}
 }
 pub struct GraphicsPipelineBuilder<'a>
 {
@@ -422,24 +339,97 @@ pub struct IntoNativeGraphicsPipelineCreateInfoStruct<'a>
 	multisample_state: VkPipelineMultisampleStateCreateInfo,
 	color_blend_state: VkPipelineColorBlendStateCreateInfo
 }
+fn make_shaderstage_data(s: &PipelineShaderProgram) -> IntoNativeShaderStageCreateInfoStruct
+{
+	let (map_entries, const_values) = if s.1.is_empty() { (Vec::new(), Vec::new()) } else
+	{
+		let map_entries = s.1.iter().scan(0usize, |o, &(id, ref v)|
+		{
+			let size = v._sizeof();
+			let rval = VkSpecializationMapEntry(id as u32, *o as u32, size);
+			*o += size;
+			Some(rval)
+		}).collect::<Vec<_>>();
+		let const_values = s.1.iter().flat_map(|&(_, ref v)| v.as_bytes().into_iter()).collect::<Vec<_>>();
+		(map_entries, const_values)
+	};
+
+	IntoNativeShaderStageCreateInfoStruct
+	{
+		stage_bits: s.0.as_stage_flags(),
+		module: **s.0.get_internal(), entry_point: s.0.entry_point().as_ptr(),
+		specialization_structure: if map_entries.is_empty() { None } else
+		{
+			Some(VkSpecializationInfo
+			{
+				mapEntryCount: map_entries.len() as u32, pMapEntries: map_entries.as_ptr(),
+				dataSize: const_values.len() as usize, pData: const_values.as_ptr() as *const std::os::raw::c_void
+			})
+		}, specialization_entry: map_entries, specialization_values: const_values
+	}
+}
+fn make_native_vistate_create_info(s: &IntoNativeVertexInputState) -> VkPipelineVertexInputStateCreateInfo
+{
+	VkPipelineVertexInputStateCreateInfo
+	{
+		sType: VkStructureType::Pipeline_VertexInputStateCreateInfo, pNext: std::ptr::null(), flags: 0,
+		vertexBindingDescriptionCount: s.bindings.len() as u32, pVertexBindingDescriptions: s.bindings.as_ptr(),
+		vertexAttributeDescriptionCount: s.attributes.len() as u32, pVertexAttributeDescriptions: s.attributes.as_ptr()
+	}
+}
+fn make_native_shaderstage(s: &IntoNativeShaderStageCreateInfoStruct) -> VkPipelineShaderStageCreateInfo
+{
+	VkPipelineShaderStageCreateInfo
+	{
+		sType: VkStructureType::Pipeline_ShaderStageCreateInfo, pNext: std::ptr::null(), flags: 0,
+		stage: s.stage_bits, module: s.module, pName: s.entry_point, pSpecializationInfo: s.specialization_structure.as_ref().map(|n| n as *const VkSpecializationInfo).unwrap_or_else(std::ptr::null)
+	}
+}
+fn make_attachment_blend_state(s: AttachmentBlendState) -> VkPipelineColorBlendAttachmentState
+{
+	const COLOR_COMPONENT_ALL: VkColorComponentFlags = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+	match s
+	{
+		AttachmentBlendState::Disabled => VkPipelineColorBlendAttachmentState
+		{
+			blendEnable: false as VkBool32, colorWriteMask: COLOR_COMPONENT_ALL, .. unsafe { std::mem::zeroed() }
+		},
+		AttachmentBlendState::AlphaBlend => VkPipelineColorBlendAttachmentState
+		{
+			blendEnable: true as VkBool32,
+			srcColorBlendFactor: VkBlendFactor::SrcAlpha, dstColorBlendFactor: VkBlendFactor::OneMinusSrcAlpha,
+			srcAlphaBlendFactor: VkBlendFactor::One, dstAlphaBlendFactor: VkBlendFactor::OneMinusSrcAlpha,
+			colorBlendOp: VkBlendOp::Add, alphaBlendOp: VkBlendOp::Add, colorWriteMask: COLOR_COMPONENT_ALL
+		},
+		AttachmentBlendState::PremultipliedAlphaBlend => VkPipelineColorBlendAttachmentState
+		{
+			blendEnable: true as VkBool32,
+			srcColorBlendFactor: VkBlendFactor::One, dstColorBlendFactor: VkBlendFactor::OneMinusSrcAlpha,
+			srcAlphaBlendFactor: VkBlendFactor::One, dstAlphaBlendFactor: VkBlendFactor::OneMinusSrcAlpha,
+			colorBlendOp: VkBlendOp::Add, alphaBlendOp: VkBlendOp::Add, colorWriteMask: COLOR_COMPONENT_ALL
+		},
+	}
+}
 impl<'a> std::convert::Into<IntoNativeGraphicsPipelineCreateInfoStruct<'a>> for &'a GraphicsPipelineBuilder<'a>
 {
 	fn into(self) -> IntoNativeGraphicsPipelineCreateInfoStruct<'a>
 	{
 		let vshader = self.vertex_shader.as_ref().expect("VertexShader is required");
-		let mut shader_stage_vec = vec![Into::into(vshader)];
-		if let Some(ref gs) = self.geometry_shader { shader_stage_vec.push(Into::into(gs)); }
-		if let Some(ref fs) = self.fragment_shader { shader_stage_vec.push(Into::into(fs)); }
-		let shader_stage = shader_stage_vec.iter().map(Into::into).collect();
+		let shader_stage_vec = vec![
+			Some(make_shaderstage_data(vshader)), self.geometry_shader.as_ref().map(make_shaderstage_data),
+			self.fragment_shader.as_ref().map(make_shaderstage_data)
+		].into_iter().filter_map(|x| x).collect::<Vec<_>>();
+		let shader_stage = shader_stage_vec.iter().map(make_native_shaderstage).collect();
 		let into_input_state = match vshader.0 { &ShaderProgram::Vertex { ref vertex_input, .. } => vertex_input, _ => unreachable!() };
 		let (vports, scissors): (Vec<_>, Vec<_>) = self.vp_sc.iter().map(|&ViewportWithScissorRect(ref vp, ref sc)|
 			unsafe { (std::mem::transmute::<_, VkViewport>(vp.clone()), std::mem::transmute::<_, VkRect2D>(sc.clone())) }).unzip();
-		let attachment_blend_states = self.attachment_blend_states.iter().map(|&x| x.into()).collect::<Vec<_>>();
+		let attachment_blend_states = self.attachment_blend_states.iter().map(|&b| make_attachment_blend_state(b)).collect::<Vec<_>>();
 		IntoNativeGraphicsPipelineCreateInfoStruct
 		{
 			into_shader_stage: shader_stage_vec,
 			shader_stage: shader_stage,
-			vertex_input_state: into_input_state.into(),
+			vertex_input_state: make_native_vistate_create_info(into_input_state),
 			input_assembly_state: VkPipelineInputAssemblyStateCreateInfo
 			{
 				sType: VkStructureType::Pipeline_InputAssemblyStateCreateInfo, pNext: std::ptr::null(), flags: 0,

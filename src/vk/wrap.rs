@@ -8,6 +8,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 #[cfg(unix)] use xcb::ffi::*;
 use libc::size_t;
+use std::borrow::Cow;
 
 pub fn empty_handle<T>() -> *mut T { std::ptr::null_mut() }
 type VkWrapResult<T> = Result<T, VkResult>;
@@ -55,6 +56,15 @@ macro_rules! DeviceDataEnumerator
 	}}
 }
 
+fn c_str(source: Cow<'static, str>) -> CString
+{
+	match source
+	{
+		Cow::Borrowed(s) => CString::new(s).unwrap(),
+		Cow::Owned(s) => CString::new(s).unwrap()
+	}
+}
+
 pub struct Instance
 {
 	obj: VkInstance,
@@ -65,19 +75,15 @@ impl Drop for Instance { fn drop(&mut self) { unsafe { vkDestroyInstance(self.ob
 impl Deref for Instance { type Target = VkInstance; fn deref(&self) -> &VkInstance { &self.obj } }
 impl Instance
 {
-	pub fn new<AppNameT: AsRef<str>, EngineNameT: AsRef<str>, LayerNameT: AsRef<str>, ExtensionNameT: AsRef<str>>
-		(app_name: AppNameT, app_version: u32, engine_name: EngineNameT, engine_version: u32, layers: &[LayerNameT], extensions: &[ExtensionNameT])
-		-> VkWrapResult<Self>
+	#[allow(unused_variables)] /* layers_c, ownership holder of layer_ptr_c */
+	pub fn new(app_name: Cow<'static, str>, app_version: u32, engine_name: Cow<'static, str>, engine_version: u32,
+		layers: &[&str], extensions: &[&str]) -> VkWrapResult<Self>
 	{
-		let (app_name_c, engine_name_c, layers_c, extensions_c) = (
-			CString::new(app_name.as_ref()).unwrap(), CString::new(engine_name.as_ref()).unwrap(),
-			layers.into_iter().map(|x| CString::new(x.as_ref()).unwrap()).collect::<Vec<_>>(),
-			extensions.into_iter().map(|x| CString::new(x.as_ref()).unwrap()).collect::<Vec<_>>()
-		);
-		let (layers_ptr_c, extensions_ptr_c) = (
-			layers_c.iter().map(|x| x.as_ptr()).collect::<Vec<_>>(),
-			extensions_c.iter().map(|x| x.as_ptr()).collect::<Vec<_>>()
-		);
+		let (app_name_c, engine_name_c) = (c_str(app_name), c_str(engine_name));
+		let layers_c = layers.into_iter().map(|&s| CString::new(s).unwrap()).collect::<Vec<_>>();
+		let extensions_c = extensions.into_iter().map(|&s| CString::new(s).unwrap()).collect::<Vec<_>>();
+		let layers_ptr_c = layers.iter().map(|x| x.as_ptr() as *const i8).collect::<Vec<_>>();
+		let extensions_ptr_c = extensions_c.iter().map(|x| x.as_ptr()).collect::<Vec<_>>();
 		let app = VkApplicationInfo
 		{
 			sType: VkStructureType::ApplicationInfo, pNext: std::ptr::null(),
@@ -94,7 +100,7 @@ impl Instance
 		
 		let mut instance = empty_handle();
 		unsafe { vkCreateInstance(&info, std::ptr::null(), &mut instance) }
-			.map(move || if layers.iter().find(|&e| e.as_ref() == "VK_LAYER_LUNARG_standard_validation").is_some()
+			.map(|| if layers.into_iter().find(|&&e| e == "VK_LAYER_LUNARG_standard_validation").is_some()
 			{
 				let create_debug_report_callback_name = CString::new("vkCreateDebugReportCallbackEXT").unwrap();
 				let destroy_debug_report_callback_name = CString::new("vkDestroyDebugReportCallbackEXT").unwrap();
@@ -192,6 +198,7 @@ impl PhysicalDevice
 }
 
 // Device and Queue //
+impl std::fmt::Debug for Device { fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result { write!(fmt, "<Device...>") } }
 pub struct Device(VkDevice, Rc<PhysicalDevice>);
 impl Drop for Device { fn drop(&mut self) { self.wait_for_idle().unwrap(); unsafe { vkDestroyDevice(self.0, std::ptr::null()) }; } }
 impl Deref for Device { type Target = VkDevice; fn deref(&self) -> &VkDevice { &self.0 } }
@@ -238,9 +245,9 @@ impl Deref for Queue { type Target = VkQueue; fn deref(&self) -> &VkQueue { &sel
 unsafe impl Sync for Queue {}
 impl Queue
 {
-	pub fn submit(&self, infos: &[VkSubmitInfo], event_receiver: Option<&Fence>) -> Result<(), VkResult>
+	pub fn submit(&self, infos: &[VkSubmitInfo], event_receiver: Option<VkFence>) -> Result<(), VkResult>
 	{
-		unsafe { vkQueueSubmit(self.0, infos.len() as u32, infos.as_ptr(), event_receiver.map(|&Fence(o, _)| o).unwrap_or(empty_handle())) }.to_result()
+		unsafe { vkQueueSubmit(self.0, infos.len() as u32, infos.as_ptr(), event_receiver.unwrap_or_else(empty_handle)) }.to_result()
 	}
 	pub fn wait_for_idle(&self) -> Result<(), VkResult> { unsafe { vkQueueWaitIdle(self.0) }.to_result() }
 	pub fn family_index(&self) -> u32 { self.1 }
@@ -251,7 +258,7 @@ macro_rules! DeviceChildObject
 {
 	($name: ident ($vkname: ident) : $df: path) =>
 	{
-		pub struct $name($vkname, Rc<Device>);
+		#[derive(Debug)] pub struct $name($vkname, Rc<Device>);
 		impl Drop for $name { fn drop(&mut self) { unsafe { $df(***self.parent(), **self, std::ptr::null()) }; } }
 		impl Deref for $name { type Target = $vkname; fn deref(&self) -> &Self::Target { &self.0 } }
 		impl HasParent for $name { type Parent = Rc<Device>; fn parent(&self) -> &Rc<Device> { &self.1 } }
@@ -285,7 +292,6 @@ impl Fence
 	}
 	pub fn wait(&self) -> VkWrapResult<()> { unsafe { vkWaitForFences(***self.parent(), 1, &**self, true as VkBool32, std::u64::MAX) }.to_result() }
 	pub fn reset(&self) -> VkWrapResult<()> { unsafe { vkResetFences(***self.parent(), 1, &**self) }.to_result() }
-	pub fn get_status(&self) -> VkWrapResult<()> { unsafe { vkGetFenceStatus(***self.parent(), **self) }.to_result() }
 }
 impl Semaphore
 {
@@ -501,10 +507,10 @@ impl Swapchain
 		unsafe { vkCreateSwapchainKHR(***device, info, std::ptr::null(), &mut sc) }.map(|| Swapchain(sc, surface.clone(), device.clone()))
 	}
 	pub fn images(&self) -> VkWrapResult<Vec<VkImage>> { DeviceDataEnumerator!(**self.parent(), **self => vkGetSwapchainImagesKHR) }
-	pub fn acquire_next(&self, device_synchronizer: &Semaphore) -> VkWrapResult<u32>
+	pub fn acquire_next(&self, device_synchronizer: VkSemaphore) -> VkWrapResult<u32>
 	{
 		let mut index = 0u32;
-		unsafe { vkAcquireNextImageKHR(**self.parent(), **self, std::u64::MAX, **device_synchronizer, std::ptr::null_mut(), &mut index) }
+		unsafe { vkAcquireNextImageKHR(**self.parent(), **self, std::u64::MAX, device_synchronizer, std::ptr::null_mut(), &mut index) }
 			.map(|| index)
 	}
 	pub fn present(&self, queue: &Queue, index: u32, device_synchronizer: &[VkSemaphore]) -> VkWrapResult<()>

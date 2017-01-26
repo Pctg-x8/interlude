@@ -3,7 +3,7 @@
 use ginterface::GraphicsInterface;
 use EngineError;
 use vk;
-use internal_traits::InternalExports;
+use vk::ffi::*;
 
 pub struct QueueFence(vk::Semaphore);
 pub struct Fence(vk::Fence);
@@ -33,5 +33,5 @@ impl QueueFence
 
 unsafe impl Send for Fence {}
 unsafe impl Send for QueueFence {}
-impl InternalExports for QueueFence { type InternalT = vk::Semaphore; fn get_internal(&self) -> &vk::Semaphore { &self.0 } }
-impl InternalExports for Fence { type InternalT = vk::Fence; fn get_internal(&self) -> &vk::Fence { &self.0 } }
+pub fn fence_raw(f: &Fence) -> VkFence { *f.0 }
+pub fn qfence_raw(f: &QueueFence) -> VkSemaphore { *f.0 }

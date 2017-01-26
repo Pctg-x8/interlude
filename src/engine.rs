@@ -64,14 +64,14 @@ pub trait EngineCoreExports
 {
 	fn graphics(&self) -> &GraphicsInterface;
 }
-pub struct EngineBuilder<'a, InputNames: Eq + Copy + Hash>
+pub struct EngineBuilder<'p, InputNames: Eq + Copy + Hash>
 {
-	app_name: Cow<'a, str>, app_version: u32, asset_base: Option<Cow<'a, Path>>, extra_features: DeviceFeatures,
-	caption: Cow<'a, str>, size: Size2, resizable: bool, ph: std::marker::PhantomData<InputNames>
+	app_name: Cow<'static, str>, app_version: u32, asset_base: Option<Cow<'p, Path>>, extra_features: DeviceFeatures,
+	caption: Cow<'static, str>, size: Size2, resizable: bool, ph: std::marker::PhantomData<InputNames>
 }
-impl<'a, InputNames: Eq + Copy + Hash> EngineBuilder<'a, InputNames>
+impl<'p, InputNames: Eq + Copy + Hash> EngineBuilder<'p, InputNames>
 {
-	pub fn new(app_name: Cow<'a, str>, app_version: (u32, u32, u32), caption: Cow<'a, str>, size: &Size2) -> Self
+	pub fn new(app_name: Cow<'static, str>, app_version: (u32, u32, u32), caption: Cow<'static, str>, size: &Size2) -> Self
 	{
 		EngineBuilder
 		{
@@ -80,7 +80,7 @@ impl<'a, InputNames: Eq + Copy + Hash> EngineBuilder<'a, InputNames>
 			asset_base: None, extra_features: DeviceFeatures::new(), ph: std::marker::PhantomData
 		}
 	}
-	pub fn asset_base(mut self, asset_base: Cow<'a, Path>) -> Self
+	pub fn asset_base(mut self, asset_base: Cow<'p, Path>) -> Self
 	{
 		self.asset_base = Some(asset_base);
 		self
@@ -137,16 +137,18 @@ impl<InputNames: Eq + Copy + Hash> Engine<InputNames>
 	{
 		EngineLogger::setup();
 
-		GraphicsInterface::new(&info.app_name, info.app_version, &info.extra_features).and_then(|gi|
+		let EngineBuilder { app_name, app_version, extra_features, size, caption, resizable, asset_base, .. } = info;
+
+		GraphicsInterface::new(app_name, app_version, &extra_features).and_then(|gi|
 		{
-			let window = NativeWindow::new(&info.size, &info.caption, info.resizable).and_then(|n| render_surface::make_render_window(n, &gi, &info.size));
+			let window = NativeWindow::new(&size, &caption, resizable).and_then(|n| render_surface::make_render_window(n, &gi, &size));
 			let ni = Input::new().map(RwLock::new).map(Arc::new);
 
 			(window, ni).flatten().map(move |(window, ni)| Engine
 			{
 				window: Arc::new(window), input_system: ni, gi: gi,
-				asset_dir: info.asset_base.map(Cow::into_owned)
-					.unwrap_or_else(|| std::env::current_exe().unwrap().parent().map(Path::to_path_buf).unwrap()).join("assets"),
+				asset_dir: asset_base.map(Cow::into_owned).or_else(|| std::env::current_exe().unwrap().parent().map(Path::to_path_buf))
+					.unwrap().join("assets"),
 				common_resources: EngineResources::new()
 			})
 		})
@@ -243,6 +245,9 @@ impl EngineResources
 }
 impl<InputNames: Eq + Copy + Hash> Deref for Engine<InputNames> { type Target = GraphicsInterface; fn deref(&self) -> &Self::Target { &self.gi } }
 
+// support function for as_ptr: returns null when the container is empty
+fn as_ptr_emp<T>(v: &[T]) -> *const T { if v.is_empty() { std::ptr::null() } else { v.as_ptr() } }
+
 pub trait CommandSubmitter
 {
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
@@ -255,36 +260,35 @@ impl<InputNames: Eq + Copy + Hash> CommandSubmitter for Engine<InputNames>
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
 	{
-		let signals_on_complete = signal_on_complete.map(|q| vec![**q.get_internal()]).unwrap_or(vec![]);
-		let wait_stages = if wait_for_execute.is_empty() { vec![VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT] }
-		else { wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>() };
-		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| **q.get_internal()).collect::<Vec<_>>();
+		let signals_on_complete = signal_on_complete.into_iter().map(qfence_raw).collect::<Vec<_>>();
+		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>();
+		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| qfence_raw(q)).collect::<Vec<_>>();
 
 		let subinfo = VkSubmitInfo
 		{
 			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
 			commandBufferCount: commands.len() as u32, pCommandBuffers: commands.as_ptr(),
-			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: wait_stages.as_ptr(),
+			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: as_ptr_emp(&wait_stages),
 			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
 		};
-		self.gi.device().graphics_queue.submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
+		self.gi.device().graphics_queue.submit(&[subinfo], signal_on_complete_host.map(fence_raw)).map_err(EngineError::from)
 	}
 	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
 	{
-		let signals_on_complete = signal_on_complete.map(|q| vec![**q.get_internal()]).unwrap_or(vec![]);
-		let wait_stages = if wait_for_execute.is_empty() { vec![VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT] }
-		else { wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>() };
-		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| **q.get_internal()).collect::<Vec<_>>();
+		let signals_on_complete = signal_on_complete.into_iter().map(qfence_raw).collect::<Vec<_>>();
+		let (wait_semaphores, wait_stages): (Vec<_>, Vec<_>) = wait_for_execute.into_iter().map(|&(q, s)| (qfence_raw(q), s)).unzip();
 
 		let subinfo = VkSubmitInfo
 		{
 			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
 			commandBufferCount: commands.len() as u32, pCommandBuffers: commands.as_ptr(),
-			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: wait_stages.as_ptr(),
+			waitSemaphoreCount: wait_semaphores.len() as u32,
+			pWaitSemaphores: wait_semaphores.as_ptr(),
+			pWaitDstStageMask: as_ptr_emp(&wait_stages),
 			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
 		};
-		self.gi.device().transfer_queue.submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
+		self.gi.device().transfer_queue.submit(&[subinfo], signal_on_complete_host.map(fence_raw)).map_err(EngineError::from)
 	}
 }
 pub struct CommandSender<'a>(&'a Device);
@@ -294,35 +298,33 @@ impl<'a> CommandSubmitter for CommandSender<'a>
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
 	{
-		let signals_on_complete = signal_on_complete.map(|q| vec![**q.get_internal()]).unwrap_or(vec![]);
-		let wait_stages = if wait_for_execute.is_empty() { vec![VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT] }
-		else { wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>() };
-		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| **q.get_internal()).collect::<Vec<_>>();
+		let signals_on_complete = signal_on_complete.into_iter().map(qfence_raw).collect::<Vec<_>>();
+		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>();
+		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| qfence_raw(q)).collect::<Vec<_>>();
 
 		let subinfo = VkSubmitInfo
 		{
 			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
 			commandBufferCount: commands.len() as u32, pCommandBuffers: commands.as_ptr(),
-			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: wait_stages.as_ptr(),
+			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: as_ptr_emp(&wait_stages),
 			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
 		};
-		self.0.graphics_queue.submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
+		self.0.graphics_queue.submit(&[subinfo], signal_on_complete_host.map(fence_raw)).map_err(EngineError::from)
 	}
 	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
 	{
-		let signals_on_complete = signal_on_complete.map(|q| vec![**q.get_internal()]).unwrap_or(vec![]);
-		let wait_stages = if wait_for_execute.is_empty() { vec![VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT] }
-		else { wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>() };
-		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| **q.get_internal()).collect::<Vec<_>>();
+		let signals_on_complete = signal_on_complete.into_iter().map(qfence_raw).collect::<Vec<_>>();
+		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>();
+		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| qfence_raw(q)).collect::<Vec<_>>();
 
 		let subinfo = VkSubmitInfo
 		{
 			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
 			commandBufferCount: commands.len() as u32, pCommandBuffers: commands.as_ptr(),
-			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: wait_stages.as_ptr(),
+			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: as_ptr_emp(&wait_stages),
 			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
 		};
-		self.0.transfer_queue.submit(&[subinfo], signal_on_complete_host.map(|x| x.get_internal())).map_err(EngineError::from)
+		self.0.transfer_queue.submit(&[subinfo], signal_on_complete_host.map(fence_raw)).map_err(EngineError::from)
 	}
 }

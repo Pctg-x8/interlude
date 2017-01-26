@@ -12,6 +12,7 @@ use std::os::raw::{c_char, c_void};
 use libc::size_t;
 use std::ffi::CStr;
 use tuple_tools::*;
+use std::borrow::Cow;
 
 #[cfg(windows)] const PSURFACE_EXNAME: &'static str = "VK_KHR_win32_surface";
 #[cfg(unix)] const PSURFACE_EXNAME: &'static str = "VK_KHR_xcb_surface";
@@ -60,9 +61,9 @@ pub struct GraphicsInterface
 }
 impl GraphicsInterface
 {
-	pub fn new(app_name: &str, app_version: u32, device_features: &DeviceFeatures) -> EngineResult<Self>
+	pub fn new(app_name: Cow<'static, str>, app_version: u32, device_features: &DeviceFeatures) -> EngineResult<Self>
 	{
-		let instance = try!(vk::Instance::new(app_name, app_version, "Interlude Multimedia Framework", VK_MAKE_VERSION!(0, 0, 1),
+		let instance = try!(vk::Instance::new(app_name, app_version, "Interlude Multimedia Framework".into(), VK_MAKE_VERSION!(0, 0, 1),
 			&["VK_LAYER_LUNARG_standard_validation"], &["VK_KHR_surface", PSURFACE_EXNAME, "VK_EXT_debug_report"]).map(Rc::new));
 		let debug_report_callback = try!(vk::DebugReportCallback::new(&instance, debug_callback));
 		let pdev = try!

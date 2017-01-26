@@ -50,8 +50,8 @@ impl<InputNames: Eq + Hash + Copy> NativeInput<InputNames>
 		let name = Self::search_device_name(&device);
 		let node_path = device.device_node().expect("Unable to get Device Node Path").to_str().unwrap();
 		let node_number: u32 = node_path["/dev/input/event".len()..].parse().unwrap();
-		let joystick_device = device.property_value("ID_INPUT_JOYSTICK").and_then(|f| f.to_str().ok()).map(|n| n == "1").unwrap_or(false);
-		let keyboard_device = device.property_value("ID_INPUT_KEYBOARD").and_then(|f| f.to_str().ok()).map(|n| n == "1").unwrap_or(false);
+		let joystick_device = device.property_value("ID_INPUT_JOYSTICK").and_then(|f| f.to_str().ok()) == Some("1");
+		let keyboard_device = device.property_value("ID_INPUT_KEYBOARD").and_then(|f| f.to_str().ok()) == Some("1");
 		if joystick_device || keyboard_device
 		{
 			info!(target: "Interlude::Input", "Initializing for {} Input: {} [{}]", if joystick_device { "Joystick" } else { "Keyboard" }, name, node_path);

@@ -50,50 +50,50 @@ pub enum ApplicationState { Continue, EventArrived(u32), Exited }
 mod debug_info;
 
 // --- Exported APIs --- //
-pub use self::error::*;
-pub use self::engine::EngineBuilder;
-pub use self::ginterface::GraphicsInterface;
-pub use self::framebuffer::{AttachmentDesc, AttachmentRef, PassDesc, PassDependency, AttachmentClearValue, PreciseRenderPass};
-pub use self::command::{MemoryBarrier, BufferMemoryBarrier, ImageMemoryBarrier, IndirectCallParameter, BufferCopyRegion, ImageCopyRegion, ImageBlitRegion};
-pub use self::resource::{
+pub use error::*;
+pub use engine::EngineBuilder;
+pub use ginterface::GraphicsInterface;
+pub use framebuffer::{AttachmentDesc, AttachmentRef, PassDesc, PassDependency, AttachmentClearValue, PreciseRenderPass};
+pub use command::{MemoryBarrier, BufferMemoryBarrier, ImageMemoryBarrier, IndirectCallParameter, BufferCopyRegion, ImageCopyRegion, ImageBlitRegion};
+pub use resource::{
 	ImageSubresourceRange, ImageSubresourceLayers, BufferContent, BufferOffsets,
 	ImageDescriptor1, ImageDescriptor2, ImageDescriptor3, ImagePreallocator,
 	SamplerState, ComponentSwizzle, ComponentMapping, Filter
 };
-pub use self::shading::{
+pub use shading::{
 	PipelineShaderProgram, ConstantEntry,
 	VertexBinding, VertexAttribute, PushConstantDesc,
 	PrimitiveTopology, ViewportWithScissorRect, RasterizerState, AttachmentBlendState,
 	GraphicsPipelineBuilder
 };
-pub use self::descriptor::{ShaderStage, Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo};
-pub use self::debug_info::DebugLine;
-pub use self::input::*;
-pub use self::data::*;
-pub use self::vk::ffi;
-pub use self::concurrent::*;
-pub use self::render_surface::*;
+pub use descriptor::{ShaderStage, Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo};
+pub use debug_info::DebugLine;
+pub use input::*;
+pub use data::*;
+pub use vk::ffi;
+pub use concurrent::*;
+pub use render_surface::*;
 // Transient or Stateful APIs //
-pub use self::command::{GraphicsCommandRecorder, TransferCommandRecorder};
+pub use command::{GraphicsCommandRecorder, TransferCommandRecorder};
 
 // traits
-pub use self::engine::{AssetProvider, CommandSubmitter};
-pub use self::command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
-pub use self::resource::{ImageView, BufferResource, ImageResource};
-pub use self::tuple_tools::{TupleFlatR};
+pub use engine::{AssetProvider, CommandSubmitter};
+pub use command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
+pub use resource::{ImageView, BufferResource, ImageResource};
+pub use tuple_tools::{TupleFlatR};
 // exported objects
-pub use self::engine::Engine;
-pub use self::synchronize::{QueueFence, Fence};
-pub use self::framebuffer::{RenderPass, Framebuffer};
-pub use self::command::{GraphicsCommandBuffers, BundledCommandBuffers, TransferCommandBuffers, TransientTransferCommandBuffers, TransientGraphicsCommandBuffers};
-pub use self::resource::{
+pub use engine::Engine;
+pub use synchronize::{QueueFence, Fence};
+pub use framebuffer::{RenderPass, Framebuffer};
+pub use command::{GraphicsCommandBuffers, BundledCommandBuffers, TransferCommandBuffers, TransientTransferCommandBuffers, TransientGraphicsCommandBuffers};
+pub use resource::{
 	Buffer, Image1D, Image2D, Image3D, LinearImage2D, DeviceBuffer, StagingBuffer,
 	DeviceImage, StagingImage, MemoryMappedRange, ImageView1D, ImageView2D, ImageView3D,
 	Sampler, BufferPreallocator
 };
-pub use self::shading::{ShaderProgram, PipelineLayout, GraphicsPipelines, GraphicsPipeline};
-pub use self::descriptor::{DescriptorSetLayout, DescriptorSets};
-pub use self::debug_info::DebugInfo;
+pub use shading::{ShaderProgram, PipelineLayout, GraphicsPipelines, GraphicsPipeline};
+pub use descriptor::{DescriptorSetLayout, DescriptorSets};
+pub use debug_info::DebugInfo;
 
 // For internal exports //
 mod internals
