@@ -327,7 +327,7 @@ pub const VK_QUEUE_SPARSE_BINDING_BIT: VkFlags	= 0x08;
 	Exclusive = 0,
 	Concurrent = 1
 }
-#[repr(C)] #[derive(Clone, Copy)] pub enum VkImageLayout
+#[repr(C)] #[derive(Clone, Copy, Debug, PartialEq, Eq)] pub enum VkImageLayout
 {
 	Undefined = 0, General = 1,
 	ColorAttachmentOptimal = 2, DepthStencilAttachmentOptimal = 3, DepthStencilReadOnlyOptimal = 4,
