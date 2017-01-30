@@ -6,7 +6,7 @@ use std;
 use std::ffi::*;
 use std::ops::Deref;
 use std::rc::Rc;
-#[cfg(unix)] use xcb::ffi::*;
+#[cfg(all(unix, not(feature = "container")))] use xcb::ffi::*;
 use libc::size_t;
 use std::borrow::Cow;
 
@@ -167,7 +167,7 @@ impl PhysicalDevice
 	}
 
 	// Surface //
-	#[cfg(unix)] pub fn is_platform_presentation_support(&self, qf_index: u32, con: *mut xcb_connection_t, vis: xcb_visualid_t) -> bool
+	#[cfg(all(unix, not(feature = "container")))] pub fn is_platform_presentation_support(&self, qf_index: u32, con: *mut xcb_connection_t, vis: xcb_visualid_t) -> bool
 	{
 		unsafe { vkGetPhysicalDeviceXcbPresentationSupportKHR(self.0, qf_index, con, vis) == 1 }
 	}
@@ -484,7 +484,7 @@ impl Deref for Surface { type Target = VkSurfaceKHR; fn deref(&self) -> &VkSurfa
 impl HasParent for Surface { type Parent = Instance; fn parent(&self) -> &Instance { &self.1 } }
 impl Surface
 {
-	#[cfg(unix)] pub fn new(instance: &Rc<Instance>, info: &VkXcbSurfaceCreateInfoKHR) -> VkWrapResult<Self>
+	#[cfg(all(unix, not(feature = "container")))] pub fn new(instance: &Rc<Instance>, info: &VkXcbSurfaceCreateInfoKHR) -> VkWrapResult<Self>
 	{
 		let mut surf = empty_handle();
 		unsafe { vkCreateXcbSurfaceKHR(***instance, info, std::ptr::null(), &mut surf) }.map(|| Surface(surf, instance.clone()))

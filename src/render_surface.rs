@@ -11,7 +11,8 @@ use vk::traits::*;
 
 // Platform dependent selection
 #[cfg(windows)] use win32::NativeWindow;
-#[cfg(unix)] use linux::NativeWindowAndServerCon as NativeWindow;
+#[cfg(all(unix, not(feature = "container")))] use linux::NativeWindowAndServerCon as NativeWindow;
+#[cfg(feature = "container")] use container::NativeWindow;
 
 pub fn make_render_window(under: NativeWindow, g: &GraphicsInterface, size: &Size2) -> EngineResult<RenderWindow>
 {

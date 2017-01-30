@@ -18,7 +18,8 @@ use std::ops::Deref;
 
 // Select WindowSystem and InputSystem
 #[cfg(windows)] use win32::NativeWindow;
-#[cfg(unix)] use linux::NativeWindowAndServerCon as NativeWindow;
+#[cfg(all(unix, not(feature = "container")))] use linux::NativeWindowAndServerCon as NativeWindow;
+#[cfg(feature = "container")] use container::NativeWindow;
 
 struct EngineLogger;
 impl log::Log for EngineLogger
