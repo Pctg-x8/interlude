@@ -53,7 +53,7 @@ impl Device
 		self.internal.wait_for_idle().map_err(EngineError::from)
 	}
 
-	pub fn is_surface_support(&self, surface: &vk::Surface) -> bool
+	pub fn is_surface_support(&self, surface: &VkSurfaceKHR) -> bool
 	{
 		self.adapter.is_surface_support(self.graphics_queue.family_index(), surface)
 	}

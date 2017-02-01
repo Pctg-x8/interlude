@@ -1,7 +1,7 @@
 // XCB Window Server and Native Window Implementation
 
 use {std, vk};
-use ApplicationState;
+use {ApplicationState, EngineResult};
 use xcb::ffi::*;
 use super::super::ffi::*;
 use std::os::raw::*;
@@ -9,6 +9,7 @@ use super::super::internals::*;
 use std::rc::Rc;
 use std::os::unix::io::*;
 use mio;
+use super::vk_wsi::*;
 
 // xcb_window_t and server connection
 pub struct NativeWindowAndServerCon(xcb_window_t, XServer, xcb_atom_t);
@@ -44,9 +45,9 @@ impl NativeWindowAndServerCon
 		})
 	}
 	pub fn show(&self) { self.1.show(self.0); }
-	pub fn make_vk_surface(&self, instance: &Rc<vk::Instance>) -> Result<vk::Surface, EngineError>
+	pub fn make_vk_surface(&self, instance: &Rc<vk::Instance>) -> EngineResult<Surface>
 	{
-		vk::Surface::new(instance, &VkXcbSurfaceCreateInfoKHR
+		Surface::new(instance, &VkXcbSurfaceCreateInfoKHR
 		{
 			sType: VkStructureType::XcbSurfaceCreateInfoKHR, pNext: std::ptr::null(), flags: 0, connection: self.1.ptr, window: self.0
 		}).map_err(EngineError::from)
@@ -99,7 +100,7 @@ unsafe impl Sync for XServer {}
 unsafe impl Send for XServer {}
 impl XServer
 {
-	pub fn connect() -> Result<Self, EngineError>
+	pub fn connect() -> EngineResult<Self>
 	{
 		let mut screen_num = 0;
 		let con_ptr = unsafe { xcb_connect(std::ptr::null(), &mut screen_num) };
@@ -220,7 +221,7 @@ impl XServer
 	}
 	fn is_vk_presentation_support(&self, adapter: &vk::PhysicalDevice, qf_index: u32) -> bool
 	{
-		adapter.is_platform_presentation_support(qf_index, self.ptr, self.root_visual)
+		unsafe { vkGetPhysicalDeviceXcbPresentationSupportKHR(**adapter, qf_index, self.ptr, self.root_visual) == true as VkBool32 }
 	}
 }
 impl std::ops::Drop for XServer { fn drop(&mut self) { unsafe { xcb_disconnect(self.ptr) }; } }

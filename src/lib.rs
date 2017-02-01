@@ -12,11 +12,9 @@ extern crate nalgebra;
 extern crate freetype_sys;
 extern crate unicode_normalization;
 extern crate ansi_term;
-#[cfg(all(unix, not(feature = "container")))] extern crate xcb;
+#[cfg(unix)] extern crate xcb;
 extern crate mio;
-
-// LowLevel APIs
-#[macro_use] mod vk;
+#[macro_use] extern crate interlude_vk as vk;
 
 // Interlude
 mod error;
@@ -37,12 +35,10 @@ mod concurrent;
 mod tuple_tools;
 
 // platform dependents
-#[cfg(all(unix, not(feature = "container")))] mod linux;
+#[cfg(unix)] mod linux;
 #[cfg(windows)] mod win32;
-#[cfg(feature = "container")] mod container;
-#[cfg(all(unix, not(feature = "container")))] pub use linux::NativeInput as Input;
+#[cfg(unix)] pub use linux::NativeInput as Input;
 #[cfg(windows)] pub use win32::NativeInput as Input;
-#[cfg(feature = "container")] pub use container::NativeInput as Input;
 
 /// Application State(has exited?)
 #[derive(PartialEq, Debug)]

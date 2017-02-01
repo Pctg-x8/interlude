@@ -57,11 +57,6 @@ impl AttachmentDesc
 	}
 }
 pub type AttachmentRef = VkAttachmentReference;
-impl AttachmentRef
-{
-	pub fn color(index: u32) -> Self { VkAttachmentReference(index, VkImageLayout::ColorAttachmentOptimal) }
-	pub fn input(index: u32) -> Self { VkAttachmentReference(index, VkImageLayout::ShaderReadOnlyOptimal) }
-}
 #[derive(Clone)]
 pub struct PassDesc
 {

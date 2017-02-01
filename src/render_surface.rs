@@ -11,8 +11,8 @@ use vk::traits::*;
 
 // Platform dependent selection
 #[cfg(windows)] use win32::NativeWindow;
-#[cfg(all(unix, not(feature = "container")))] use linux::NativeWindowAndServerCon as NativeWindow;
-#[cfg(feature = "container")] use container::NativeWindow;
+#[cfg(unix)] use linux::NativeWindowAndServerCon as NativeWindow;
+#[cfg(unix)] use linux::Surface;
 
 pub fn make_render_window(under: NativeWindow, g: &GraphicsInterface, size: &Size2) -> EngineResult<RenderWindow>
 {
@@ -32,13 +32,13 @@ impl ImageView for WindowRenderTargetView
 }
 pub struct RenderWindow
 {
-	underlying: NativeWindow, swapchain: Rc<vk::Swapchain>, render_targets: Vec<WindowRenderTargetView>,
+	underlying: NativeWindow, swapchain: Rc<vk::Swapchain<Surface>>, render_targets: Vec<WindowRenderTargetView>,
 	format: VkFormat, extent: Size2, has_vsync: bool
 }
-struct SupportedSurface<'a>(&'a vk::Surface, &'a GraphicsInterface);
+struct SupportedSurface<'a>(&'a Surface, &'a GraphicsInterface);
 impl<'a> SupportedSurface<'a>
 {
-	fn ensure(s: &'a vk::Surface, g: &'a GraphicsInterface) -> Result<Self, EngineError>
+	fn ensure(s: &'a Surface, g: &'a GraphicsInterface) -> Result<Self, EngineError>
 	{
 		g.ensure_surface_support(s).map(|_| SupportedSurface(s, g))
 	}

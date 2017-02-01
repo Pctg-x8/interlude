@@ -127,19 +127,19 @@ impl GraphicsInterface
 		info!(target: "Interlude::DiagAdapter", "-- shaderResourceResidency: {}", bool_to_str(features.shaderResourceResidency));
 		// if features.depthClamp == false as VkBool32 { panic!("DepthClamp Feature is required in device"); }
 	}
-	pub fn ensure_surface_support(&self, s: &vk::Surface) -> EngineResult<()>
+	pub fn ensure_surface_support(&self, s: &VkSurfaceKHR) -> EngineResult<()>
 	{
 		if self.device.is_surface_support(s) { Ok(()) } else { Err(EngineError::GenericError("Unsupported Surface")) }
 	}
-	pub fn surface_caps(&self, s: &vk::Surface) -> VkSurfaceCapabilitiesKHR
+	pub fn surface_caps(&self, s: &VkSurfaceKHR) -> VkSurfaceCapabilitiesKHR
 	{
 		self.device.adapter().surface_caps(s)
 	}
-	pub fn surface_formats(&self, s: &vk::Surface) -> EngineResult<Vec<VkSurfaceFormatKHR>>
+	pub fn surface_formats(&self, s: &VkSurfaceKHR) -> EngineResult<Vec<VkSurfaceFormatKHR>>
 	{
 		self.device.adapter().surface_formats(s).map_err(EngineError::from)
 	}
-	pub fn surface_present_modes(&self, s: &vk::Surface) -> EngineResult<Vec<VkPresentModeKHR>>
+	pub fn surface_present_modes(&self, s: &VkSurfaceKHR) -> EngineResult<Vec<VkPresentModeKHR>>
 	{
 		self.device.adapter().present_modes(s).map_err(EngineError::from)
 	}
