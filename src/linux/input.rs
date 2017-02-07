@@ -226,7 +226,7 @@ impl InputDevice
 				_ => ()
 			}
 		}
-		info!(target: "Interlude::NativeInputDevice", "Finish Updating");
+		info!(target: "Interlude::NativeInputDevice", "Finish Updating: {:?}", std::time::SystemTime::now());
 	}
 	fn unplug(self, aggregate_key_states: &mut HashMap<InputKeys, u32>, aggregate_axis_states: &mut HashMap<InputAxis, f32>)
 	{
