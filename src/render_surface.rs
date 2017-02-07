@@ -4,8 +4,8 @@
 
 use super::internals::*;
 use {std, vk};
+use vkdefs::*;
 use std::rc::Rc;
-use vk::ffi::*;
 use {EngineResult, GraphicsInterface};
 use vk::traits::*;
 

@@ -14,7 +14,8 @@ extern crate unicode_normalization;
 extern crate ansi_term;
 #[cfg(unix)] extern crate xcb;
 extern crate mio;
-#[macro_use] extern crate interlude_vk as vk;
+#[macro_use] extern crate interlude_vkdefs as vkdefs;
+extern crate interlude_vk as vk;
 
 // Interlude
 mod error;
@@ -68,11 +69,12 @@ pub use descriptor::{ShaderStage, Descriptor, BufferInfo, ImageInfo, DescriptorS
 pub use debug_info::DebugLine;
 pub use input::*;
 pub use data::*;
-pub use vk::ffi;
 pub use concurrent::*;
 pub use render_surface::*;
 // Transient or Stateful APIs //
 pub use command::{GraphicsCommandRecorder, TransferCommandRecorder};
+// Re-exporting defs by enclosing into ffi module
+pub mod ffi { pub use vkdefs::*; }
 
 // traits
 pub use engine::{AssetProvider, CommandSubmitter};

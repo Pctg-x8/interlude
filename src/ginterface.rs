@@ -3,19 +3,24 @@
 use {UnrecoverableExt, DescriptorSetWriteInfo, EngineResult};
 use descriptor::IntoWriteDescriptorSetNativeStruct;
 use {vk, std};
-use vk::ffi::*;
+use vkdefs::*;
+use vk::vkUpdateDescriptorSets;
 use std::rc::Rc;
 use device::Device;
 use command::CommandPool;
 use error::EngineError;
-use std::os::raw::{c_char, c_void};
-use libc::size_t;
+use libc::{c_void, size_t, c_char};
 use std::ffi::CStr;
 use tuple_tools::*;
 use std::borrow::Cow;
 
 #[cfg(windows)] const PSURFACE_EXNAME: &'static str = "VK_KHR_win32_surface";
 #[cfg(unix)] const PSURFACE_EXNAME: &'static str = "VK_KHR_xcb_surface";
+
+fn bool_to_str(v: VkBool32) -> &'static str
+{
+	if v == true as VkBool32 { "true" } else { "false" }
+}
 
 pub struct DeviceFeatures(VkPhysicalDeviceFeatures);
 impl DeviceFeatures

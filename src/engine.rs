@@ -5,8 +5,8 @@
 use {ApplicationState, Input};
 use super::internals::*;
 use super::ginterface::*;
-use {std, log, RenderPass, AttachmentDesc, PassDesc, RenderWindow, render_surface};
-use vk::ffi::*;
+use {std, log, RenderPass, AttachmentDesc, PassDesc, RenderWindow, render_surface, Fence};
+use vkdefs::*;
 use ansi_term::*;
 use std::sync::{Arc, RwLock};
 use std::path::{Path, PathBuf};
@@ -18,8 +18,7 @@ use std::ops::Deref;
 
 // Select WindowSystem and InputSystem
 #[cfg(windows)] use win32::NativeWindow;
-#[cfg(all(unix, not(feature = "container")))] use linux::NativeWindowAndServerCon as NativeWindow;
-#[cfg(feature = "container")] use container::NativeWindow;
+#[cfg(unix)] use linux::NativeWindowAndServerCon as NativeWindow;
 
 struct EngineLogger;
 impl log::Log for EngineLogger

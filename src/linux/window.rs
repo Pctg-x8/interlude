@@ -3,7 +3,7 @@
 use {std, vk};
 use {ApplicationState, EngineResult};
 use xcb::ffi::*;
-use super::super::ffi::*;
+use vkdefs::*;
 use std::os::raw::*;
 use super::super::internals::*;
 use std::rc::Rc;

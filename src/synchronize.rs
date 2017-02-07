@@ -3,7 +3,7 @@
 use ginterface::GraphicsInterface;
 use EngineError;
 use vk;
-use vk::ffi::*;
+use vkdefs::*;
 
 pub struct QueueFence(vk::Semaphore);
 pub struct Fence(vk::Fence);

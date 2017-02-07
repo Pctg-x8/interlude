@@ -1,7 +1,7 @@
 // Interlude: Data Structures
 
 use std;
-use vk::ffi::*;
+use vk::*;
 
 // Vulkan DataType Exports
 /// Viewport: left, top, width, height, near, far

@@ -4,8 +4,8 @@
 
 use super::internals::*;
 use {std, vk};
-use vk::ffi::*;
-use {EngineResult, GraphicsInterface};
+use vkdefs::*;
+use {EngineResult, GraphicsInterface, Sampler, ImageView};
 use std::borrow::Cow;
 
 #[derive(Clone, Copy)] #[repr(u8)]

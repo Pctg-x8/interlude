@@ -20,7 +20,7 @@ const T_PARENT: mio::Token = mio::Token(std::usize::MAX - 2);
 
 pub struct NativeInput<InputNames: Eq + Hash + Copy>
 {
-	poll_thread: std::thread::JoinHandle<()>, term_event: Arc<EventFd>,
+	poll_thread: Option<std::thread::JoinHandle<()>>, term_event: Arc<EventFd>,
 	keymap: HashMap<InputNames, Vec<InputType>>,
 	aggregate_key_states: Arc<RwLock<HashMap<InputKeys, u32>>>,
 	aggregate_axis_states: Arc<RwLock<HashMap<InputAxis, f32>>>,
@@ -133,7 +133,7 @@ impl<InputNames: Eq + Hash + Copy> NativeInput<InputNames>
 			info!(target: "Interlude::Input", "Terminating Input Thread...");
 		}).map(|poll_thread| NativeInput
 		{
-			poll_thread: poll_thread, keymap: HashMap::new(), input_states: HashMap::new(),
+			poll_thread: Some(poll_thread), keymap: HashMap::new(), input_states: HashMap::new(),
 			aggregate_key_states: aks, aggregate_axis_states: aas, term_event: term_event
 		}).map_err(From::from)
 	}
@@ -168,10 +168,8 @@ impl<InputNames: Eq + Hash + Copy> Drop for NativeInput<InputNames>
 {
 	fn drop(&mut self)
 	{
-		let mut jh = unsafe { std::mem::uninitialized() };
-		std::mem::swap(&mut jh, &mut self.poll_thread);
 		self.term_event.set();
-		jh.join().unwrap();
+		self.poll_thread.take().unwrap().join().unwrap();
 	}
 }
 impl<InputNames: Eq + Hash + Copy> Index<InputNames> for NativeInput<InputNames>

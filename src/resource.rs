@@ -3,7 +3,7 @@
 ///! Interlude: Resources(Buffer and Image)
 
 use super::internals::*;
-use vk::ffi::*;
+use vk::*;
 use vk::traits::*;
 use {std, vk};
 use std::os::raw::c_void;
@@ -91,12 +91,8 @@ impl Image3D
 		}).map(|o| Image3D(o, desc.extent.into())).map_err(From::from)
 	}
 }
-#[repr(u32)] #[derive(Clone, Copy)]
-pub enum SampleCount
-{
-	Bit1 = VK_SAMPLE_COUNT_1_BIT, Bit2 = VK_SAMPLE_COUNT_2_BIT, Bit4 = VK_SAMPLE_COUNT_4_BIT, Bit8 = VK_SAMPLE_COUNT_8_BIT,
-	Bit16 = VK_SAMPLE_COUNT_16_BIT, Bit32 = VK_SAMPLE_COUNT_32_BIT, Bit64 = VK_SAMPLE_COUNT_64_BIT
-}
+/// SampleCount: e.g. 1 << 4 = 4 samples
+pub type SampleCount = u32;
 #[derive(Clone)]
 pub struct ImageDescriptor1(VkImageCreateInfo, bool);
 #[derive(Clone)]
@@ -166,9 +162,9 @@ macro_rules! ImplImageDescriptorMutations
 				self.0.arrayLayers = layers;
 				self
 			}
-			fn sample_flags(mut self, samples: &[SampleCount]) -> Self
+			fn sample_flags(mut self, samples: SampleCount) -> Self
 			{
-				self.0.samples = samples.into_iter().fold(0, |flags, &c| flags | (c as u32));
+				self.0.samples = samples;
 				self
 			}
 		}

@@ -3,9 +3,8 @@
 // Vulkan C to Rust FFI [Window System Integration]
 
 use xcb::ffi::*;
-use vk::ffi::*;
-use libc::c_void;
 use vk::*;
+use libc::c_void;
 use EngineResult;
 use std;
 use std::rc::Rc;

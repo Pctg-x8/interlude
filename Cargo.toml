@@ -16,14 +16,15 @@ ansi_term = "0.9.0"
 thread-scoped = "1.0.1"
 time = "0.1.35"
 mio = "0.6.3"
+interlude-vkdefs = { git = "https://github.com/Pctg-x8/interlude_vkdefs.git" }
 interlude-vk = { git = "https://github.com/Pctg-x8/interlude_vk.git" }
 
-[target.'cfg(windows)'.dependencies]
+[target."cfg(windows)".dependencies]
 winapi = "0.2.8"
 kernel32-sys = "0.2.2"
 user32-sys = "0.2.0"
 widestring = "0.2.2"
 ole32-sys = "0.2.0"
 
-[target.'cfg(unix)'.dependencies]
+[target."cfg(unix)".dependencies]
 xcb = "0.7.6"

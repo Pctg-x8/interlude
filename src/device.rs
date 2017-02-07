@@ -2,7 +2,7 @@
 
 use super::internals::*;
 use {std, vk};
-use vk::ffi::*;
+use vk::*;
 use std::rc::Rc;
 
 pub struct Device
@@ -46,7 +46,7 @@ impl Device
 			graphics_queue: device.queue_at(graphics_qf, 0),
 			transfer_queue: device.queue_at(transfer_qf.unwrap_or(graphics_qf), queue_info[0].queueCount - 1),
 			internal: Rc::new(device), adapter: adapter.clone()
-		}).map_err(|e| EngineError::from(e))
+		}).map_err(From::from)
 	}
 	pub fn wait_for_idle(&self) -> Result<(), EngineError>
 	{

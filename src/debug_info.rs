@@ -5,14 +5,14 @@
 
 use super::internals::*;
 use std;
-use vk::ffi::*;
+use vkdefs::*;
 use std::collections::{LinkedList, HashMap};
 use std::cell::RefCell;
 use freetype_sys::*;
 use std::ffi::CString;
 use unicode_normalization::*;
 use nalgebra::*;
-use {EngineResult, GraphicsInterface, PreciseRenderPass, RenderPass};
+use {EngineResult, GraphicsInterface, PreciseRenderPass, RenderPass, ImageSubresourceRange};
 use std::ops::Deref;
 
 const TEXTURE_SIZE: u32 = 512;
@@ -382,11 +382,13 @@ impl<'a> DebugInfo<'a>
 					];
 					let buffer_memory_barriers = [
 						BufferMemoryBarrier::hold_ownership(&bstage, update_start_offs .. update_end_offs, VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
-						BufferMemoryBarrier::hold_ownership(&bdev, update_start_offs .. update_end_offs, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT)
+						BufferMemoryBarrier::hold_ownership(&bdev, update_start_offs .. update_end_offs,
+							VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT)
 					];
 					let buffer_memory_barriers_ret = [
 						BufferMemoryBarrier::hold_ownership(&bstage, update_start_offs .. update_end_offs, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_HOST_WRITE_BIT),
-						BufferMemoryBarrier::hold_ownership(&bdev, update_start_offs .. update_end_offs, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT)
+						BufferMemoryBarrier::hold_ownership(&bdev, update_start_offs .. update_end_offs,
+							VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT)
 					];
 
 					recorder
@@ -425,7 +427,8 @@ impl<'a> DebugInfo<'a>
 					];
 					let buffer_memory_barriers_ret = [
 						BufferMemoryBarrier::hold_ownership(&bstage, 0 .. rendering_params_prealloc.total_size(), VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_HOST_WRITE_BIT),
-						BufferMemoryBarrier::hold_ownership(&bdev, 0 .. rendering_params_prealloc.total_size(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT)
+						BufferMemoryBarrier::hold_ownership(&bdev, 0 .. rendering_params_prealloc.total_size(), VK_ACCESS_TRANSFER_WRITE_BIT,
+							VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT)
 					];
 
 					recorder

@@ -2,7 +2,7 @@
 
 use super::internals::*;
 use {std, vk};
-use vk::ffi::*;
+use vkdefs::*;
 use std::rc::Rc;
 use std::ops::Deref;
 

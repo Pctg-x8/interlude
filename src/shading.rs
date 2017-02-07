@@ -1,7 +1,7 @@
 ///! Interlude: Primitive Shading(Shaders and Pipelines)
 
 use {std, vk};
-use vk::ffi::*;
+use vkdefs::*;
 use std::ffi::CString;
 use super::internals::*;
 use {EngineResult, GraphicsInterface, PreciseRenderPass, RenderPass};

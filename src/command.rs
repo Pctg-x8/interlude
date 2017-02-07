@@ -4,12 +4,13 @@
 ///! Interlude: Command Pool and Buffers
 
 use super::internals::*;
-use {std, vk};
-use vk::ffi::*;
+use {std, vk, device, shading, resource};
+use vk::*;
 use vk::traits::*;
 use std::rc::Rc;
 use {EngineResult, GraphicsInterface, PreciseRenderPass, Framebuffer, AttachmentClearValue};
 use std::ops::Deref;
+use libc::c_void;
 
 // Crate-level Object: Graphics, Transfer, TransientT, TransientG
 pub struct CommandPool
@@ -19,7 +20,7 @@ pub struct CommandPool
 }
 impl CommandPool
 {
-	pub fn new(device: &Device) -> EngineResult<Self>
+	pub fn new(device: &device::Device) -> EngineResult<Self>
 	{
 		let g = vk::CommandPool::new(device, &device.graphics_queue, false).map(Rc::new);
 		let t = vk::CommandPool::new(device, &device.transfer_queue, false).map(Rc::new);
@@ -73,15 +74,15 @@ pub struct ImageMemoryBarrier<'a>
 	src_mask: VkAccessFlags, dst_mask: VkAccessFlags,
 	src_layout: VkImageLayout, dst_layout: VkImageLayout,
 	src_queue_family_index: u32, dst_queue_family_index: u32,
-	image: &'a Resource<Type = VkImage>, subresource_range: ImageSubresourceRange
+	image: &'a Resource<Type = VkImage>, subresource_range: resource::ImageSubresourceRange
 }
 impl<'a> ImageMemoryBarrier<'a>
 {
-	pub fn template(img: &'a Resource<Type = VkImage>, subresource_range: ImageSubresourceRange) -> ImageMemoryBarrierTemplate<'a>
+	pub fn template(img: &'a Resource<Type = VkImage>, subresource_range: resource::ImageSubresourceRange) -> ImageMemoryBarrierTemplate<'a>
 	{
 		ImageMemoryBarrierTemplate(img, subresource_range)
 	}
-	pub fn hold_ownership(img: &'a Resource<Type = VkImage>, subresource_range: ImageSubresourceRange,
+	pub fn hold_ownership(img: &'a Resource<Type = VkImage>, subresource_range: resource::ImageSubresourceRange,
 		src_mask: VkAccessFlags, dst_mask: VkAccessFlags, src_layout: VkImageLayout, dst_layout: VkImageLayout) -> Self
 	{
 		ImageMemoryBarrier
@@ -91,7 +92,7 @@ impl<'a> ImageMemoryBarrier<'a>
 			image: img, subresource_range: subresource_range
 		}
 	}
-	pub fn initialize(img: &'a Resource<Type = VkImage>, subresource_range: ImageSubresourceRange, dst_mask: VkAccessFlags, dst_layout: VkImageLayout) -> Self
+	pub fn initialize(img: &'a Resource<Type = VkImage>, subresource_range: resource::ImageSubresourceRange, dst_mask: VkAccessFlags, dst_layout: VkImageLayout) -> Self
 	{
 		ImageMemoryBarrier
 		{
@@ -103,7 +104,7 @@ impl<'a> ImageMemoryBarrier<'a>
 }
 /// A Template for constructing Image Memory Barrier.
 /// This holds a reference of ImageResource and a ImageSubresourceRange
-pub struct ImageMemoryBarrierTemplate<'a>(&'a Resource<Type = VkImage>, ImageSubresourceRange);
+pub struct ImageMemoryBarrierTemplate<'a>(&'a Resource<Type = VkImage>, resource::ImageSubresourceRange);
 impl<'a> ImageMemoryBarrierTemplate<'a>
 {
 	pub fn hold_ownership(&self, src_mask: VkAccessFlags, dst_mask: VkAccessFlags, src_layout: VkImageLayout, dst_layout: VkImageLayout)
@@ -469,9 +470,9 @@ impl<'a> Drop for TransferCommandRecorder<'a> { fn drop(&mut self) { unsafe { vk
 pub trait DrawingCommandRecorder
 {
 	fn bind_pipeline(self, pipeline: &GraphicsPipeline) -> Self;
-	fn bind_descriptor_sets(self, layout: &PipelineLayout, sets: &DescriptorSetArrayView) -> Self;
-	fn bind_descriptor_sets_partial(self, layout: &PipelineLayout, start_set: u32, sets: &DescriptorSetArrayView) -> Self;
-	fn push_constants(self, layout: &PipelineLayout, shader_stage: ShaderStage, range: std::ops::Range<u32>, data: &[f32]) -> Self;
+	fn bind_descriptor_sets(self, layout: &shading::PipelineLayout, sets: &DescriptorSetArrayView) -> Self;
+	fn bind_descriptor_sets_partial(self, layout: &shading::PipelineLayout, start_set: u32, sets: &DescriptorSetArrayView) -> Self;
+	fn push_constants(self, layout: &shading::PipelineLayout, shader_stage: ShaderStage, range: std::ops::Range<u32>, data: &[f32]) -> Self;
 	fn bind_vertex_buffers(self, buffer_offsets: &[(&Resource<Type = VkBuffer>, usize)]) -> Self;
 	fn bind_vertex_buffers_partial(self, start_binding: u32, buffer_offsets: &[(&Resource<Type = VkBuffer>, usize)]) -> Self;
 	fn bind_index_buffer(self, buffer: &Resource<Type = VkBuffer>, offset: usize) -> Self;
@@ -493,20 +494,20 @@ macro_rules! DrawingCommandRecorderDefaultImpl
 				unsafe { vkCmdBindPipeline(*self.0, VkPipelineBindPoint::Graphics, **pipeline.get_internal()) };
 				self
 			}
-			fn bind_descriptor_sets(self, layout: &PipelineLayout, sets: &DescriptorSetArrayView) -> Self
+			fn bind_descriptor_sets(self, layout: &shading::PipelineLayout, sets: &DescriptorSetArrayView) -> Self
 			{
 				self.bind_descriptor_sets_partial(layout, 0, sets)
 			}
-			fn bind_descriptor_sets_partial(self, layout: &PipelineLayout, start_set: u32, sets: &DescriptorSetArrayView) -> Self
+			fn bind_descriptor_sets_partial(self, layout: &shading::PipelineLayout, start_set: u32, sets: &DescriptorSetArrayView) -> Self
 			{
 				unsafe { vkCmdBindDescriptorSets(*self.0, VkPipelineBindPoint::Graphics, **layout.get_internal(),
 					start_set, sets.len() as u32, sets.as_ptr(), 0, std::ptr::null()) };
 				self
 			}
-			fn push_constants(self, layout: &PipelineLayout, shader_stage: ShaderStage, range: std::ops::Range<u32>, data: &[f32]) -> Self
+			fn push_constants(self, layout: &shading::PipelineLayout, shader_stage: ShaderStage, range: std::ops::Range<u32>, data: &[f32]) -> Self
 			{
 				unsafe { vkCmdPushConstants(*self.0, **layout.get_internal(), shader_stage as VkShaderStageFlags,
-					range.start, range.len() as u32, data.as_ptr() as *const std::os::raw::c_void) };
+					range.start, range.len() as u32, data.as_ptr() as *const c_void) };
 				self
 			}
 			fn bind_vertex_buffers(self, buffer_offsets: &[(&Resource<Type = VkBuffer>, usize)]) -> Self
