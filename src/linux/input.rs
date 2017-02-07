@@ -226,6 +226,7 @@ impl InputDevice
 				_ => ()
 			}
 		}
+		info!(target: "Interlude::NativeInputDevice", "Finish Updating");
 	}
 	fn unplug(self, aggregate_key_states: &mut HashMap<InputKeys, u32>, aggregate_axis_states: &mut HashMap<InputAxis, f32>)
 	{
