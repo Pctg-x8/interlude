@@ -13,8 +13,7 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
-use super::super::internals::*;
-use {std, libc};
+use {std, libc, EngineResult, EngineError};
 use std::io::Read;
 use std::collections::HashMap;
 use std::os::unix::io::AsRawFd;
@@ -394,7 +393,7 @@ pub struct EventDevice
 }
 impl EventDevice
 {
-	pub fn new(node_path: &str) -> Result<Self, EngineError>
+	pub fn new(node_path: &str) -> EngineResult<Self>
 	{
 		std::fs::OpenOptions::new().read(true).open(node_path).map_err(EngineError::from).map(|fp| EventDevice
 		{
@@ -402,13 +401,13 @@ impl EventDevice
 			data_u8: vec![0u8; std::mem::size_of::<input_event>()]
 		})
 	}
-	pub fn grab_device(&self) -> Result<(), EngineError>
+	pub fn grab_device(&self) -> EngineResult<()>
 	{
 		let grab_flag: libc::c_int = 1;
 		let iores = unsafe { libc::ioctl(self.as_raw_fd(), EVIOCGRAB!(), &grab_flag) };
 		if iores == -1 { Err(EngineError::GenericError("Failed to grabbing event device")) } else { Ok(()) }
 	}
-	pub fn wait_event(&mut self) -> Result<DeviceEvent, EngineError>
+	pub fn wait_event(&mut self) -> EngineResult<DeviceEvent>
 	{
 		self.reader.read_exact(&mut self.data_u8)
 			.map(|()| unsafe { std::mem::transmute::<_, &input_event>(self.data_u8.as_ptr()) })

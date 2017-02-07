@@ -1,8 +1,8 @@
 // Interlude: Concurrency Entities
 
+use EngineResult;
 use std;
 use std::sync::Arc;
-use super::internals::*;
 #[cfg(windows)] use winapi::*;
 #[cfg(windows)] use kernel32::*;
 #[cfg(unix)] use libc;
@@ -12,7 +12,7 @@ use super::internals::*;
 #[cfg(windows)] pub struct Event(HANDLE);
 #[cfg(windows)] impl Event
 {
-	pub fn new<Str: Into<Vec<u8>>>(name: Str) -> Result<Arc<Self>, EngineError>
+	pub fn new<Str: Into<Vec<u8>>>(name: Str) -> EngineResult<Arc<Self>>
 	{
 		let evname = std::ffi::CString::new(name).unwrap();
 		let ev = unsafe { CreateEventA(std::ptr::null_mut(), FALSE, FALSE, evname.as_ptr()) };
@@ -29,7 +29,7 @@ use super::internals::*;
 #[cfg(unix)] impl AsRawFd for Event { fn as_raw_fd(&self) -> RawFd { self.0 } }
 #[cfg(unix)] impl Event
 {
-	pub fn new<Str: Into<Vec<u8>>>(_: Str) -> Result<Arc<Self>, EngineError>
+	pub fn new<Str: Into<Vec<u8>>>(_: Str) -> EngineResult<Arc<Self>>
 	{
 		Ok(Arc::new(Event(unsafe { libc::eventfd(0, 0) })))
 	}

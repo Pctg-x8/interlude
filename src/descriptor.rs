@@ -2,7 +2,8 @@
 
 #![allow(dead_code)]
 
-use super::internals::*;
+use rawexports::InternalExports;
+use Resource;
 use {std, vk};
 use vkdefs::*;
 use {EngineResult, GraphicsInterface, Sampler, ImageView};

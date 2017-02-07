@@ -1,11 +1,10 @@
 // XCB Window Server and Native Window Implementation
 
 use {std, vk};
-use {ApplicationState, EngineResult};
+use {ApplicationState, EngineResult, Size2, EngineError, Event};
 use xcb::ffi::*;
 use vkdefs::*;
 use std::os::raw::*;
-use super::super::internals::*;
 use std::rc::Rc;
 use std::os::unix::io::*;
 use mio;
@@ -15,7 +14,7 @@ use super::vk_wsi::*;
 pub struct NativeWindowAndServerCon(xcb_window_t, XServer, xcb_atom_t);
 impl NativeWindowAndServerCon
 {
-	pub fn new(size: &Size2, caption: &str, resizable: bool) -> Result<Self, EngineError>
+	pub fn new(size: &Size2, caption: &str, resizable: bool) -> EngineResult<Self>
 	{
 		XServer::connect().map(|srv|
 		{
@@ -50,7 +49,7 @@ impl NativeWindowAndServerCon
 		Surface::new(instance, &VkXcbSurfaceCreateInfoKHR
 		{
 			sType: VkStructureType::XcbSurfaceCreateInfoKHR, pNext: std::ptr::null(), flags: 0, connection: self.1.ptr, window: self.0
-		}).map_err(EngineError::from)
+		}).map_err(From::from)
 	}
 
 	pub fn process_messages(&self) -> ApplicationState { self.1.process_events(self.2) }

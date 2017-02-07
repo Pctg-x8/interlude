@@ -1,6 +1,6 @@
 ///! Interlude: RenderPass and Framebuffer
 
-use super::internals::*;
+use {ImageView, Size3, AssetProvider, rawexports};
 use {std, vk};
 use vkdefs::*;
 use std::rc::Rc;
@@ -233,5 +233,5 @@ impl Framebuffer
 	pub fn area(&self) -> &VkExtent2D { &self.area }
 }
 
-impl InternalExports for RenderPass { type InternalT = vk::RenderPass; fn get_internal(&self) -> &vk::RenderPass { &self.0 } }
-impl InternalExports for Framebuffer { type InternalT = vk::Framebuffer; fn get_internal(&self) -> &vk::Framebuffer { &self.internal } }
+impl rawexports::InternalExports for RenderPass { type InternalT = vk::RenderPass; fn get_internal(&self) -> &vk::RenderPass { &self.0 } }
+impl rawexports::InternalExports for Framebuffer { type InternalT = vk::Framebuffer; fn get_internal(&self) -> &vk::Framebuffer { &self.internal } }

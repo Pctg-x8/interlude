@@ -3,7 +3,6 @@
 #![allow(mutable_transmutes)]
 #![allow(dead_code)]
 
-use super::internals::*;
 use std;
 use vkdefs::*;
 use std::collections::{LinkedList, HashMap};
@@ -12,7 +11,7 @@ use freetype_sys::*;
 use std::ffi::CString;
 use unicode_normalization::*;
 use nalgebra::*;
-use {EngineResult, GraphicsInterface, PreciseRenderPass, RenderPass, ImageSubresourceRange};
+use super::*;
 use std::ops::Deref;
 
 const TEXTURE_SIZE: u32 = 512;
@@ -20,18 +19,18 @@ const DEBUG_LEFT_OFFSET: f32 = 6.0;
 
 trait FreeTypeErrorHandler
 {
-	fn map<F, T>(self, f: F) -> Result<T, EngineError> where F: FnOnce() -> T;
-	fn into_result(self) -> Result<(), EngineError>;
+	fn map<F, T>(self, f: F) -> EngineResult<T> where F: FnOnce() -> T;
+	fn into_result(self) -> EngineResult<()>;
 }
 impl FreeTypeErrorHandler for FT_Error
 {
-	fn map<F, T>(self, f: F) -> Result<T, EngineError> where F: FnOnce() -> T
+	fn map<F, T>(self, f: F) -> EngineResult<T> where F: FnOnce() -> T
 	{
-		if self.succeeded() { Ok(f()) } else { Err(EngineError::from(self)) }
+		if self.succeeded() { Ok(f()) } else { Err(From::from(self)) }
 	}
-	fn into_result(self) -> Result<(), EngineError>
+	fn into_result(self) -> EngineResult<()>
 	{
-		if self.succeeded() { Ok(()) } else { Err(EngineError::from(self)) }
+		if self.succeeded() { Ok(()) } else { Err(From::from(self)) }
 	}
 }
 

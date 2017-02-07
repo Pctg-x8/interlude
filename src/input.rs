@@ -1,6 +1,6 @@
 // Interlude: Input System
 
-use super::internals::*;
+use EngineResult;
 use std::hash::Hash;
 use std::ops::Index;
 #[cfg(windows)] use winapi::*;
@@ -44,7 +44,7 @@ impl InputType
 }
 pub trait InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone> : Sized + Index<InputNames, Output = f32>
 {
-	fn new() -> Result<Self, EngineError>;
+	fn new() -> EngineResult<Self>;
 	fn add_input(&mut self, to: InputNames, from: InputType);
 	fn update(&mut self);
 }
@@ -58,7 +58,7 @@ pub trait InputSystem<InputNames: PartialEq + Eq + Hash + Copy + Clone> : Sized 
 }
 #[cfg(windows)] impl<InputNames: PartialEq + Eq + Clone + Copy + std::hash::Hash> InputSystem<InputNames> for Win32InputSystem<InputNames>
 {
-	fn new() -> Result<Self, EngineError>
+	fn new() -> EngineResult<Self>
 	{
 		info!(target: "Interlude::Input", "Registering RawInput Devices...");
 		let ri_devices = [

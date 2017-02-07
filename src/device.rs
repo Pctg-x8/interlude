@@ -1,6 +1,6 @@
 // Prelude: Device Structure
 
-use super::internals::*;
+use EngineResult;
 use {std, vk};
 use vk::*;
 use std::rc::Rc;
@@ -15,7 +15,7 @@ impl std::ops::Deref for Device { type Target = Rc<vk::Device>; fn deref(&self) 
 impl Device
 {
 	pub fn new(adapter: &Rc<vk::PhysicalDevice>, features: &VkPhysicalDeviceFeatures,
-		graphics_qf: u32, transfer_qf: Option<u32>, qf_props: &VkQueueFamilyProperties) -> Result<Self, EngineError>
+		graphics_qf: u32, transfer_qf: Option<u32>, qf_props: &VkQueueFamilyProperties) -> EngineResult<Self>
 	{
 		fn device_queue_create_info(family_index: u32, count: u32, priorities: &[f32]) -> VkDeviceQueueCreateInfo
 		{
@@ -29,8 +29,8 @@ impl Device
 		static QUEUE_PRIORITIES: [f32; 2] = [0.0f32; 2];
 		match transfer_qf
 		{
-			Some(t) => info!(target: "Prelude", "Not sharing queue family: g={}, t={}", graphics_qf, t),
-			None => info!(target: "Prelude", "Sharing queue family: {}", graphics_qf)
+			Some(t) => info!(target: "Interlude", "Not sharing queue family: g={}, t={}", graphics_qf, t),
+			None => info!(target: "Interlude", "Sharing queue family: {}", graphics_qf)
 		};
 		let queue_info = match transfer_qf
 		{
@@ -48,9 +48,9 @@ impl Device
 			internal: Rc::new(device), adapter: adapter.clone()
 		}).map_err(From::from)
 	}
-	pub fn wait_for_idle(&self) -> Result<(), EngineError>
+	pub fn wait_for_idle(&self) -> EngineResult<()>
 	{
-		self.internal.wait_for_idle().map_err(EngineError::from)
+		self.internal.wait_for_idle().map_err(From::from)
 	}
 
 	pub fn is_surface_support(&self, surface: &VkSurfaceKHR) -> bool

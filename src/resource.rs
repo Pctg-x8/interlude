@@ -2,14 +2,16 @@
 
 ///! Interlude: Resources(Buffer and Image)
 
-use super::internals::*;
-use vk::*;
 use vk::traits::*;
+use vkdefs::*;
 use {std, vk};
 use std::os::raw::c_void;
 use std::rc::Rc;
 use ginterface::{GraphicsInterface, MemoryIndexType};
-use EngineResult;
+use data::*;
+use {EngineResult, EngineError};
+use internal_traits::*;
+use tuple_tools::*;
 
 // Resource DataType //
 pub struct Buffer(vk::Buffer, VkDeviceSize);

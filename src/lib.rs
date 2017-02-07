@@ -53,7 +53,10 @@ pub use error::*;
 pub use engine::EngineBuilder;
 pub use ginterface::GraphicsInterface;
 pub use framebuffer::{AttachmentDesc, AttachmentRef, PassDesc, PassDependency, AttachmentClearValue, PreciseRenderPass};
-pub use command::{MemoryBarrier, BufferMemoryBarrier, ImageMemoryBarrier, IndirectCallParameter, BufferCopyRegion, ImageCopyRegion, ImageBlitRegion};
+pub use command::{
+	MemoryBarrier, BufferMemoryBarrier, ImageMemoryBarrier, IndirectCallParameter, BufferCopyRegion, ImageCopyRegion, ImageBlitRegion,
+	GraphicsCommandBuffersView, TransferCommandBuffersView
+};
 pub use resource::{
 	ImageSubresourceRange, ImageSubresourceLayers, BufferContent, BufferOffsets,
 	ImageDescriptor1, ImageDescriptor2, ImageDescriptor3, ImagePreallocator,
@@ -65,7 +68,7 @@ pub use shading::{
 	PrimitiveTopology, ViewportWithScissorRect, RasterizerState, AttachmentBlendState,
 	GraphicsPipelineBuilder
 };
-pub use descriptor::{ShaderStage, Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo};
+pub use descriptor::{ShaderStage, Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo, DescriptorSetArrayView};
 pub use debug_info::DebugLine;
 pub use input::*;
 pub use data::*;
@@ -79,8 +82,7 @@ pub mod ffi { pub use vkdefs::*; }
 // traits
 pub use engine::{AssetProvider, CommandSubmitter};
 pub use command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
-pub use resource::{ImageView, BufferResource, ImageResource};
-pub use tuple_tools::{TupleFlatR};
+pub use resource::{Resource, ImageView, BufferResource, ImageResource};
 // exported objects
 pub use engine::Engine;
 pub use synchronize::{QueueFence, Fence};
@@ -96,22 +98,10 @@ pub use descriptor::{DescriptorSetLayout, DescriptorSets};
 pub use debug_info::DebugInfo;
 
 // For internal exports //
-mod internals
+mod rawexports
 {
-	pub use super::internal_traits::*;
-	pub use super::engine::*;
-	pub use super::error::*;
-	pub use super::device::*;
-	pub use super::command::*;
-	pub use super::resource::*;
-	pub use super::synchronize::*;
-	pub use super::shading::*;
-	pub use super::descriptor::*;
-	pub use super::debug_info::*;
-	pub use super::data::*;
-	pub use super::input::*;
-	pub use super::concurrent::*;
-	pub use super::tuple_tools::*;
+	pub use internal_traits::InternalExports;
+	pub use synchronize::{fence_raw, qfence_raw};
 }
 
 type EngineResult<T> = Result<T, EngineError>;
