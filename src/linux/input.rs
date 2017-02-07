@@ -56,7 +56,7 @@ impl<InputNames: Eq + Hash + Copy> NativeInput<InputNames>
 		{
 			info!(target: "Interlude::Input", "Initializing for {} Input: {} [{}]", if joystick_device { "Joystick" } else { "Keyboard" }, name, node_path);
 			let idev = InputDevice::new(node_path).unwrap();
-			polling.register(&EventedFd(&idev.as_raw_fd()), mio::Token(node_number as usize), mio::Ready::readable(), mio::PollOpt::edge()).unwrap();
+			polling.register(&EventedFd(&idev.as_raw_fd()), mio::Token(node_number as usize), mio::Ready::readable(), mio::PollOpt::level()).unwrap();
 			input_devices.insert(node_number, idev);
 		}
 	}
@@ -87,8 +87,8 @@ impl<InputNames: Eq + Hash + Copy> NativeInput<InputNames>
 			}
 
 			let udev_monitor = udev.new_monitor().unwrap().add_filter_subsystem("input").enable_receiving();
-			polling.register(&EventedFd(&udev_monitor.as_raw_fd()), T_UDEV, mio::Ready::readable(), mio::PollOpt::edge()).unwrap();
-			polling.register(&EventedFd(&term_event_th.as_raw_fd()), T_PARENT, mio::Ready::readable(), mio::PollOpt::edge()).unwrap();
+			polling.register(&EventedFd(&udev_monitor.as_raw_fd()), T_UDEV, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
+			polling.register(&EventedFd(&term_event_th.as_raw_fd()), T_PARENT, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
 			let mut events = mio::Events::with_capacity(256);
 			'entire: loop
 			{
@@ -226,7 +226,6 @@ impl InputDevice
 				_ => ()
 			}
 		}
-		info!(target: "Interlude::NativeInputDevice", "Finish Updating: {:?}", std::time::SystemTime::now());
 	}
 	fn unplug(self, aggregate_key_states: &mut HashMap<InputKeys, u32>, aggregate_axis_states: &mut HashMap<InputAxis, f32>)
 	{
