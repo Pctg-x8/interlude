@@ -104,7 +104,7 @@ mod rawexports
 	pub use synchronize::{fence_raw, qfence_raw};
 }
 
-type EngineResult<T> = Result<T, EngineError>;
+pub type EngineResult<T> = Result<T, EngineError>;
 // Result<_, EngineError> as Unrecoverable(Crashes immediately)
 #[macro_export]
 macro_rules! Unrecoverable

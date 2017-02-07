@@ -497,17 +497,17 @@ macro_rules! DrawingCommandRecorderDefaultImpl
 				unsafe { vk::vkCmdBindPipeline(*self.0, VkPipelineBindPoint::Graphics, **pipeline.get_internal()) };
 				self
 			}
-			fn bind_descriptor_sets(self, layout: &shading::PipelineLayout, sets: &DescriptorSetArrayView) -> Self
+			fn bind_descriptor_sets(self, layout: &PipelineLayout, sets: &DescriptorSetArrayView) -> Self
 			{
 				self.bind_descriptor_sets_partial(layout, 0, sets)
 			}
-			fn bind_descriptor_sets_partial(self, layout: &shading::PipelineLayout, start_set: u32, sets: &DescriptorSetArrayView) -> Self
+			fn bind_descriptor_sets_partial(self, layout: &PipelineLayout, start_set: u32, sets: &DescriptorSetArrayView) -> Self
 			{
 				unsafe { vk::vkCmdBindDescriptorSets(*self.0, VkPipelineBindPoint::Graphics, **layout.get_internal(),
 					start_set, sets.len() as u32, sets.as_ptr(), 0, std::ptr::null()) };
 				self
 			}
-			fn push_constants(self, layout: &shading::PipelineLayout, shader_stage: ShaderStage, range: std::ops::Range<u32>, data: &[f32]) -> Self
+			fn push_constants(self, layout: &PipelineLayout, shader_stage: ShaderStage, range: std::ops::Range<u32>, data: &[f32]) -> Self
 			{
 				unsafe { vk::vkCmdPushConstants(*self.0, **layout.get_internal(), shader_stage as VkShaderStageFlags,
 					range.start, range.len() as u32, data.as_ptr() as *const c_void) };
