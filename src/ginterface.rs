@@ -17,11 +17,6 @@ use std::borrow::Cow;
 #[cfg(windows)] const PSURFACE_EXNAME: &'static str = "VK_KHR_win32_surface";
 #[cfg(unix)] const PSURFACE_EXNAME: &'static str = "VK_KHR_xcb_surface";
 
-fn bool_to_str(v: VkBool32) -> &'static str
-{
-	if v == true as VkBool32 { "true" } else { "false" }
-}
-
 pub struct DeviceFeatures(VkPhysicalDeviceFeatures);
 impl DeviceFeatures
 {

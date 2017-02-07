@@ -3,10 +3,11 @@
 #![allow(dead_code)]
 
 use super::*;
+use render_surface;
 use tuple_tools::*;
 use device::Device;
 use rawexports::*;
-use ginterface::*;
+use ginterface::DeviceFeatures;
 use {std, log};
 use vkdefs::*;
 use ansi_term::*;
@@ -15,7 +16,6 @@ use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::borrow::Cow;
-use EngineResult;
 use std::ops::Deref;
 
 // Select WindowSystem and InputSystem

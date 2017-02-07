@@ -10,7 +10,6 @@ use std;
 use std::rc::Rc;
 use vk::traits::*;
 
-pub type VkXcbSurfaceCreateFlagsKHR = VkFlags;
 #[repr(C)] pub struct VkXcbSurfaceCreateInfoKHR
 {
 	pub sType: VkStructureType, pub pNext: *const c_void, pub flags: VkXcbSurfaceCreateFlagsKHR,
