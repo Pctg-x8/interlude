@@ -18,7 +18,7 @@ impl std::convert::From<Size2> for Viewport
 		let Size2(w, h) = s;
 		Viewport(0.0, 0.0, w as f32, h as f32, 0.0, 1.0)
 	}
-} 
+}
 impl std::convert::From<Size3> for Size2
 {
 	fn from(s: Size3) -> Size2 { let Size3(x, y, _) = s; Size2(x, y) }
@@ -35,6 +35,14 @@ ConvertByTransmuting!(VkExtent2D => Size2);
 ConvertByTransmuting!(VkExtent3D => Size3);
 ConvertByTransmuting!(VkOffset2D => Offset2);
 ConvertByTransmuting!(VkOffset3D => Offset3);
+impl Viewport
+{
+	pub fn make_from(s: &Size2) -> Viewport
+	{
+		let &Size2(w, h) = s;
+		Viewport(0.0, 0.0, w as f32, h as f32, 0.0, 1.0)
+	}
+}
 
 // Extra Data Exports
 #[derive(Clone, Debug, PartialEq)] #[repr(C)] pub struct Size2F(pub f32, pub f32);
