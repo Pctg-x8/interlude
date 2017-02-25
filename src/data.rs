@@ -47,6 +47,16 @@ impl Size2
 {
 	pub fn width(&self) -> u32 { self.0 }
 	pub fn height(&self) -> u32 { self.1 }
+	pub fn hpart(&self, left: f32, right: f32, gap: u32) -> (Size2, Size2)
+	{
+		let total = left + right;
+		(Size2((self.width() as f32 * left / total) as u32 - gap, self.height()), Size2((self.width() as f32 * right / total) as u32 - gap, self.height()))
+	}
+	pub fn vpart(&self, top: f32, bottom: f32, gap: u32) -> (Size2, Size2)
+	{
+		let total = top + bottom;
+		(Size2(self.width(), (self.height() as f32 * top / total) as u32 - gap), Size2(self.width(), (self.height() as f32 * bottom / total) as u32 - gap))
+	}
 }
 impl Size3
 {
@@ -56,14 +66,14 @@ impl Size3
 }
 impl Offset2
 {
-	pub fn x(&self) -> u32 { self.0 }
-	pub fn y(&self) -> u32 { self.1 }
+	pub fn x(&self) -> i32 { self.0 }
+	pub fn y(&self) -> i32 { self.1 }
 }
 impl Offset3
 {
-	pub fn x(&self) -> u32 { self.0 }
-	pub fn y(&self) -> u32 { self.1 }
-	pub fn z(&self) -> u32 { self.2 }
+	pub fn x(&self) -> i32 { self.0 }
+	pub fn y(&self) -> i32 { self.1 }
+	pub fn z(&self) -> i32 { self.2 }
 }
 
 // Extra Data Exports
