@@ -43,6 +43,28 @@ impl Viewport
 		Viewport(0.0, 0.0, w as f32, h as f32, 0.0, 1.0)
 	}
 }
+impl Size2
+{
+	pub fn width(&self) -> u32 { self.0 }
+	pub fn height(&self) -> u32 { self.1 }
+}
+impl Size3
+{
+	pub fn width(&self) -> u32 { self.0 }
+	pub fn height(&self) -> u32 { self.1 }
+	pub fn depth(&self) -> u32 { self.2 }
+}
+impl Offset2
+{
+	pub fn x(&self) -> u32 { self.0 }
+	pub fn y(&self) -> u32 { self.1 }
+}
+impl Offset3
+{
+	pub fn x(&self) -> u32 { self.0 }
+	pub fn y(&self) -> u32 { self.1 }
+	pub fn z(&self) -> u32 { self.2 }
+}
 
 // Extra Data Exports
 #[derive(Clone, Debug, PartialEq)] #[repr(C)] pub struct Size2F(pub f32, pub f32);
