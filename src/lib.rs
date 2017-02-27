@@ -63,8 +63,7 @@ pub use resource::{
 	SamplerState, ComponentSwizzle, ComponentMapping, Filter
 };
 pub use shading::{
-	PipelineShaderProgram, ConstantEntry,
-	VertexBinding, VertexAttribute, PushConstantDesc,
+	ConstantEntry, VertexBinding, VertexAttribute, PushConstantDesc,
 	PrimitiveTopology, ViewportWithScissorRect, RasterizerState, AttachmentBlendState,
 	GraphicsPipelineBuilder
 };
@@ -83,6 +82,7 @@ pub mod ffi { pub use vkdefs::*; }
 pub use engine::{AssetProvider, CommandSubmitter};
 pub use command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
 pub use resource::{Resource, ImageView, BufferResource, ImageResource};
+pub use shading::Shader;
 // exported objects
 pub use engine::Engine;
 pub use synchronize::{QueueFence, Fence};
@@ -93,7 +93,8 @@ pub use resource::{
 	DeviceImage, StagingImage, MemoryMappedRange, ImageView1D, ImageView2D, ImageView3D,
 	Sampler, BufferPreallocator
 };
-pub use shading::{ShaderProgram, PipelineLayout, GraphicsPipelines, GraphicsPipeline};
+pub use shading::{VertexShader, TessellationControlShader, TessellationEvaluationShader, GeometryShader, FragmentShader, PipelineShaderProgram};
+pub use shading::{PipelineLayout, GraphicsPipelines, GraphicsPipeline};
 pub use descriptor::{DescriptorSetLayout, DescriptorSets};
 pub use debug_info::DebugInfo;
 

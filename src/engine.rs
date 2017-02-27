@@ -120,7 +120,7 @@ impl<T> LazyLoadedResource<T>
 }
 pub struct EngineResources
 {
-	postprocess_vsh: LazyLoadedResource<ShaderProgram>, postprocess_vsh_nouv: LazyLoadedResource<ShaderProgram>,
+	postprocess_vsh: LazyLoadedResource<VertexShader>, postprocess_vsh_nouv: LazyLoadedResource<VertexShader>,
 	default_renderpass: HashMap<(Option<bool>, VkFormat), RenderPass>, presenting_renderpass: HashMap<(Option<bool>, VkFormat), RenderPass>
 }
 pub struct Engine<InputNames: Eq + Copy + Hash>
@@ -172,7 +172,7 @@ pub trait AssetProvider
 {
 	fn parse_asset(&self, path: &str, extension: &str) -> std::ffi::OsString;
 
-	fn postprocess_vsh(&self, require_uv: bool) -> EngineResult<&ShaderProgram>;
+	fn postprocess_vsh(&self, require_uv: bool) -> EngineResult<&VertexShader>;
 	fn default_renderpass(&self, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>;
 	fn presenting_renderpass(&self, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>;
 }
@@ -183,7 +183,7 @@ impl<InputNames: Eq + Copy + Hash> AssetProvider for Engine<InputNames>
 		self.asset_dir.join(path.replace(".", "/")).with_extension(extension).into()
 	}
 
-	fn postprocess_vsh(&self, require_uv: bool) -> EngineResult<&ShaderProgram>
+	fn postprocess_vsh(&self, require_uv: bool) -> EngineResult<&VertexShader>
 	{
 		if require_uv { self.common_resources.postprocess_vsh(self) } else { self.common_resources.postprocess_vsh_nouv(self) }
 	}
@@ -208,14 +208,14 @@ impl EngineResources
 		}
 	}
 
-	fn postprocess_vsh<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(&self, context: &Engine) -> EngineResult<&ShaderProgram>
+	fn postprocess_vsh<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(&self, context: &Engine) -> EngineResult<&VertexShader>
 	{
-		self.postprocess_vsh.get(|| ShaderProgram::new_vertex_from_asset(context, "engine.shaders.PostProcessVertex", "main",
+		self.postprocess_vsh.get(|| VertexShader::from_asset(context, "engine.shaders.PostProcessVertex", "main",
 			&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
 	}
-	fn postprocess_vsh_nouv<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(&self, context: &Engine) -> EngineResult<&ShaderProgram>
+	fn postprocess_vsh_nouv<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(&self, context: &Engine) -> EngineResult<&VertexShader>
 	{
-		self.postprocess_vsh_nouv.get(|| ShaderProgram::new_vertex_from_asset(context, "engine.shaders.PostProcessVertexNoUV", "main",
+		self.postprocess_vsh_nouv.get(|| VertexShader::from_asset(context, "engine.shaders.PostProcessVertexNoUV", "main",
 			&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
 	}
 	fn default_renderpass(&self, context: &GraphicsInterface, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>

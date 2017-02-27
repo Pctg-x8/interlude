@@ -216,14 +216,14 @@ impl<'a> DebugInfo<'a>
 			try!(Sampler::new(engine, &sampler_state))
 		);
 
-		let vshader = try!(ShaderProgram::new_vertex_from_asset(engine, "engine.shaders.DebugInfoV", "main",
+		let vshader = try!(VertexShader::from_asset(engine, "engine.shaders.DebugInfoV", "main",
 			&[VertexBinding::PerVertex(std::mem::size_of::<Position>() as u32), VertexBinding::PerInstance(std::mem::size_of::<StrRenderInstanceData>() as u32)],
 			&[
 				VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0),
 				VertexAttribute(1, VkFormat::R32G32B32A32_SFLOAT, 0),
 				VertexAttribute(1, VkFormat::R32G32B32A32_SFLOAT, std::mem::size_of::<f32>() as u32 * 4)
 			]));
-		let fshader = try!(ShaderProgram::new_fragment_from_asset(engine, "engine.shaders.DebugInfoF", "main"));
+		let fshader = try!(FragmentShader::from_asset(engine, "engine.shaders.DebugInfoF", "main"));
 		let ds_layout = try!(DescriptorSetLayout::new(engine, vec![
 			Descriptor::Uniform(1, ShaderStage::Vertex),
 			Descriptor::CombinedSampler(1, ShaderStage::Fragment)
