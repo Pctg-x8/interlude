@@ -8,6 +8,7 @@ use super::*;
 use rawexports::InternalExports;
 use std::ops::Deref;
 use std::io::prelude::*;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub enum VertexBinding { PerVertex(u32), PerInstance(u32) }
@@ -69,11 +70,11 @@ fn build_shader_module_from_file(engine: &GraphicsInterface, path: std::ffi::OsS
 impl VertexShader
 {
 	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str,
-		bindings: &[VertexBinding], attributes: &[VertexAttribute]) -> EngineResult<Self>
+		bindings: &[VertexBinding], attributes: &[VertexAttribute]) -> EngineResult<Rc<Self>>
 	{
 		let os_path = engine.parse_asset(path, "spv");
 		info!(target: "Interlude::ShaderProgram", "Loading Vertex Shader from {:?}...", os_path);
-		build_shader_module_from_file(engine, os_path).map(|m| VertexShader
+		build_shader_module_from_file(engine, os_path).map(|m| Rc::new(VertexShader
 		{
 			internal: m, entry_point: CString::new(entry_point).unwrap(),
 			vertex_input: IntoNativeVertexInputState
@@ -87,43 +88,43 @@ impl VertexShader
 					.map(|(i, &VertexAttribute(binding, format, offset))| VkVertexInputAttributeDescription(i as u32, binding, format, offset))
 					.collect()
 			}
-		})
+		}))
 	}
 }
 impl TessellationControlShader
 {
-	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Self>
+	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Rc<Self>>
 	{
 		let os_path = engine.parse_asset(path, "spv");
 		info!(target: "Interlude::ShaderProgram", "Loading Tessellation Control Shader from {:?}...", os_path);
-		build_shader_module_from_file(engine, os_path).map(|m| TessellationControlShader { internal: m, entry_point: CString::new(entry_point).unwrap() })
+		build_shader_module_from_file(engine, os_path).map(|m| Rc::new(TessellationControlShader { internal: m, entry_point: CString::new(entry_point).unwrap() }))
 	}
 }
 impl TessellationEvaluationShader
 {
-	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Self>
+	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Rc<Self>>
 	{
 		let os_path = engine.parse_asset(path, "spv");
 		info!(target: "Interlude::ShaderProgram", "Loading Tessellation Evaluation Shader from {:?}...", os_path);
-		build_shader_module_from_file(engine, os_path).map(|m| TessellationEvaluationShader { internal: m, entry_point: CString::new(entry_point).unwrap() })
+		build_shader_module_from_file(engine, os_path).map(|m| Rc::new(TessellationEvaluationShader { internal: m, entry_point: CString::new(entry_point).unwrap() }))
 	}
 }
 impl GeometryShader
 {
-	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Self>
+	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Rc<Self>>
 	{
 		let os_path = engine.parse_asset(path, "spv");
 		info!(target: "Interlude::ShaderProgram", "Loading Geometry Shader from {:?}...", os_path);
-		build_shader_module_from_file(engine, os_path).map(|m| GeometryShader { internal: m, entry_point: CString::new(entry_point).unwrap() })
+		build_shader_module_from_file(engine, os_path).map(|m| Rc::new(GeometryShader { internal: m, entry_point: CString::new(entry_point).unwrap() }))
 	}
 }
 impl FragmentShader
 {
-	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Self>
+	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Rc<Self>>
 	{
 		let os_path = engine.parse_asset(path, "spv");
 		info!(target: "Interlude::ShaderProgram", "Loading Fragment Shader from {:?}...", os_path);
-		build_shader_module_from_file(engine, os_path).map(|m| FragmentShader { internal: m, entry_point: CString::new(entry_point).unwrap() })
+		build_shader_module_from_file(engine, os_path).map(|m| Rc::new(FragmentShader { internal: m, entry_point: CString::new(entry_point).unwrap() }))
 	}
 }
 
@@ -225,14 +226,14 @@ impl ConstantEntry
 		}
 	}
 }
-pub struct PipelineShaderProgram<'a, Module: Shader + 'a>(pub &'a Module, pub Vec<(usize, ConstantEntry)>);
-impl<'a, Module: Shader + 'a> PipelineShaderProgram<'a, Module>
+pub struct PipelineShaderProgram<Module: Shader>(pub Rc<Module>, pub Vec<(usize, ConstantEntry)>);
+impl<Module: Shader> PipelineShaderProgram<Module>
 {
-	pub fn unspecialized(shref: &'a Module) -> Self { PipelineShaderProgram(shref, Vec::new()) }
+	pub fn unspecialized(shref: &Rc<Module>) -> Self { PipelineShaderProgram(shref.clone(), Vec::new()) }
 }
-impl<'a, Module: Shader + 'a> Clone for PipelineShaderProgram<'a, Module>
+impl<Module: Shader> Clone for PipelineShaderProgram<Module>
 {
-	fn clone(&self) -> Self { PipelineShaderProgram(self.0, self.1.clone()) }
+	fn clone(&self) -> Self { PipelineShaderProgram(self.0.clone(), self.1.clone()) }
 }
 pub struct IntoNativeShaderStageCreateInfoStruct
 {
@@ -244,11 +245,11 @@ pub struct IntoNativeShaderStageCreateInfoStruct
 pub struct GraphicsPipelineBuilder<'a>
 {
 	layout: &'a PipelineLayout, render_pass: &'a RenderPass, subpass_index: u32,
-	vertex_shader: Option<PipelineShaderProgram<'a, VertexShader>>,
-	tesscontrol_shader: Option<PipelineShaderProgram<'a, TessellationControlShader>>,
-	tessevaluation_shader: Option<PipelineShaderProgram<'a, TessellationEvaluationShader>>,
-	geometry_shader: Option<PipelineShaderProgram<'a, GeometryShader>>,
-	fragment_shader: Option<PipelineShaderProgram<'a, FragmentShader>>,
+	vertex_shader: Option<PipelineShaderProgram<VertexShader>>,
+	tesscontrol_shader: Option<PipelineShaderProgram<TessellationControlShader>>,
+	tessevaluation_shader: Option<PipelineShaderProgram<TessellationEvaluationShader>>,
+	geometry_shader: Option<PipelineShaderProgram<GeometryShader>>,
+	fragment_shader: Option<PipelineShaderProgram<FragmentShader>>,
 	primitive_topology: PrimitiveTopology, vp_sc: Vec<ViewportWithScissorRect>,
 	rasterizer_state: RasterizerState, use_alpha_to_coverage: bool, attachment_blend_states: Vec<AttachmentBlendState>
 }
@@ -280,7 +281,7 @@ impl<'a> GraphicsPipelineBuilder<'a>
 		}
 	}
 	pub fn for_postprocess<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &'a Engine, layout: &'a PipelineLayout,
-		render_pass: PreciseRenderPass<'a>, fragment_shader: PipelineShaderProgram<'a, FragmentShader>, processing_viewport: &Viewport) -> Result<Self, EngineError>
+		render_pass: PreciseRenderPass<'a>, fragment_shader: PipelineShaderProgram<FragmentShader>, processing_viewport: &Viewport) -> Result<Self, EngineError>
 	{
 		Ok(GraphicsPipelineBuilder
 		{
@@ -295,23 +296,23 @@ impl<'a> GraphicsPipelineBuilder<'a>
 		})
 	}
 
-	pub fn vertex_shader(mut self, vshader: PipelineShaderProgram<'a, VertexShader>) -> Self
+	pub fn vertex_shader(mut self, vshader: PipelineShaderProgram<VertexShader>) -> Self
 	{
 		self.vertex_shader = Some(vshader); self
 	}
-	pub fn tesscontrol_shader(mut self, tcshader: PipelineShaderProgram<'a, TessellationControlShader>) -> Self
+	pub fn tesscontrol_shader(mut self, tcshader: PipelineShaderProgram<TessellationControlShader>) -> Self
 	{
 		self.tesscontrol_shader = Some(tcshader); self
 	}
-	pub fn tessevaluation_shader(mut self, teshader: PipelineShaderProgram<'a, TessellationEvaluationShader>) -> Self
+	pub fn tessevaluation_shader(mut self, teshader: PipelineShaderProgram<TessellationEvaluationShader>) -> Self
 	{
 		self.tessevaluation_shader = Some(teshader); self
 	}
-	pub fn geometry_shader(mut self, gshader: PipelineShaderProgram<'a, GeometryShader>) -> Self
+	pub fn geometry_shader(mut self, gshader: PipelineShaderProgram<GeometryShader>) -> Self
 	{
 		self.geometry_shader = Some(gshader); self
 	}
-	pub fn fragment_shader(mut self, fshader: PipelineShaderProgram<'a, FragmentShader>) -> Self
+	pub fn fragment_shader(mut self, fshader: PipelineShaderProgram<FragmentShader>) -> Self
 	{
 		self.fragment_shader = Some(fshader); self
 	}
