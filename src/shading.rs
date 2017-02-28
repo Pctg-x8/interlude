@@ -9,6 +9,7 @@ use rawexports::InternalExports;
 use std::ops::Deref;
 use std::io::prelude::*;
 use std::rc::Rc;
+use std::path::Path;
 
 #[derive(Clone)]
 pub enum VertexBinding { PerVertex(u32), PerInstance(u32) }
@@ -62,19 +63,19 @@ impl InternalExports for TessellationControlShader { type InternalT = vk::Shader
 impl InternalExports for TessellationEvaluationShader { type InternalT = vk::ShaderModule; fn get_internal(&self) -> &vk::ShaderModule { &self.internal } }
 impl InternalExports for GeometryShader { type InternalT = vk::ShaderModule; fn get_internal(&self) -> &vk::ShaderModule { &self.internal } }
 impl InternalExports for FragmentShader { type InternalT = vk::ShaderModule; fn get_internal(&self) -> &vk::ShaderModule { &self.internal } }
-fn build_shader_module_from_file(engine: &GraphicsInterface, path: std::ffi::OsString) -> EngineResult<vk::ShaderModule>
+fn build_shader_module_from_file(engine: &GraphicsInterface, path: &Path) -> EngineResult<vk::ShaderModule>
 {
 	std::fs::File::open(path).and_then(|mut fp| { let mut vb = Vec::new(); fp.read_to_end(&mut vb).map(|_| vb) }).map_err(From::from)
 		.and_then(|b| vk::ShaderModule::new(engine.device(), &b).map_err(From::from))
 }
 impl VertexShader
 {
-	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str,
+	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>, P: AssetPath>(engine: &Engine, path: P, entry_point: &str,
 		bindings: &[VertexBinding], attributes: &[VertexAttribute]) -> EngineResult<Rc<Self>>
 	{
-		let os_path = engine.parse_asset(path, "spv");
-		info!(target: "Interlude::ShaderProgram", "Loading Vertex Shader from {:?}...", os_path);
-		build_shader_module_from_file(engine, os_path).map(|m| Rc::new(VertexShader
+		let fs_path = engine.parse_asset(path, "spv");
+		info!(target: "Interlude::ShaderProgram", "Loading Vertex Shader from {:?}...", fs_path);
+		build_shader_module_from_file(engine, &fs_path).map(|m| Rc::new(VertexShader
 		{
 			internal: m, entry_point: CString::new(entry_point).unwrap(),
 			vertex_input: IntoNativeVertexInputState
@@ -93,38 +94,38 @@ impl VertexShader
 }
 impl TessellationControlShader
 {
-	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Rc<Self>>
+	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>, P: AssetPath>(engine: &Engine, path: P, entry_point: &str) -> EngineResult<Rc<Self>>
 	{
-		let os_path = engine.parse_asset(path, "spv");
-		info!(target: "Interlude::ShaderProgram", "Loading Tessellation Control Shader from {:?}...", os_path);
-		build_shader_module_from_file(engine, os_path).map(|m| Rc::new(TessellationControlShader { internal: m, entry_point: CString::new(entry_point).unwrap() }))
+		let fs_path = engine.parse_asset(path, "spv");
+		info!(target: "Interlude::ShaderProgram", "Loading Tessellation Control Shader from {:?}...", fs_path);
+		build_shader_module_from_file(engine, &fs_path).map(|m| Rc::new(TessellationControlShader { internal: m, entry_point: CString::new(entry_point).unwrap() }))
 	}
 }
 impl TessellationEvaluationShader
 {
-	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Rc<Self>>
+	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>, P: AssetPath>(engine: &Engine, path: P, entry_point: &str) -> EngineResult<Rc<Self>>
 	{
-		let os_path = engine.parse_asset(path, "spv");
-		info!(target: "Interlude::ShaderProgram", "Loading Tessellation Evaluation Shader from {:?}...", os_path);
-		build_shader_module_from_file(engine, os_path).map(|m| Rc::new(TessellationEvaluationShader { internal: m, entry_point: CString::new(entry_point).unwrap() }))
+		let fs_path = engine.parse_asset(path, "spv");
+		info!(target: "Interlude::ShaderProgram", "Loading Tessellation Evaluation Shader from {:?}...", fs_path);
+		build_shader_module_from_file(engine, &fs_path).map(|m| Rc::new(TessellationEvaluationShader { internal: m, entry_point: CString::new(entry_point).unwrap() }))
 	}
 }
 impl GeometryShader
 {
-	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Rc<Self>>
+	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>, P: AssetPath>(engine: &Engine, path: P, entry_point: &str) -> EngineResult<Rc<Self>>
 	{
-		let os_path = engine.parse_asset(path, "spv");
-		info!(target: "Interlude::ShaderProgram", "Loading Geometry Shader from {:?}...", os_path);
-		build_shader_module_from_file(engine, os_path).map(|m| Rc::new(GeometryShader { internal: m, entry_point: CString::new(entry_point).unwrap() }))
+		let fs_path = engine.parse_asset(path, "spv");
+		info!(target: "Interlude::ShaderProgram", "Loading Geometry Shader from {:?}...", fs_path);
+		build_shader_module_from_file(engine, &fs_path).map(|m| Rc::new(GeometryShader { internal: m, entry_point: CString::new(entry_point).unwrap() }))
 	}
 }
 impl FragmentShader
 {
-	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(engine: &Engine, path: &str, entry_point: &str) -> EngineResult<Rc<Self>>
+	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>, P: AssetPath>(engine: &Engine, path: P, entry_point: &str) -> EngineResult<Rc<Self>>
 	{
-		let os_path = engine.parse_asset(path, "spv");
-		info!(target: "Interlude::ShaderProgram", "Loading Fragment Shader from {:?}...", os_path);
-		build_shader_module_from_file(engine, os_path).map(|m| Rc::new(FragmentShader { internal: m, entry_point: CString::new(entry_point).unwrap() }))
+		let fs_path = engine.parse_asset(path, "spv");
+		info!(target: "Interlude::ShaderProgram", "Loading Fragment Shader from {:?}...", fs_path);
+		build_shader_module_from_file(engine, &fs_path).map(|m| Rc::new(FragmentShader { internal: m, entry_point: CString::new(entry_point).unwrap() }))
 	}
 }
 

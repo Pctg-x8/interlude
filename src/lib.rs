@@ -79,7 +79,7 @@ pub use command::{GraphicsCommandRecorder, TransferCommandRecorder};
 pub mod ffi { pub use vkdefs::*; }
 
 // traits
-pub use engine::{AssetProvider, CommandSubmitter};
+pub use engine::{AssetProvider, AssetPath, CommandSubmitter};
 pub use command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
 pub use resource::{Resource, ImageView, BufferResource, ImageResource};
 pub use shading::Shader;

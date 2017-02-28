@@ -171,7 +171,7 @@ impl<InputNames: Eq + Copy + Hash> Engine<InputNames>
 /// Asset Provider
 pub trait AssetProvider
 {
-	fn parse_asset(&self, path: &str, extension: &str) -> std::ffi::OsString;
+	fn parse_asset<P: AssetPath>(&self, path: P, extension: &str) -> PathBuf;
 
 	fn postprocess_vsh(&self, require_uv: bool) -> EngineResult<&Rc<VertexShader>>;
 	fn default_renderpass(&self, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>;
@@ -179,9 +179,9 @@ pub trait AssetProvider
 }
 impl<InputNames: Eq + Copy + Hash> AssetProvider for Engine<InputNames>
 {
-	fn parse_asset(&self, path: &str, extension: &str) -> std::ffi::OsString
+	fn parse_asset<P: AssetPath>(&self, path: P, extension: &str) -> PathBuf
 	{
-		self.asset_dir.join(path.replace(".", "/")).with_extension(extension).into()
+		path.decode(&self.asset_dir, extension)
 	}
 
 	fn postprocess_vsh(&self, require_uv: bool) -> EngineResult<&Rc<VertexShader>>
@@ -195,6 +195,25 @@ impl<InputNames: Eq + Copy + Hash> AssetProvider for Engine<InputNames>
 	fn presenting_renderpass(&self, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>
 	{
 		self.common_resources.presenting_renderpass(&self.gi, format, clear_mode)
+	}
+}
+/// Asset Path, implemented for some types because optimization.
+pub trait AssetPath
+{
+	fn decode(self, basedir: &Path, extension: &str) -> PathBuf;
+}
+impl<'s> AssetPath for &'s str
+{
+	fn decode(self, basedir: &Path, extension: &str) -> PathBuf
+	{
+		basedir.join(self.replace(".", "/")).with_extension(extension)
+	}
+}
+impl<'s> AssetPath for &'s [&'s str]
+{
+	fn decode(self, basedir: &Path, extension: &str) -> PathBuf
+	{
+		basedir.join(self.join("/")).with_extension(extension)
 	}
 }
 // Delayed Loaders for EngineResources
