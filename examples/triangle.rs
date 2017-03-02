@@ -29,10 +29,10 @@ fn main()
 		.collect::<Result<Vec<_>, _>>().or_crash();
 
 	// load shaders and build pipeline state
-	let vshader = ShaderProgram::new_vertex_from_asset(&engine, "examples.triangle.vert", "main",
+	let vshader = VertexShader::from_asset(&engine, "examples.triangle.vert", "main",
 		&[VertexBinding::PerVertex(std::mem::size_of::<[CVector4; 2]>() as u32)],
 		&[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0), VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, std::mem::size_of::<CVector4>() as u32)]).or_crash();
-	let fshader = ShaderProgram::new_fragment_from_asset(&engine, "engine.shaders.TrivialFragment", "main").or_crash();
+	let fshader = FragmentShader::from_asset(&engine, "engine.shaders.TrivialFragment", "main").or_crash();
 	let psl = PipelineLayout::new(&engine, &[], &[]).or_crash();
 	let ps_mold = GraphicsPipelineBuilder::new(&psl, PreciseRenderPass(fb[0].renderpass(), 0))
 		.primitive_topology(PrimitiveTopology::TriangleList(false))
