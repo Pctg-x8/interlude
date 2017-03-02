@@ -13,6 +13,7 @@ use vk::traits::*;
 
 // Platform dependent selection
 #[cfg(windows)] use win32::NativeWindow;
+#[cfg(windows)] use win32::Surface;
 #[cfg(unix)] use linux::NativeWindowAndServerCon as NativeWindow;
 #[cfg(unix)] use linux::Surface;
 

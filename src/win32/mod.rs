@@ -1,5 +1,7 @@
 
+mod wsi;
+pub use self::wsi::Surface;
 mod window;
 pub use self::window::*;
-mod bstr;
-pub use self::bstr::*;
+mod input;
+pub use self::input::NativeInput;
