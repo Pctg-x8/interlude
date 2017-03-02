@@ -11,9 +11,9 @@ use std::io::prelude::*;
 use std::rc::Rc;
 use std::path::Path;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum VertexBinding { PerVertex(u32), PerInstance(u32) }
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VertexAttribute(pub u32, pub VkFormat, pub u32);
 pub struct IntoNativeVertexInputState
 {
