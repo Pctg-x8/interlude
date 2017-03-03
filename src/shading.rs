@@ -22,7 +22,7 @@ pub struct IntoNativeVertexInputState
 }
 
 /// The structure that is part of Shader Program.
-pub trait Shader : InternalExports<InternalT = vk::ShaderModule>
+pub trait Shader
 {
 	fn as_stage_bits() -> VkShaderStageFlags;
 	fn entry_point_ptr(&self) -> *const c_char;
@@ -362,7 +362,7 @@ pub struct IntoNativeGraphicsPipelineCreateInfoStruct<'a>
 	multisample_state: VkPipelineMultisampleStateCreateInfo,
 	color_blend_state: VkPipelineColorBlendStateCreateInfo
 }
-fn make_shaderstage_data<Module: Shader>(s: &PipelineShaderProgram<Module>) -> IntoNativeShaderStageCreateInfoStruct
+fn make_shaderstage_data<Module: Shader + InternalExports<InternalT = vk::ShaderModule>>(s: &PipelineShaderProgram<Module>) -> IntoNativeShaderStageCreateInfoStruct
 {
 	let (map_entries, const_values) = if s.1.is_empty() { (Vec::new(), Vec::new()) } else
 	{
