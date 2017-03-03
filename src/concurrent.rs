@@ -16,7 +16,7 @@ use std::sync::Arc;
 	{
 		let evname = std::ffi::CString::new(name).unwrap();
 		let ev = unsafe { CreateEventA(std::ptr::null_mut(), FALSE, FALSE, evname.as_ptr()) };
-		if ev.is_null() { Err(EngineError::from(std::io::Error::last_os_error())) }
+		if ev.is_null() { Err(From::from(std::io::Error::last_os_error())) }
 		else { Ok(Arc::new(Event(ev))) }
 	}
 	pub fn set(&self) { unsafe { SetEvent(self.0); } }

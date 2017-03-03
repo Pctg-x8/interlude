@@ -134,6 +134,10 @@ impl<InputNames: Eq + Copy + Hash> EngineCoreExports for Engine<InputNames>
 {
 	fn graphics(&self) -> &GraphicsInterface { &self.gi }
 }
+macro_rules! FunComposite1
+{
+	($f: expr; $g: expr) => {|x| $f($g(x))}
+}
 impl<InputNames: Eq + Copy + Hash> Engine<InputNames>
 {
 	pub fn new(info: EngineBuilder<InputNames>) -> Result<Self, EngineError>
@@ -145,7 +149,7 @@ impl<InputNames: Eq + Copy + Hash> Engine<InputNames>
 		GraphicsInterface::new(app_name, app_version, &extra_features).and_then(|gi|
 		{
 			let window = NativeWindow::new(&size, &caption, resizable).and_then(|n| render_surface::make_render_window(n, &gi, &size));
-			let ni = Input::new().map(RwLock::new).map(Arc::new);
+			let ni = Input::new().map(FunComposite1!(Arc::new; RwLock::new));
 
 			(window, ni).flatten().map(move |(window, ni)| Engine
 			{

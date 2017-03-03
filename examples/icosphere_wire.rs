@@ -46,9 +46,9 @@ fn main()
 	};
 
 	// load shaders and build pipeline state
-	let vshader = ShaderProgram::new_vertex_from_asset(&engine, "examples.icosphere.vert", "main",
+	let vshader = VertexShader::from_asset(&engine, "examples.icosphere.vert", "main",
 		&[VertexBinding::PerVertex(std::mem::size_of::<CVector4>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]).or_crash();
-	let fshader = ShaderProgram::new_fragment_from_asset(&engine, "examples.icosphere.frag", "main").or_crash();
+	let fshader = FragmentShader::from_asset(&engine, "examples.icosphere.frag", "main").or_crash();
 	let dsl_cam = DescriptorSetLayout::new(&engine, vec![Descriptor::Uniform(1, ShaderStage::Vertex)].into()).or_crash();
 	let psl = PipelineLayout::new(&engine, &[&dsl_cam], &[]).or_crash();
 	let ps_mold = GraphicsPipelineBuilder::new(&psl, PreciseRenderPass(fb[0].renderpass(), 0))
@@ -56,7 +56,7 @@ fn main()
 		.vertex_shader(PipelineShaderProgram::unspecialized(&vshader))
 		.rasterizer_enable_wired_mode()
 		.viewport_scissors(&[ViewportWithScissorRect::default_scissor(&vport)])
-		.fragment_shader(PipelineShaderProgram(&fshader, vec![
+		.fragment_shader(PipelineShaderProgram(fshader.clone(), vec![
 			(0, ConstantEntry::Float(1.0)),
 			(1, ConstantEntry::Float(1.0)),
 			(2, ConstantEntry::Float(1.0)),
