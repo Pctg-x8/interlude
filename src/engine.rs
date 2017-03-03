@@ -227,6 +227,10 @@ impl<'s> AssetPath for &'s [&'s str]
 		basedir.join(self.join("/")).with_extension(extension)
 	}
 }
+impl<'s, T> AssetPath for &'s Vec<T> where &'s [T]: AssetPath
+{
+	fn decode(self, basedir: &Path, extension: &str) -> PathBuf { AssetPath::decode(&self[..], basedir, extension) }
+}
 // Delayed Loaders for EngineResources
 impl EngineResources
 {
