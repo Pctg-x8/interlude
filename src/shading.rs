@@ -153,7 +153,7 @@ impl PipelineLayout
 impl InternalExports for PipelineLayout { type InternalT = vk::PipelineLayout; fn get_internal(&self) -> &vk::PipelineLayout { &self.0 } }
 
 // Primitive Topology + With-Adjacency flag
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PrimitiveTopology
 {
 	Point, LineList(bool), LineStrip(bool), TriangleList(bool), TriangleStrip(bool)
@@ -176,7 +176,7 @@ impl std::convert::Into<VkPrimitiveTopology> for PrimitiveTopology
 		}
 	}
 }
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ViewportWithScissorRect(Viewport, Rect2);
 impl ViewportWithScissorRect
 {
@@ -186,7 +186,7 @@ impl ViewportWithScissorRect
 		ViewportWithScissorRect(vp.clone(), Rect2(Offset2(vx as i32, vy as i32), Size2(vw as u32, vh as u32)))
 	}
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CullingSide { Front, Back }
 impl std::convert::Into<VkCullModeFlags> for CullingSide
 {
@@ -199,12 +199,12 @@ impl std::convert::Into<VkCullModeFlags> for CullingSide
 		}
 	}
 }
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RasterizerState
 {
 	pub wired_render: bool, pub cull_side: Option<CullingSide>
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AttachmentBlendState
 {
 	Disabled, AlphaBlend, PremultipliedAlphaBlend
