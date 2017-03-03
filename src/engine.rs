@@ -213,6 +213,13 @@ impl<'s> AssetPath for &'s str
 		basedir.join(self.replace(".", "/")).with_extension(extension)
 	}
 }
+impl<'s> AssetPath for &'s [String]
+{
+	fn decode(self, basedir: &Path, extension: &str) -> PathBuf
+	{
+		basedir.join(self.join("/")).with_extension(extension)
+	}
+}
 impl<'s> AssetPath for &'s [&'s str]
 {
 	fn decode(self, basedir: &Path, extension: &str) -> PathBuf
