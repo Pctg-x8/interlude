@@ -174,9 +174,9 @@ impl<'a> std::convert::Into<VkClearValue> for &'a AttachmentClearValue
 	}
 }
 
-fn into_ref_of_ref<'a, T, U>(from: &[&'a T]) -> Vec<U> where &'a T: std::convert::Into<U>
+fn into_ref_of_ref<'a, T, U>(from: &'a [T]) -> Vec<U> where &'a T: std::convert::Into<U>
 {
-	from.into_iter().map(|&x| x.into()).collect()
+	from.into_iter().map(|x| x.into()).collect()
 }
 
 use ginterface::GraphicsInterface;
@@ -191,7 +191,7 @@ pub struct Framebuffer { mold: RenderPass, internal: vk::Framebuffer, area: VkEx
 pub struct PreciseRenderPass<'a>(pub &'a RenderPass, pub u32);
 impl RenderPass
 {
-	pub fn new(engine: &GraphicsInterface, attachments: &[&AttachmentDesc], passes: &[&PassDesc], deps: &[&PassDependency]) -> EngineResult<Self>
+	pub fn new(engine: &GraphicsInterface, attachments: &[AttachmentDesc], passes: &[PassDesc], deps: &[PassDependency]) -> EngineResult<Self>
 	{
 		let attachments = into_ref_of_ref(attachments);
 		let passes = into_ref_of_ref(passes);

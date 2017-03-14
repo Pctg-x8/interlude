@@ -263,7 +263,7 @@ impl EngineResources
 				.. Default::default()
 			};
 			let pass = PassDesc::single_fragment_output(0);
-			try!(RenderPass::new(context, &[&attachment], &[&pass], &[]))
+			try!(RenderPass::new(context, &[attachment], &[pass], &[]))
 		}))
 	}
 	fn presenting_renderpass(&self, context: &GraphicsInterface, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>
@@ -276,7 +276,7 @@ impl EngineResources
 				.. Default::default()
 			};
 			let pass = PassDesc::single_fragment_output(0);
-			try!(RenderPass::new(context, &[&attachment], &[&pass], &[]))
+			try!(RenderPass::new(context, &[attachment], &[pass], &[]))
 		}))
 	}
 }
