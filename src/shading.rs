@@ -1,7 +1,7 @@
 ///! Interlude: Primitive Shading(Shaders and Pipelines)
 
 use {std, vk};
-use vkdefs::*;
+use vk::defs::*;
 use std::ffi::CString;
 use std::os::raw::c_char;
 use super::*;

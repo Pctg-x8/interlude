@@ -3,7 +3,7 @@
 use {std, vk};
 use {ApplicationState, EngineResult, Size2, EngineError, Event};
 use xcb::ffi::*;
-use vkdefs::*;
+use vk::defs::*;
 use std::os::raw::*;
 use std::rc::Rc;
 use std::os::unix::io::*;

@@ -3,9 +3,6 @@ name = "interlude"
 version = "0.1.0"
 authors = ["S.Percentage <Syn.Tri.Naga@gmail.com>"]
 
-[features]
-container = []
-
 [dependencies]
 libc = "0.2.*"
 log = "0.3.6"
@@ -16,8 +13,6 @@ ansi_term = "0.9.0"
 thread-scoped = "1.0.1"
 time = "0.1.35"
 mio = "0.6.3"
-interlude-vkdefs = { git = "https://github.com/Pctg-x8/interlude_vkdefs.git" }
-interlude-vk = { git = "https://github.com/Pctg-x8/interlude_vk.git" }
 
 [target."cfg(windows)".dependencies]
 winapi = "0.2.8"

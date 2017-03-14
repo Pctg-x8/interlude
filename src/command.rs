@@ -6,8 +6,7 @@
 use super::*;
 use tuple_tools::*;
 use {std, vk};
-use vkdefs::*;
-use vk::{vkBeginCommandBuffer, vkEndCommandBuffer, vkFreeCommandBuffers};
+use vk::defs::*;
 use vk::traits::*;
 use std::rc::Rc;
 use device::Device;

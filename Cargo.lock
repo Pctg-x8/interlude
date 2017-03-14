@@ -4,8 +4,6 @@ version = "0.1.0"
 dependencies = [
  "ansi_term 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "freetype-sys 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "interlude-vk 0.1.0 (git+https://github.com/Pctg-x8/interlude_vk.git)",
- "interlude-vkdefs 0.1.0 (git+https://github.com/Pctg-x8/interlude_vkdefs)",
  "kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -45,23 +43,6 @@ dependencies = [
 name = "gcc"
 version = "0.3.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "interlude-vk"
-version = "0.1.0"
-source = "git+https://github.com/Pctg-x8/interlude_vk.git#7048bd1bbfa81d17033382a9a49bcd77aedf768c"
-dependencies = [
- "interlude-vkdefs 0.1.0 (git+https://github.com/Pctg-x8/interlude_vkdefs)",
- "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "interlude-vkdefs"
-version = "0.1.0"
-source = "git+https://github.com/Pctg-x8/interlude_vkdefs#301c7651b337a9fdf8178651dcba797281ed15e8"
-dependencies = [
- "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "kernel32-sys"
@@ -316,8 +297,6 @@ dependencies = [
 "checksum cfg-if 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "de1e760d7b6535af4241fca8bd8adf68e2e7edacc6b29f5d399050c5e48cf88c"
 "checksum freetype-sys 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "eccfb6d96cac99921f0c2142a91765f6c219868a2c45bdfe7d65a08775f18127"
 "checksum gcc 0.3.43 (registry+https://github.com/rust-lang/crates.io-index)" = "c07c758b972368e703a562686adb39125707cc1ef3399da8c019fc6c2498a75d"
-"checksum interlude-vk 0.1.0 (git+https://github.com/Pctg-x8/interlude_vk.git)" = "<none>"
-"checksum interlude-vkdefs 0.1.0 (git+https://github.com/Pctg-x8/interlude_vkdefs)" = "<none>"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum lazycell 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ce12306c4739d86ee97c23139f3a34ddf0387bbf181bc7929d287025a8c3ef6b"
 "checksum libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)" = "684f330624d8c3784fb9558ca46c4ce488073a8d22450415c5eb4f4cfb0d11b5"

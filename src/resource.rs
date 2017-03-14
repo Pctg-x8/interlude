@@ -2,9 +2,9 @@
 
 ///! Interlude: Resources(Buffer and Image)
 
-use vk::traits::*;
-use vkdefs::*;
 use {std, vk};
+use vk::defs::*;
+use vk::traits::*;
 use std::os::raw::c_void;
 use std::rc::Rc;
 use ginterface::{GraphicsInterface, MemoryIndexType};
@@ -224,7 +224,8 @@ impl std::convert::Into<VkImageSubresourceLayers> for ImageSubresourceLayers
 // Content Type with size in bytes
 pub enum BufferContent
 {
-	Vertex(usize), Index(usize), Uniform(usize), Storage(usize), IndirectCallParam(usize)
+	Vertex(usize), Index(usize), Uniform(usize), Storage(usize), IndirectCallParam(usize),
+	Custom(VkBufferUsageFlags, usize)
 }
 impl BufferContent
 {
@@ -236,7 +237,8 @@ impl BufferContent
 			&BufferContent::Index(_) => VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 			&BufferContent::Uniform(_) => VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			&BufferContent::Storage(_) => VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-			&BufferContent::IndirectCallParam(_) => VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
+			&BufferContent::IndirectCallParam(_) => VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+			&BufferContent::Custom(f, _) => f
 		}
 	}
 }
@@ -260,7 +262,13 @@ impl<'a> BufferPreallocator<'a>
 			{
 				&BufferContent::Vertex(s) | &BufferContent::Index(s) | &BufferContent::IndirectCallParam(s) => (*a, s),
 				&BufferContent::Uniform(s) => (alignment(*a, alignment_u), s),
-				&BufferContent::Storage(s) => (alignment(*a, alignment_s), s)
+				&BufferContent::Storage(s) => (alignment(*a, alignment_s), s),
+				&BufferContent::Custom(f, s) => if (f & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) != 0
+				{
+					(alignment(*a, alignment_u), s)
+				}
+				else if (f & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) != 0 { (alignment(*a, alignment_s), s) }
+				else { (*a, s) }
 			};
 			*a = current + size;
 			Some(current)

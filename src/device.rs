@@ -2,7 +2,7 @@
 
 use EngineResult;
 use {std, vk};
-use vkdefs::*;
+use vk::defs::*;
 use std::rc::Rc;
 
 pub struct Device

@@ -5,7 +5,7 @@
 use rawexports::InternalExports;
 use Resource;
 use {std, vk};
-use vkdefs::*;
+use vk::defs::*;
 use {EngineResult, GraphicsInterface, Sampler, ImageView};
 use std::borrow::Cow;
 

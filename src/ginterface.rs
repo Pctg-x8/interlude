@@ -3,7 +3,7 @@
 use {UnrecoverableExt, DescriptorSetWriteInfo, EngineResult};
 use descriptor::IntoWriteDescriptorSetNativeStruct;
 use {vk, std};
-use vkdefs::*;
+use vk::defs::*;
 use vk::vkUpdateDescriptorSets;
 use std::rc::Rc;
 use device::Device;

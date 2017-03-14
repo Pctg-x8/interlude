@@ -8,7 +8,6 @@ use libc::c_void;
 use EngineResult;
 use std;
 use std::rc::Rc;
-use vk::traits::*;
 
 #[repr(C)] pub struct VkXcbSurfaceCreateInfoKHR
 {

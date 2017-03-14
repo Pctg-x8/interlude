@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 
 use std;
-use vkdefs::*;
+use vk::defs::*;
 use std::collections::{LinkedList, HashMap};
 use std::cell::RefCell;
 use freetype_sys::*;

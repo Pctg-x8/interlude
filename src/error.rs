@@ -1,7 +1,7 @@
 // Prelude: Error Enums and Crash Handling
 
 use std;
-use vkdefs::*;
+use vk::defs::*;
 use std::os::raw::*;
 use freetype_sys::*;
 

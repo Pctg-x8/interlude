@@ -2,7 +2,7 @@
 
 use {ImageView, Size3, AssetProvider, rawexports};
 use {std, vk};
-use vkdefs::*;
+use vk::defs::*;
 use std::rc::Rc;
 use std::ops::Deref;
 

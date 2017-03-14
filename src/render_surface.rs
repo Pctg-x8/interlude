@@ -4,12 +4,12 @@
 
 use {std, vk};
 use tuple_tools::*;
-use vkdefs::*;
+use vk::defs::*;
+use vk::traits::*;
 use std::rc::Rc;
 use {EngineResult, EngineError, GraphicsInterface, QueueFence, Resource, ImageView};
 use data::*;
 use rawexports::*;
-use vk::traits::*;
 
 // Platform dependent selection
 #[cfg(windows)] use win32::NativeWindow;

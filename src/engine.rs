@@ -9,7 +9,7 @@ use device::Device;
 use rawexports::*;
 use ginterface::DeviceFeatures;
 use {std, log};
-use vkdefs::*;
+use vk::defs::*;
 use ansi_term::*;
 use std::sync::{Arc, RwLock};
 use std::path::{Path, PathBuf};
