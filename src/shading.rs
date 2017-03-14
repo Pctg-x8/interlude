@@ -91,6 +91,13 @@ impl VertexShader
 			}
 		}))
 	}
+	/// Build VertexShader from Asset, vertices are passed each R32G32B32A32_SFLOAT format in single stream.
+	pub fn from_asset_for_postprocessing<Engine: AssetProvider + Deref<Target = GraphicsInterface>, P: AssetPath>(engine: &Engine, path: P, entry_point: &str)
+		-> EngineResult<Rc<Self>>
+	{
+		Self::from_asset(engine, path, entry_point,
+			&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)])
+	}
 }
 impl TessellationControlShader
 {
