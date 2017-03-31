@@ -1,5 +1,6 @@
 // Win32 Input Module
 
+use std;
 use std::thread;
 use std::collections::BTreeMap as GenericMap;
 use input::*;

@@ -3,7 +3,7 @@
 use std;
 use error::EngineError;
 use std::hash::Hash;
-use std::collections::HashMap;
+use std::collections::BTreeMap as GenericMap;
 use std::sync::{Arc, RwLock};
 use super::evdev::*;
 use super::udev::*;
@@ -18,15 +18,15 @@ use mio::unix::EventedFd;
 const T_UDEV: mio::Token = mio::Token(std::usize::MAX - 1);
 const T_PARENT: mio::Token = mio::Token(std::usize::MAX - 2);
 
-pub struct NativeInput<InputNames: Eq + Hash + Copy>
+pub struct NativeInput<InputNames: Eq + Ord + Copy>
 {
 	poll_thread: Option<std::thread::JoinHandle<()>>, term_event: Arc<EventFd>,
-	keymap: HashMap<InputNames, Vec<InputType>>,
-	aggregate_key_states: Arc<RwLock<HashMap<InputKeys, u32>>>,
-	aggregate_axis_states: Arc<RwLock<HashMap<InputAxis, f32>>>,
-	input_states: HashMap<InputNames, f32>
+	keymap: GenericMap<InputNames, Vec<InputType>>,
+	aggregate_key_states: Arc<RwLock<GenericMap<InputKeys, u32>>>,
+	aggregate_axis_states: Arc<RwLock<GenericMap<InputAxis, f32>>>,
+	input_states: GenericMap<InputNames, f32>
 }
-impl<InputNames: Eq + Hash + Copy> NativeInput<InputNames>
+impl<InputNames: Eq + Ord + Copy> NativeInput<InputNames>
 {
 	fn search_device_name(device: &UserspaceDevice) -> String
 	{
@@ -45,7 +45,7 @@ impl<InputNames: Eq + Hash + Copy> NativeInput<InputNames>
 		}
 		recursive(device)
 	}
-	fn insert_device(input_devices: &mut HashMap<u32, InputDevice>, polling: &mut mio::Poll, device: UserspaceDevice)
+	fn insert_device(input_devices: &mut GenericMap<u32, InputDevice>, polling: &mut mio::Poll, device: UserspaceDevice)
 	{
 		let name = Self::search_device_name(&device);
 		let node_path = device.device_node().expect("Unable to get Device Node Path").to_str().unwrap();

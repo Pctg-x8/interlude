@@ -14,7 +14,6 @@ use ansi_term::*;
 use std::sync::{Arc, RwLock};
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
-use std::hash::Hash;
 use std::borrow::Cow;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -67,12 +66,12 @@ pub trait EngineCoreExports
 {
 	fn graphics(&self) -> &GraphicsInterface;
 }
-pub struct EngineBuilder<'p, InputNames: Eq + Copy + Hash>
+pub struct EngineBuilder<'p, InputNames: Eq + Copy + Ord>
 {
 	app_name: Cow<'static, str>, app_version: u32, asset_base: Option<Cow<'p, Path>>, extra_features: DeviceFeatures,
 	caption: Cow<'static, str>, size: Size2, resizable: bool, ph: std::marker::PhantomData<InputNames>
 }
-impl<'p, InputNames: Eq + Copy + Hash> EngineBuilder<'p, InputNames>
+impl<'p, InputNames: Eq + Copy + Ord> EngineBuilder<'p, InputNames>
 {
 	pub fn new(app_name: Cow<'static, str>, app_version: (u32, u32, u32), caption: Cow<'static, str>, size: &Size2) -> Self
 	{
@@ -124,13 +123,13 @@ pub struct EngineResources
 	postprocess_vsh: LazyLoadedResource<Rc<VertexShader>>, postprocess_vsh_nouv: LazyLoadedResource<Rc<VertexShader>>,
 	default_renderpass: HashMap<(Option<bool>, VkFormat), RenderPass>, presenting_renderpass: HashMap<(Option<bool>, VkFormat), RenderPass>
 }
-pub struct Engine<InputNames: Eq + Copy + Hash>
+pub struct Engine<InputNames: Eq + Copy + Ord>
 {
 	window: Arc<RenderWindow>, input_system: Arc<RwLock<Input<InputNames>>>, gi: GraphicsInterface,
 	asset_dir: PathBuf, common_resources: EngineResources
 }
-unsafe impl<InputNames: Eq + Copy + Hash> Send for Engine<InputNames> {}
-impl<InputNames: Eq + Copy + Hash> EngineCoreExports for Engine<InputNames>
+unsafe impl<InputNames: Eq + Copy + Ord> Send for Engine<InputNames> {}
+impl<InputNames: Eq + Copy + Ord> EngineCoreExports for Engine<InputNames>
 {
 	fn graphics(&self) -> &GraphicsInterface { &self.gi }
 }
@@ -138,7 +137,7 @@ macro_rules! FunComposite1
 {
 	($f: expr; $g: expr) => {|x| $f($g(x))}
 }
-impl<InputNames: Eq + Copy + Hash> Engine<InputNames>
+impl<InputNames: Eq + Copy + Ord> Engine<InputNames>
 {
 	pub fn new(info: EngineBuilder<InputNames>) -> Result<Self, EngineError>
 	{
@@ -164,7 +163,7 @@ impl<InputNames: Eq + Copy + Hash> Engine<InputNames>
 	pub fn render_window(&self) -> &Arc<RenderWindow> { &self.window }
 }
 // For any WindowSystems
-impl<InputNames: Eq + Copy + Hash> Engine<InputNames>
+impl<InputNames: Eq + Copy + Ord> Engine<InputNames>
 {
 	pub fn input_system_ref(&self) -> &Arc<RwLock<Input<InputNames>>> { &self.input_system }
 
@@ -172,7 +171,7 @@ impl<InputNames: Eq + Copy + Hash> Engine<InputNames>
 	pub fn process_all_messages(&self) { self.window.process_all_messages() }
 	pub fn process_events_and_messages(&self, events: &[&Event]) -> ApplicationState { self.window.process_events_and_messages(events) }
 }
-/// Asset Provider
+/// The Asset Provider that can parse AssetPath and provides some of pre-defined objects
 pub trait AssetProvider
 {
 	fn parse_asset<P: AssetPath>(&self, path: P, extension: &str) -> PathBuf;
@@ -181,7 +180,7 @@ pub trait AssetProvider
 	fn default_renderpass(&self, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>;
 	fn presenting_renderpass(&self, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>;
 }
-impl<InputNames: Eq + Copy + Hash> AssetProvider for Engine<InputNames>
+impl<InputNames: Eq + Copy + Ord> AssetProvider for Engine<InputNames>
 {
 	fn parse_asset<P: AssetPath>(&self, path: P, extension: &str) -> PathBuf
 	{
@@ -280,7 +279,7 @@ impl EngineResources
 		}))
 	}
 }
-impl<InputNames: Eq + Copy + Hash> Deref for Engine<InputNames> { type Target = GraphicsInterface; fn deref(&self) -> &Self::Target { &self.gi } }
+impl<InputNames: Eq + Copy + Ord> Deref for Engine<InputNames> { type Target = GraphicsInterface; fn deref(&self) -> &Self::Target { &self.gi } }
 
 // support function for as_ptr: returns null when the container is empty
 fn as_ptr_emp<T>(v: &[T]) -> *const T { if v.is_empty() { std::ptr::null() } else { v.as_ptr() } }
@@ -292,7 +291,7 @@ pub trait CommandSubmitter
 	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>;
 }
-impl<InputNames: Eq + Copy + Hash> CommandSubmitter for Engine<InputNames>
+impl<InputNames: Eq + Copy + Ord> CommandSubmitter for Engine<InputNames>
 {
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
