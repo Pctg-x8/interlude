@@ -1,11 +1,14 @@
+#![allow(non_snake_case)]
+
 use {std, libc};
 use vk::*;
 use winapi::*;
 use std::rc::Rc;
 use std::ops::Deref;
-use {EngineResult, EngineError};
+use EngineResult;
 
 pub type VkWin32SurfaceCreateFlagsKHR = VkFlags;
+#[repr(C)]
 pub struct VkWin32SurfaceCreateInfoKHR
 {
 	pub sType: VkStructureType, pub pNext: *const libc::c_void, pub flags: VkWin32SurfaceCreateFlagsKHR,
