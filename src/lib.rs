@@ -49,7 +49,7 @@ mod debug_info;
 
 // --- Exported APIs --- //
 pub use error::*;
-pub use engine::EngineBuilder;
+pub use engine::{EngineBuilder, EmptyInput};
 pub use ginterface::GraphicsInterface;
 pub use framebuffer::{AttachmentDesc, AttachmentRef, PassDesc, PassDependency, AttachmentClearValue, PreciseRenderPass};
 pub use command::{

@@ -9,11 +9,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use nalgebra::*;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)] enum InputNames { }
-
 fn main()
 {
-	let engine = EngineBuilder::<InputNames>::new("com.cterm2.interlude.examples.icosphere_wire".into(), (0, 1, 0),
+	let engine = EngineBuilder::<EmptyInput>::new("com.cterm2.interlude.examples.icosphere_wire".into(), (0, 1, 0),
 		"Rendering Icosphere[Wireframe]".into(), &Size2(640, 480))
 		.asset_base(std::env::current_dir().unwrap().into()).device_feature_nonsolid_fillmode().launch().or_crash();
 

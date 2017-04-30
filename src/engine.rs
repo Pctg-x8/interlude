@@ -62,6 +62,10 @@ fn mtflags_decomposite(flags: VkMemoryPropertyFlags) -> Vec<&'static str>
 	temp
 }
 
+/// Placeholder for applications that never uses any inputs.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum EmptyInput {}
+
 pub trait EngineCoreExports
 {
 	fn graphics(&self) -> &GraphicsInterface;
