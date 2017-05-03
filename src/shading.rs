@@ -21,22 +21,22 @@ pub struct IntoNativeVertexInputState
 	attributes: Vec<VkVertexInputAttributeDescription>
 }
 
-/// Simple Shader Module that holds shader program and entry point name
-pub struct ShaderModule { internal: vk::ShaderModule, entry_point: CString }
+/// Discrete Shader Module that holds shader program
+pub struct ShaderModule(vk::ShaderModule);
 impl ShaderModule
 {
-	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>, P: AssetPath>(engine: &Engine, path: P, entry_point: &str) -> EngineResult<Self>
+	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>, P: AssetPath>(engine: &Engine, path: P) -> EngineResult<Self>
 	{
 		let path = engine.parse_asset(path, "spv");
 		info!(target: "Interlude::ShaderProgram", "Loading Shader from {:?}...", path);
-		build_shader_module_from_file(engine, &path).map(|m| ShaderModule { internal: m, entry_point: CString::new(entry_point).unwrap() })
+		build_shader_module_from_file(engine, &path).map(ShaderModule)
 	}
 
-	pub fn into_vertex_shader(self, bindings: &[VertexBinding], attributes: &[VertexAttribute]) -> Rc<VertexShader>
+	pub fn into_vertex_shader(self, entry_point: &str, bindings: &[VertexBinding], attributes: &[VertexAttribute]) -> Rc<VertexShader>
 	{
 		Rc::new(VertexShader
 		{
-			internal: self.internal, entry_point: self.entry_point,
+			internal: self.0, entry_point: CString::new(entry_point).unwrap(),
 			vertex_input: IntoNativeVertexInputState
 			{
 				bindings: bindings.iter().enumerate().map(|(i, x)| match x
@@ -50,21 +50,21 @@ impl ShaderModule
 			}
 		})
 	}
-	pub fn into_tessellation_control_shader(self) -> Rc<TessellationControlShader>
+	pub fn into_tessellation_control_shader(self, entry_point: &str) -> Rc<TessellationControlShader>
 	{
-		Rc::new(unsafe { std::mem::transmute(self) })
+		Rc::new(TessellationControlShader { internal: self.0, entry_point: CString::new(entry_point).unwrap() })
 	}
-	pub fn into_tessellation_evaluation_shader(self) -> Rc<TessellationEvaluationShader>
+	pub fn into_tessellation_evaluation_shader(self, entry_point: &str) -> Rc<TessellationEvaluationShader>
 	{
-		Rc::new(unsafe { std::mem::transmute(self) })
+		Rc::new(TessellationEvaluationShader { internal: self.0, entry_point: CString::new(entry_point).unwrap() })
 	}
-	pub fn into_geometry_shader(self) -> Rc<GeometryShader>
+	pub fn into_geometry_shader(self, entry_point: &str) -> Rc<GeometryShader>
 	{
-		Rc::new(unsafe { std::mem::transmute(self) })
+		Rc::new(GeometryShader { internal: self.0, entry_point: CString::new(entry_point).unwrap() })
 	}
-	pub fn into_fragment_shader(self) -> Rc<FragmentShader>
+	pub fn into_fragment_shader(self, entry_point: &str) -> Rc<FragmentShader>
 	{
-		Rc::new(unsafe { std::mem::transmute(self) })
+		Rc::new(FragmentShader { internal: self.0, entry_point: CString::new(entry_point).unwrap() })
 	}
 }
 
