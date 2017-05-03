@@ -21,6 +21,53 @@ pub struct IntoNativeVertexInputState
 	attributes: Vec<VkVertexInputAttributeDescription>
 }
 
+/// Simple Shader Module that holds shader program and entry point name
+pub struct ShaderModule { internal: vk::ShaderModule, entry_point: CString }
+impl ShaderModule
+{
+	pub fn from_asset<Engine: AssetProvider + Deref<Target = GraphicsInterface>, P: AssetPath>(engine: &Engine, path: P, entry_point: &str) -> EngineResult<Self>
+	{
+		let path = engine.parse_asset(path, "spv");
+		info!(target: "Interlude::ShaderProgram", "Loading Shader from {:?}...", path);
+		build_shader_module_from_file(engine, &path).map(|m| ShaderModule { internal: m, entry_point: CString::new(entry_point).unwrap() })
+	}
+
+	pub fn into_vertex_shader(self, bindings: &[VertexBinding], attributes: &[VertexAttribute]) -> Rc<VertexShader>
+	{
+		Rc::new(VertexShader
+		{
+			internal: self.internal, entry_point: self.entry_point,
+			vertex_input: IntoNativeVertexInputState
+			{
+				bindings: bindings.iter().enumerate().map(|(i, x)| match x
+				{
+					&VertexBinding::PerVertex(stride) => VkVertexInputBindingDescription(i as u32, stride, VkVertexInputRate::Vertex),
+					&VertexBinding::PerInstance(stride) => VkVertexInputBindingDescription(i as u32, stride, VkVertexInputRate::Instance)
+				}).collect(),
+				attributes: attributes.iter().enumerate()
+					.map(|(i, &VertexAttribute(binding, format, offset))| VkVertexInputAttributeDescription(i as u32, binding, format, offset))
+					.collect()
+			}
+		})
+	}
+	pub fn into_tessellation_control_shader(self) -> Rc<TessellationControlShader>
+	{
+		Rc::new(unsafe { std::mem::transmute(self) })
+	}
+	pub fn into_tessellation_evaluation_shader(self) -> Rc<TessellationEvaluationShader>
+	{
+		Rc::new(unsafe { std::mem::transmute(self) })
+	}
+	pub fn into_geometry_shader(self) -> Rc<GeometryShader>
+	{
+		Rc::new(unsafe { std::mem::transmute(self) })
+	}
+	pub fn into_fragment_shader(self) -> Rc<FragmentShader>
+	{
+		Rc::new(unsafe { std::mem::transmute(self) })
+	}
+}
+
 /// The structure that is part of Shader Program.
 pub trait Shader
 {

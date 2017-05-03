@@ -92,7 +92,7 @@ pub use resource::{
 	DeviceImage, StagingImage, MemoryMappedRange, ImageView1D, ImageView2D, ImageView3D,
 	Sampler, BufferPreallocator
 };
-pub use shading::{VertexShader, TessellationControlShader, TessellationEvaluationShader, GeometryShader, FragmentShader};
+pub use shading::{VertexShader, TessellationControlShader, TessellationEvaluationShader, GeometryShader, FragmentShader, ShaderModule};
 pub use shading::{PipelineShaderProgram, PipelineLayout, GraphicsPipelines, GraphicsPipeline};
 pub use descriptor::{DescriptorSetLayout, DescriptorSets};
 pub use debug_info::DebugInfo;
