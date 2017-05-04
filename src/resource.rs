@@ -628,7 +628,7 @@ impl Sampler
 }
 impl InternalExports for Sampler { type InternalT = vk::Sampler; fn get_internal(&self) -> &vk::Sampler { &self.0 } }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ComponentSwizzle { R, G, B, A }
 impl std::convert::Into<VkComponentSwizzle> for ComponentSwizzle
 {
@@ -643,7 +643,7 @@ impl std::convert::Into<VkComponentSwizzle> for ComponentSwizzle
 		}
 	}
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ComponentMapping(pub ComponentSwizzle, pub ComponentSwizzle, pub ComponentSwizzle, pub ComponentSwizzle);
 impl ComponentMapping
 {
