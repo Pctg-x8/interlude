@@ -9,7 +9,7 @@ use vk::defs::*;
 use {EngineResult, GraphicsInterface, Sampler, ImageView};
 use std::borrow::Cow;
 
-#[derive(Clone, Copy)] #[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[repr(u8)]
 pub enum ShaderStage
 {
 	Vertex = VK_SHADER_STAGE_VERTEX_BIT as u8,
@@ -24,7 +24,7 @@ impl std::ops::BitOr for ShaderStage
 	fn bitor(self, rhs: Self) -> Self { unsafe { std::mem::transmute(self as u8 | rhs as u8) } }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub enum Descriptor
 {
 	Uniform(u32, ShaderStage), Storage(u32, ShaderStage),
