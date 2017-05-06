@@ -6,7 +6,7 @@ use vk::defs::*;
 use std::rc::Rc;
 use std::ops::Deref;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AttachmentDesc
 {
 	pub format: VkFormat, pub samples: VkSampleCountFlagBits,
@@ -57,7 +57,7 @@ impl AttachmentDesc
 	}
 }
 pub type AttachmentRef = VkAttachmentReference;
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct PassDesc
 {
 	pub input_attachment_indices: Vec<AttachmentRef>,
@@ -105,7 +105,7 @@ impl<'a> std::convert::Into<VkSubpassDescription> for &'a PassDesc
 		}
 	}
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct PassDependency
 {
 	pub src: u32, pub dst: u32,
