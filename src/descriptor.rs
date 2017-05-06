@@ -14,7 +14,7 @@ pub enum ShaderStage
 {
 	Vertex = VK_SHADER_STAGE_VERTEX_BIT as u8,
 	TessControl = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT as u8,
-	TessEvaluate = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT as u8,
+	TessEvaluation = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT as u8,
 	Geometry = VK_SHADER_STAGE_GEOMETRY_BIT as u8,
 	Fragment = VK_SHADER_STAGE_FRAGMENT_BIT as u8
 }
@@ -22,6 +22,10 @@ impl std::ops::BitOr for ShaderStage
 {
 	type Output = Self;
 	fn bitor(self, rhs: Self) -> Self { unsafe { std::mem::transmute(self as u8 | rhs as u8) } }
+}
+impl std::ops::BitOrAssign for ShaderStage
+{
+	fn bitor_assign(&mut self, rhs: Self) { *self = *self | rhs; }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]

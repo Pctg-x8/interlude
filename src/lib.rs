@@ -66,6 +66,7 @@ pub use shading::{
 	PrimitiveTopology, ViewportWithScissorRect, RasterizerState, AttachmentBlendState,
 	GraphicsPipelineBuilder
 };
+pub use framebuffer::AccessFlags;
 pub use descriptor::{ShaderStage, Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo, DescriptorSetArrayView};
 pub use debug_info::DebugLine;
 pub use input::*;

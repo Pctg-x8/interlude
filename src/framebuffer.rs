@@ -235,3 +235,36 @@ impl Framebuffer
 
 impl rawexports::InternalExports for RenderPass { type InternalT = vk::RenderPass; fn get_internal(&self) -> &vk::RenderPass { &self.0 } }
 impl rawexports::InternalExports for Framebuffer { type InternalT = vk::Framebuffer; fn get_internal(&self) -> &vk::Framebuffer { &self.internal } }
+
+/// Access Flags Mask
+#[repr(u32)] #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AccessFlags
+{
+	IndirectCommandRead = VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
+	IndexRead = VK_ACCESS_INDEX_READ_BIT,
+	VertexAttributeRead = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+	UniformRead = VK_ACCESS_UNIFORM_READ_BIT,
+	InputAttachmentRead = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+	ShaderRead = VK_ACCESS_SHADER_READ_BIT,
+	ShaderWrite = VK_ACCESS_SHADER_WRITE_BIT,
+	ColorAttachmentRead = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+	ColorAttachmentWrite = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+	DepthStencilAttachmentRead = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+	DepthStencilAttachmentWrite = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+	TransferRead = VK_ACCESS_TRANSFER_READ_BIT,
+	TransferWrite = VK_ACCESS_TRANSFER_WRITE_BIT,
+	HostRead = VK_ACCESS_HOST_READ_BIT,
+	HostWrite = VK_ACCESS_HOST_WRITE_BIT,
+	MemoryRead = VK_ACCESS_MEMORY_READ_BIT,
+	MemoryWrite = VK_ACCESS_MEMORY_WRITE_BIT
+}
+
+impl std::ops::BitOr for AccessFlags
+{
+	type Output = AccessFlags;
+	fn bitor(self, rhs: Self) -> Self { unsafe { std::mem::transmute(self as u32 | rhs as u32) } }
+}
+impl std::ops::BitOrAssign for AccessFlags
+{
+	fn bitor_assign(&mut self, rhs: Self) { *self = unsafe { std::mem::transmute(*self as u32 | rhs as u32) }; }
+}
