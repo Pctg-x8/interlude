@@ -237,7 +237,7 @@ impl rawexports::InternalExports for RenderPass { type InternalT = vk::RenderPas
 impl rawexports::InternalExports for Framebuffer { type InternalT = vk::Framebuffer; fn get_internal(&self) -> &vk::Framebuffer { &self.internal } }
 
 /// Access Flags Mask
-#[repr(u32)] #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u32)] #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum AccessFlags
 {
 	IndirectCommandRead = VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
