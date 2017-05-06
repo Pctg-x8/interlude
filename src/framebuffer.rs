@@ -110,7 +110,7 @@ pub struct PassDependency
 {
 	pub src: u32, pub dst: u32,
 	pub src_stage_mask: VkPipelineStageFlags, pub dst_stage_mask: VkPipelineStageFlags,
-	pub src_access_mask: VkAccessFlags, pub dst_access_mask: VkAccessFlags,
+	pub src_access_mask: AccessFlags, pub dst_access_mask: AccessFlags,
 	pub depend_by_region: bool
 }
 impl std::default::Default for PassDependency
@@ -122,8 +122,8 @@ impl std::default::Default for PassDependency
 			src: 0, dst: 0,
 			src_stage_mask: VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
 			dst_stage_mask: VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-			src_access_mask: VK_ACCESS_MEMORY_READ_BIT,
-			dst_access_mask: VK_ACCESS_MEMORY_READ_BIT,
+			src_access_mask: AccessFlags::MemoryRead,
+			dst_access_mask: AccessFlags::MemoryRead,
 			depend_by_region: false
 		}
 	}
@@ -136,7 +136,7 @@ impl<'a> std::convert::Into<VkSubpassDependency> for &'a PassDependency
 		{
 			srcSubpass: self.src, dstSubpass: self.dst,
 			srcStageMask: self.src_stage_mask, dstStageMask: self.dst_stage_mask,
-			srcAccessMask: self.src_access_mask, dstAccessMask: self.dst_access_mask,
+			srcAccessMask: self.src_access_mask as VkAccessFlags, dstAccessMask: self.dst_access_mask as VkAccessFlags,
 			dependencyFlags: if self.depend_by_region { VK_DEPENDENCY_BY_REGION_BIT } else { 0 }
 		}
 	}
@@ -149,7 +149,7 @@ impl PassDependency
 		{
 			src: src_pass, dst: dst_pass,
 			src_stage_mask: VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, dst_stage_mask: VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			src_access_mask: VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, dst_access_mask: VK_ACCESS_SHADER_READ_BIT,
+			src_access_mask: AccessFlags::ColorAttachmentWrite, dst_access_mask: AccessFlags::ShaderRead,
 			depend_by_region: dep_by_region
 		}
 	}
