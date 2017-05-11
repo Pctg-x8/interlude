@@ -261,7 +261,7 @@ impl<'a> DebugInfo<'a>
 				Position(1.0f32, 1.0f32, 0.0f32, 1.0f32)
 			];
 			let &Viewport(_, _, w, h, _, _) = framebuffer_size;
-			let pp_matrix = OrthographicMatrix3::new(0.0f32, w as f32, 0.0f32, h as f32, -2.0f32, 1.0f32);
+			let pp_matrix = Orthographic3::new(0.0f32, w as f32, 0.0f32, h as f32, -2.0f32, 1.0f32);
 			*mapped_buf.map_mut::<CMatrix4>(rendering_params_prealloc.offset(3)) = *pp_matrix.as_matrix().transpose().as_ref();
 
 			let rendering_params = mapped_buf.range_mut::<StrRenderInstanceData>(rendering_params_prealloc.offset(2), max_instance_count);

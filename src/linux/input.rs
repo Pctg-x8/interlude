@@ -2,8 +2,8 @@
 
 use std;
 use error::EngineError;
-use std::hash::Hash;
 use std::collections::BTreeMap as GenericMap;
+use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 use super::evdev::*;
 use super::udev::*;
@@ -64,14 +64,14 @@ impl<InputNames: Eq + Ord + Copy> NativeInput<InputNames>
 	// Old InputSystem implementation //
 	pub fn new() -> EngineResult<Self>
 	{
-		let (aks, aas) = (Arc::new(RwLock::new(HashMap::new())), Arc::new(RwLock::new(HashMap::new())));
+		let (aks, aas) = (Arc::new(RwLock::new(GenericMap::new())), Arc::new(RwLock::new(GenericMap::new())));
 		let (aks_thread, aas_thread) = (aks.clone(), aas.clone());
 		let term_event = try!(EventFd::new("Input Cancel"));
 		let term_event_th = term_event.clone();
 
 		std::thread::Builder::new().name("Input Thread".into()).spawn(move ||
 		{
-			let mut input_devices = HashMap::new();
+			let mut input_devices = BTreeMap::new();
 			info!(target: "Interlude::Input", "Starting udev...");
 			let udev = UserspaceDeviceManager::new().unwrap();
 			let mut polling = mio::Poll::new().expect("Unable to create polling object");
@@ -133,7 +133,7 @@ impl<InputNames: Eq + Ord + Copy> NativeInput<InputNames>
 			info!(target: "Interlude::Input", "Terminating Input Thread...");
 		}).map(|poll_thread| NativeInput
 		{
-			poll_thread: Some(poll_thread), keymap: HashMap::new(), input_states: HashMap::new(),
+			poll_thread: Some(poll_thread), keymap: GenericMap::new(), input_states: GenericMap::new(),
 			aggregate_key_states: aks, aggregate_axis_states: aas, term_event: term_event
 		}).map_err(From::from)
 	}
@@ -164,7 +164,7 @@ impl<InputNames: Eq + Ord + Copy> NativeInput<InputNames>
 		}
 	}
 }
-impl<InputNames: Eq + Hash + Copy> Drop for NativeInput<InputNames>
+impl<InputNames: Eq + Ord + Copy> Drop for NativeInput<InputNames>
 {
 	fn drop(&mut self)
 	{
@@ -172,7 +172,7 @@ impl<InputNames: Eq + Hash + Copy> Drop for NativeInput<InputNames>
 		self.poll_thread.take().unwrap().join().unwrap();
 	}
 }
-impl<InputNames: Eq + Hash + Copy> Index<InputNames> for NativeInput<InputNames>
+impl<InputNames: Eq + Ord + Copy> Index<InputNames> for NativeInput<InputNames>
 {
 	type Output = f32;
 	fn index(&self, name: InputNames) -> &f32
@@ -185,16 +185,16 @@ impl<InputNames: Eq + Hash + Copy> Index<InputNames> for NativeInput<InputNames>
 pub struct InputDevice
 {
 	dev: EventDevice,
-	key_states: HashMap<InputKeys, bool>,
-	axis_prev_values: HashMap<InputAxis, f32>
+	key_states: GenericMap<InputKeys, bool>,
+	axis_prev_values: GenericMap<InputAxis, f32>
 }
 impl InputDevice
 {
 	fn new(node_path: &str) -> Result<Self, EngineError>
 	{
-		EventDevice::new(node_path).map(|ev| InputDevice { dev: ev, key_states: HashMap::new(), axis_prev_values: HashMap::new() })
+		EventDevice::new(node_path).map(|ev| InputDevice { dev: ev, key_states: GenericMap::new(), axis_prev_values: GenericMap::new() })
 	}
-	fn update(&mut self, aggregate_key_states: &mut HashMap<InputKeys, u32>, aggregate_axis_states: &mut HashMap<InputAxis, f32>)
+	fn update(&mut self, aggregate_key_states: &mut GenericMap<InputKeys, u32>, aggregate_axis_states: &mut GenericMap<InputAxis, f32>)
 	{
 		while let Ok(ev) = self.dev.wait_event()
 		{
@@ -227,7 +227,7 @@ impl InputDevice
 			}
 		}
 	}
-	fn unplug(self, aggregate_key_states: &mut HashMap<InputKeys, u32>, aggregate_axis_states: &mut HashMap<InputAxis, f32>)
+	fn unplug(self, aggregate_key_states: &mut GenericMap<InputKeys, u32>, aggregate_axis_states: &mut GenericMap<InputAxis, f32>)
 	{
 		for (k, v) in self.key_states
 		{

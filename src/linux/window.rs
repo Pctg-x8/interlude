@@ -154,6 +154,7 @@ impl XServer
 			if !event_obj.is_null()
 			{
 				let event = &unsafe { *event_obj };
+				info!("Event Response: {:02x}(/{:02x})", event.response_type & 0x7f, XCB_CLIENT_MESSAGE);
 				match event.response_type & 0x7f
 				{
 					XCB_CLIENT_MESSAGE =>
