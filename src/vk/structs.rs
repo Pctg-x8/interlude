@@ -438,7 +438,7 @@ impl VkComponentMapping
 	pub stencilTestEnable: VkBool32, pub front: VkStencilOpState, pub back: VkStencilOpState,
 	pub minDepthBounds: f32, pub maxDepthBounds: f32
 }
-#[repr(C)] #[derive(Clone)] pub struct VkPipelineColorBlendAttachmentState
+#[repr(C)] #[derive(Clone, Debug)] pub struct VkPipelineColorBlendAttachmentState
 {
 	pub blendEnable: VkBool32,
 	pub srcColorBlendFactor: VkBlendFactor, pub dstColorBlendFactor: VkBlendFactor,

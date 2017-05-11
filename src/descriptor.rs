@@ -9,7 +9,7 @@ use vk::defs::*;
 use {EngineResult, GraphicsInterface, Sampler, ImageView};
 use std::borrow::Cow;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[repr(u8)]
 pub enum ShaderStage
 {
 	Vertex = VK_SHADER_STAGE_VERTEX_BIT as u8,

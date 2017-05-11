@@ -207,7 +207,7 @@ impl PipelineLayout
 impl InternalExports for PipelineLayout { type InternalT = vk::PipelineLayout; fn get_internal(&self) -> &vk::PipelineLayout { &self.0 } }
 
 // Primitive Topology + With-Adjacency flag
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrimitiveTopology
 {
 	Point, LineList(bool), LineStrip(bool), TriangleList(bool), TriangleStrip(bool)
