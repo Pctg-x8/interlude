@@ -3,6 +3,7 @@ extern crate interlude;
 extern crate thread_scoped;
 extern crate nalgebra;
 extern crate time;
+extern crate alga;
 use interlude::*;
 use interlude::ffi::*;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -36,9 +37,9 @@ fn main()
 		{
 			m.range_mut::<CVector4>(bp.offset(1), v.len()).copy_from_slice(&v[..]);
 			m.range_mut::<u16>(bp.offset(2), i.len()).copy_from_slice(&i[..]);
-			let proj = PerspectiveMatrix3::new(w as f32 / h as f32, 30.0f32.to_radians(), 0.1, 100.0).to_matrix() *
+			let proj = Perspective3::new(w as f32 / h as f32, 30.0f32.to_radians(), 0.1, 100.0).unwrap() *
 				view_matrix(Vector3::new(5.0, 2.0, 30.0), Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
-			*m.map_mut::<[CMatrix4; 2]>(bp.offset(0)) = [*proj.as_ref(), *Rotation3::new(Vector3::new(0.0, 1.0, 0.0).normalize() * 0.0).submatrix().to_homogeneous().as_ref()];
+			*m.map_mut::<[CMatrix4; 2]>(bp.offset(0)) = [*proj.as_ref(), *Rotation3::new(Vector3::new(0.0, 1.0, 0.0).normalize() * 0.0).to_homogeneous().as_ref()];
 		}).or_crash();
 		(bp.independence(), stg, dev)
 	};
@@ -172,7 +173,7 @@ fn main()
 					update_event.reset();
 					let elapsed = start_time.to(time::PreciseTime::now());
 					*model_rot = *Rotation3::new(Vector3::new(0.1, 1.0, 0.0).normalize() * (230.0f32 * elapsed.num_microseconds().unwrap() as f32 / 1_000_000.0f32).to_radians())
-						.submatrix().to_homogeneous().as_ref();
+						.to_homogeneous().as_ref();
 				},
 				_ => ()
 			}
@@ -250,7 +251,8 @@ fn index_triangles(v: Vec<[CVector4; 3]>) -> (Vec<CVector4>, Vec<u16>)
 	(verts, indices)
 }
 
-fn view_matrix<N: BaseFloat>(eye: Vector3<N>, target: Vector3<N>, up: Vector3<N>) -> Matrix4<N>
+use alga::general::{Real, Ring};
+fn view_matrix<N: Scalar + Ring + Real>(eye: Vector3<N>, target: Vector3<N>, up: Vector3<N>) -> Matrix4<N>
 {
 	let zaxis = (eye - target).normalize();
 	let xaxis = up.cross(&zaxis).normalize();
