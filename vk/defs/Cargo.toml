@@ -1,0 +1,41 @@
+[package]
+name = "interlude-vk-defs"
+description = "Interlude: Vulkan Definitions"
+version = "1.0.54"
+authors = ["S.Percentage"]
+
+[features]
+VK_KHR_surface = []
+VK_KHR_swapchain = []
+VK_KHR_display = []
+VK_KHR_display_swapchain = []
+VK_KHR_xlib_surface = ["xlib"]
+VK_KHR_xcb_surface = ["xcb"]
+VK_KHR_wayland_surface = ["wayland-client"]
+VK_KHR_android_surface = ["android_ffi"]
+VK_KHR_win32_surface = ["winapi"]
+VK_KHR_sampler_mirror_clamp_to_edge = []
+VK_KHR_get_physical_device_properties2 = []
+VK_KHR_shader_draw_parameters = []
+VK_KHR_maintenance1 = []
+VK_KHR_external_memory_capabilities = []
+VK_KHR_external_memory = []
+VK_KHR_external_memory_win32 = ["winapi"]
+VK_KHR_external_memory_fd = []
+VK_KHR_win32_keyed_mutex = []
+VK_KHR_external_semaphore_capabilities = []
+VK_KHR_external_semaphore = []
+VK_KHR_external_semaphore_win32 = ["winapi"]
+VK_KHR_external_semaphore_fd = []
+VK_KHR_push_descriptor = []
+VK_KHR_16bit_storage = []
+VK_KHR_incremental_present = []
+VK_KHR_descriptor_update_template = []
+
+[dependencies]
+libc = "0.2"
+xlib = { version = "~0.0", optional = true }
+xcb = { version = "~0.8", optional = true }
+wayland-client = { version = "~0.9", optional = true }
+android_ffi = { version = "~0.1", optional = true }
+winapi = { version = "~0.2", optional = true }

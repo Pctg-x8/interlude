@@ -1,0 +1,6 @@
+[package]
+name = "funport"
+version = "0.1.0"
+authors = ["S.Percentage"]
+
+[dependencies]
