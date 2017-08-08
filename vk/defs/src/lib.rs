@@ -2601,3 +2601,8 @@ pub use incremental_present_khr::*;
 mod descriptor_update_template_khr;
 #[cfg(features = "VK_KHR_descriptor_update_template")]
 pub use descriptor_update_template_khr::*;
+
+#[cfg(features = "VK_KHR_shared_presentable_image")]
+mod shared_presentable_image_khr;
+#[cfg(features = "VK_KHR_shared_presentable_image")]
+pub use shared_presentable_image_khr::*;
