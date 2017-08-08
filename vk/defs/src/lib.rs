@@ -2458,7 +2458,7 @@ pub type PFN_vkCmdExecuteCommands = extern "system" fn(commandBuffer: VkCommandB
 // Platform Extras
 #[cfg(any(
     feature = "VK_KHR_win32_surface", feature = "VK_KHR_external_memory_win32",
-    feature = "VK_KHR_external_semaphore_win32"
+    feature = "VK_KHR_external_semaphore_win32", feature = "VK_KHR_external_fence_win32"
 ))]
 extern crate winapi;
 
@@ -2606,3 +2606,24 @@ pub use descriptor_update_template_khr::*;
 mod shared_presentable_image_khr;
 #[cfg(features = "VK_KHR_shared_presentable_image")]
 pub use shared_presentable_image_khr::*;
+
+#[cfg(features = "VK_KHR_external_fence_capabilities")]
+mod external_fence_capabilities_khr;
+#[cfg(features = "VK_KHR_external_fence_capabilities")]
+pub use external_fence_capabilities_khr::*;
+
+#[cfg(features = "VK_KHR_external_fence")]
+mod external_fence_khr;
+#[cfg(features = "VK_KHR_external_fence")]
+pub use external_fence_khr::*;
+
+#[cfg(features = "VK_KHR_external_fence_win32")]
+mod external_fence_win32_khr;
+#[cfg(features = "VK_KHR_external_fence_win32")]
+pub use external_fence_win32_khr::*;
+
+#[cfg(features = "VK_KHR_external_fence_fd")]
+mod external_fence_fd_khr;
+#[cfg(features = "VK_KHR_external_fence_fd")]
+pub use external_fence_fd_khr::*;
+

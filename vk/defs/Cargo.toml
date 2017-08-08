@@ -32,6 +32,10 @@ VK_KHR_16bit_storage = []
 VK_KHR_incremental_present = []
 VK_KHR_descriptor_update_template = []
 VK_KHR_shared_presentable_image = []
+VK_KHR_external_fence_capabilities = []
+VK_KHR_external_fence = []
+VK_KHR_external_fence_win32 = ["winapi"]
+VK_KHR_external_fence_fd = []
 
 [dependencies]
 libc = "0.2"
