@@ -2677,3 +2677,17 @@ mod debug_marker_ext;
 #[cfg(feature = "VK_EXT_debug_marker")]
 pub use debug_marker_ext::*;
 
+#[cfg(feature = "VK_AMD_gcn_shader")]
+mod gcn_shader_amd;
+#[cfg(feature = "VK_AMD_gcn_shader")]
+pub use gcn_shader_amd::*;
+
+#[cfg(feature = "VK_NV_dedicated_allocation")]
+mod dedicated_allocation_nv;
+#[cfg(feature = "VK_NV_dedicated_allocation")]
+pub use dedicated_allocation_nv::*;
+
+#[cfg(feature = "VK_AMD_draw_indirect_count")]
+mod draw_indirect_count_amd;
+#[cfg(feature = "VK_AMD_draw_indirect_count")]
+pub use draw_indirect_count_amd::*;

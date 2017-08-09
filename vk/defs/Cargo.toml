@@ -48,6 +48,9 @@ VK_AMD_rasterization_order = []
 VK_AMD_shader_trinary_minmax = []
 VK_AMD_shader_explicit_vertex_parameter = []
 VK_EXT_debug_marker = []
+VK_AMD_gcn_shader = []
+VK_NV_dedicated_allocation = []
+VK_AMD_draw_indirect_count = []
 
 [dependencies]
 libc = "0.2"
