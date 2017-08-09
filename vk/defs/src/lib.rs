@@ -2691,3 +2691,28 @@ pub use dedicated_allocation_nv::*;
 mod draw_indirect_count_amd;
 #[cfg(feature = "VK_AMD_draw_indirect_count")]
 pub use draw_indirect_count_amd::*;
+
+#[cfg(feature = "VK_AMD_negative_viewport_height")]
+mod negative_viewport_height_amd;
+#[cfg(feature = "VK_AMD_negative_viewport_height")]
+pub use negative_viewport_height_amd::*;
+
+#[cfg(feature = "VK_AMD_gpu_shader_half_float")]
+mod gpu_shader_half_float_amd;
+#[cfg(feature = "VK_AMD_gpu_shader_half_float")]
+pub use gpu_shader_half_float_amd::*;
+
+#[cfg(feature = "VK_AMD_shader_ballot")]
+mod shader_ballot_amd;
+#[cfg(feature = "VK_AMD_shader_ballot")]
+pub use shader_ballot_amd::*;
+
+#[cfg(feature = "VK_AMD_texture_gather_bias_lod")]
+mod texture_gather_bias_lod_amd;
+#[cfg(feature = "VK_AMD_texture_gather_bias_lod")]
+pub use texture_gather_bias_lod_amd::*;
+
+#[cfg(feature = "VK_KHX_multiview")]
+mod multiview_khx;
+#[cfg(feature = "VK_KHX_multiview")]
+pub use multiview_khx::*;
