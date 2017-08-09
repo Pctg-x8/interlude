@@ -16,7 +16,7 @@ impl Default for VkSharedPresentSurfaceCapabilitiesKHR
 {
 	fn default() -> Self
 	{
-		VkSharedPresentSurfaceCapbilitiesKHR
+		VkSharedPresentSurfaceCapabilitiesKHR
 		{
 			sType: VK_STRUCTURE_TYPE_SHARED_PRESENT_SURFACE_CAPABILITIES_KHR,
 			.. unsafe { std::mem::zeroed() }

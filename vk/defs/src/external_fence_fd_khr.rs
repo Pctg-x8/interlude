@@ -44,4 +44,4 @@ impl Default for VkFenceGetFdInfoKHR
 }
 
 pub type PFN_vkImportFenceFdKHR = extern "system" fn(device: VkDevice, pImportFenceFdInfo: *const VkImportFenceFdInfoKHR) -> VkResult;
-pub type PFN_vGetFenceFdKHR = extern "system" fn(device: VkDEvice, pGetFdInfo: *const VkFEnceGetFdInfoKHR, pFd: *mut c_int) -> VkResult;
+pub type PFN_vGetFenceFdKHR = extern "system" fn(device: VkDevice, pGetFdInfo: *const VkFenceGetFdInfoKHR, pFd: *mut c_int) -> VkResult;

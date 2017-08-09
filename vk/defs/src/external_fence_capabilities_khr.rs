@@ -20,13 +20,13 @@ pub const VK_EXTERNAL_FENCE_FEATURE_IMPORTABLE_BIT_KHR: VkExternalFenceFeatureFl
 pub struct VkPhysicalDeviceExternalFenceInfoKHR
 {
 	pub sType: VkStructureType, pub pNext: *const c_void,
-	pub handleType: VkExternalFenceHandleTYpeFlagsKHR
+	pub handleType: VkExternalFenceHandleTypeFlagsKHR
 }
 #[repr(C)] #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VkExternalFencePropertiesKHR
 {
 	pub sType: VkStructureType, pub pNext: *mut c_void,
-	pub exportFromImportedHandleTypes: VkExternalFenceTypeFlagsKHR,
+	pub exportFromImportedHandleTypes: VkExternalFenceHandleTypeFlagsKHR,
 	pub compatibleHandleTypes: VkExternalFenceHandleTypeFlagsKHR,
 	pub externalFenceFeatures: VkExternalFenceFeatureFlagsKHR
 }

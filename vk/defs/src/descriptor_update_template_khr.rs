@@ -4,7 +4,6 @@ pub const VK_KHR_DESCRIPTOR_UPDATE_TEMPLATE_SPEC_VERSION: usize = 1;
 pub static VK_KHR_DESCRIPTOR_UPDATE_TEMPLATE_EXTENSION_NAME: &'static str = "VK_KHR_descriptor_update_template";
 
 use super::*;
-use libc::*;
 
 mod nd_handle_base_ts { pub enum VkDescriptorUpdateTemplateKHR {} }
 pub type VkDescriptorUpdateTemplateKHR = VK_NON_DISPATCHABLE_HANDLE!(VkDescriptorUpdateTemplateKHR);
@@ -37,7 +36,7 @@ pub struct VkDescriptorUpdateTemplateCreateInfoKHR
     pub descriptorSetLayout: VkDescriptorSetLayout, pub pipelineBindPoint: VkPipelineBindPoint,
     pub pipelineLayout: VkPipelineLayout, pub set: u32
 }
-impl Default for VkDescriptorUpdateTEmplateCreateInfoKHR
+impl Default for VkDescriptorUpdateTemplateCreateInfoKHR
 {
     fn default() -> Self
     {

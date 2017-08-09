@@ -13,7 +13,7 @@ pub const VK_FENCE_IMPORT_TEMPORARY_BIT_KHR: VkFenceImportFlagsKHR = 0x01;
 pub struct VkExportFenceCreateInfoKHR
 {
 	pub sType: VkStructureType, pub pNext: *const c_void,
-	pub handleTypes: VkExternalFenceHandleTYpeFlagsKHR
+	pub handleTypes: VkExternalFenceHandleTypeFlagsKHR
 }
 impl Default for VkExportFenceCreateInfoKHR
 {
