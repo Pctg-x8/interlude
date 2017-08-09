@@ -2484,7 +2484,7 @@ mod display_swapchain_khr;
 pub use display_swapchain_khr::*;
 
 #[cfg(feature = "VK_KHR_xlib_surface")]
-extern crate xlib;
+extern crate x11;
 #[cfg(feature = "VK_KHR_xlib_surface")]
 mod xlib_surface_khr;
 #[cfg(feature = "VK_KHR_xlib_surface")]
