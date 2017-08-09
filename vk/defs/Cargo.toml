@@ -56,6 +56,10 @@ VK_AMD_gpu_shader_half_float = []
 VK_AMD_shader_ballot = []
 VK_AMD_texture_gather_bias_lod = []
 VK_KHX_multiview = []
+VK_IMG_format_pvrtc = []
+VK_NV_external_memory_capabilities = []
+VK_NV_external_memory = []
+VK_NV_external_memory_win32 = ["winapi"]
 
 [dependencies]
 libc = "0.2"

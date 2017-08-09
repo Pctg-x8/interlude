@@ -2458,7 +2458,8 @@ pub type PFN_vkCmdExecuteCommands = extern "system" fn(commandBuffer: VkCommandB
 // Platform Extras
 #[cfg(any(
     feature = "VK_KHR_win32_surface", feature = "VK_KHR_external_memory_win32",
-    feature = "VK_KHR_external_semaphore_win32", feature = "VK_KHR_external_fence_win32"
+    feature = "VK_KHR_external_semaphore_win32", feature = "VK_KHR_external_fence_win32",
+    feature = "VK_NV_external_memory_win32"
 ))]
 extern crate winapi;
 
@@ -2716,3 +2717,23 @@ pub use texture_gather_bias_lod_amd::*;
 mod multiview_khx;
 #[cfg(feature = "VK_KHX_multiview")]
 pub use multiview_khx::*;
+
+#[cfg(feature = "VK_IMG_format_pvrtc")]
+mod format_pvrtc_img;
+#[cfg(feature = "VK_IMG_format_pvrtc")]
+pub use format_pvrtc_img::*;
+
+#[cfg(feature = "VK_NV_external_memory_capabilities")]
+mod external_memory_capabilities_nv;
+#[cfg(feature = "VK_NV_external_memory_capabilities")]
+pub use external_memory_capabilities_nv::*;
+
+#[cfg(feature = "VK_NV_external_memory")]
+mod external_memory_nv;
+#[cfg(feature = "VK_NV_external_memory")]
+pub use external_memory_nv::*;
+
+#[cfg(feature = "VK_NV_external_memory_win32")]
+mod external_memory_win32_nv;
+#[cfg(feature = "VK_NV_external_memory_win32")]
+pub use external_memory_win32_nv::*;
