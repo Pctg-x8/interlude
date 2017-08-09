@@ -79,6 +79,7 @@ VK_NV_geometry_shader_passthrough = []
 VK_NV_viewport_array2 = []
 VK_NVX_multiview_per_view_attributes = []
 VK_NV_viewport_swizzle = []
+VK_EXT_discard_rectangles = []
 
 [dependencies]
 libc = "0.2"

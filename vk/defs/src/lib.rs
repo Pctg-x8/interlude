@@ -2832,3 +2832,8 @@ pub use multiview_per_view_attributes_nvx::*;
 mod viewport_swizzle_nv;
 #[cfg(feature = "VK_NV_viewport_swizzle")]
 pub use viewport_swizzle_nv::*;
+
+#[cfg(feature = "VK_EXT_discard_rectangles")]
+mod discard_rectangles_ext;
+#[cfg(feature = "VK_EXT_discard_rectangles")]
+pub use discard_rectangles_ext::*;
