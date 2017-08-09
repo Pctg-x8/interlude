@@ -2,7 +2,8 @@
 
 use libc::*;
 use super::*;
-use wayland_client::*;
+use wayland_client::sys::wl_display;
+use wayland_client::protocol::wl_surface;
 
 pub const VK_KHR_WAYLAND_SURFACE_SPEC_VERSION: usize = 6;
 pub static VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME: &'static str = "VK_KHR_wayland_surface";
