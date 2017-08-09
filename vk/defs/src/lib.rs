@@ -2522,109 +2522,109 @@ mod sampler_mirror_clamp_to_edge_khr;
 #[cfg(feature = "VK_KHR_sampler_mirror_clamp_to_edge")]
 pub use sampler_mirror_clamp_to_edge_khr::*;
 
-#[cfg(features = "VK_KHR_get_physical_device_properties2")]
+#[cfg(feature = "VK_KHR_get_physical_device_properties2")]
 mod get_physical_device_properties2_khr;
-#[cfg(features = "VK_KHR_get_physical_device_properties2")]
+#[cfg(feature = "VK_KHR_get_physical_device_properties2")]
 pub use get_physical_device_properties2_khr::*;
 
-#[cfg(features = "VK_KHR_shader_draw_parameters")]
+#[cfg(feature = "VK_KHR_shader_draw_parameters")]
 mod shader_draw_parameters_khr;
-#[cfg(features = "VK_KHR_shader_draw_parameters")]
+#[cfg(feature = "VK_KHR_shader_draw_parameters")]
 pub use shader_draw_parameters_khr::*;
 
-#[cfg(features = "VK_KHR_maintenance1")]
+#[cfg(feature = "VK_KHR_maintenance1")]
 mod maintenance1_khr;
-#[cfg(features = "VK_KHR_maintenance1")]
+#[cfg(feature = "VK_KHR_maintenance1")]
 pub use maintenance1_khr::*;
 
-#[cfg(features = "VK_KHR_external_memory_capabilities")]
+#[cfg(feature = "VK_KHR_external_memory_capabilities")]
 mod external_memory_capabilities_khr;
-#[cfg(features = "VK_KHR_external_memory_capabilities")]
+#[cfg(feature = "VK_KHR_external_memory_capabilities")]
 pub use external_memory_capabilities_khr::*;
 
-#[cfg(features = "VK_KHR_external_memory")]
+#[cfg(feature = "VK_KHR_external_memory")]
 mod external_memory_khr;
-#[cfg(features = "VK_KHR_external_memory")]
+#[cfg(feature = "VK_KHR_external_memory")]
 pub use external_memory_khr::*;
 
-#[cfg(features = "VK_KHR_external_memory_win32")]
+#[cfg(feature = "VK_KHR_external_memory_win32")]
 mod external_memory_win32_khr;
-#[cfg(features = "VK_KHR_external_memory_win32")]
+#[cfg(feature = "VK_KHR_external_memory_win32")]
 pub use external_memory_win32_khr::*;
 
-#[cfg(features = "VK_KHR_external_memory_fd")]
+#[cfg(feature = "VK_KHR_external_memory_fd")]
 mod external_memory_fd_khr;
-#[cfg(features = "VK_KHR_external_memory_fd")]
+#[cfg(feature = "VK_KHR_external_memory_fd")]
 pub use external_memory_fd_khr::*;
 
-#[cfg(features = "VK_KHR_win32_keyed_mutex")]
+#[cfg(feature = "VK_KHR_win32_keyed_mutex")]
 mod win32_keyed_mutex_khr;
-#[cfg(features = "VK_KHR_win32_keyed_mutex")]
+#[cfg(feature = "VK_KHR_win32_keyed_mutex")]
 pub use win32_keyed_mutex_khr::*;
 
-#[cfg(features = "VK_KHR_external_semaphore_capabilities")]
+#[cfg(feature = "VK_KHR_external_semaphore_capabilities")]
 mod external_semaphore_capabilities_khr;
-#[cfg(features = "VK_KHR_external_semaphore_capabilities")]
+#[cfg(feature = "VK_KHR_external_semaphore_capabilities")]
 pub use external_semaphore_capabilities_khr::*;
 
-#[cfg(features = "VK_KHR_external_semaphore")]
+#[cfg(feature = "VK_KHR_external_semaphore")]
 mod external_semaphore_khr;
-#[cfg(features = "VK_KHR_external_semaphore")]
+#[cfg(feature = "VK_KHR_external_semaphore")]
 pub use external_semaphore_khr::*;
 
 #[cfg(featuers = "VK_KHR_external_semaphore_win32")]
 mod external_semaphore_win32_khr;
-#[cfg(features = "VK_KHR_external_semaphore_win32")]
+#[cfg(feature = "VK_KHR_external_semaphore_win32")]
 pub use external_semaphore_win32_khr::*;
 
-#[cfg(features = "VK_KHR_external_semaphore_fd")]
+#[cfg(feature = "VK_KHR_external_semaphore_fd")]
 mod external_semaphore_fd_khr;
-#[cfg(features = "VK_KHR_external_semaphore_fd")]
+#[cfg(feature = "VK_KHR_external_semaphore_fd")]
 pub use external_semaphore_fd_khr::*;
 
-#[cfg(features = "VK_KHR_push_descriptor")]
+#[cfg(feature = "VK_KHR_push_descriptor")]
 mod push_descriptor_khr;
-#[cfg(features = "VK_KHR_push_descriptor")]
+#[cfg(feature = "VK_KHR_push_descriptor")]
 pub use push_descriptor_khr::*;
 
-#[cfg(features = "VK_KHR_16bit_storage")]
+#[cfg(feature = "VK_KHR_16bit_storage")]
 mod halfbit_storage_khr;
-#[cfg(features = "VK_KHR_16bit_storage")]
+#[cfg(feature = "VK_KHR_16bit_storage")]
 pub use halfbit_storage_khr::*;
 
-#[cfg(features = "VK_KHR_incremental_present")]
+#[cfg(feature = "VK_KHR_incremental_present")]
 mod incremental_present_khr;
-#[cfg(features = "VK_KHR_incremental_present")]
+#[cfg(feature = "VK_KHR_incremental_present")]
 pub use incremental_present_khr::*;
 
-#[cfg(features = "VK_KHR_descriptor_update_template")]
+#[cfg(feature = "VK_KHR_descriptor_update_template")]
 mod descriptor_update_template_khr;
-#[cfg(features = "VK_KHR_descriptor_update_template")]
+#[cfg(feature = "VK_KHR_descriptor_update_template")]
 pub use descriptor_update_template_khr::*;
 
-#[cfg(features = "VK_KHR_shared_presentable_image")]
+#[cfg(feature = "VK_KHR_shared_presentable_image")]
 mod shared_presentable_image_khr;
-#[cfg(features = "VK_KHR_shared_presentable_image")]
+#[cfg(feature = "VK_KHR_shared_presentable_image")]
 pub use shared_presentable_image_khr::*;
 
-#[cfg(features = "VK_KHR_external_fence_capabilities")]
+#[cfg(feature = "VK_KHR_external_fence_capabilities")]
 mod external_fence_capabilities_khr;
-#[cfg(features = "VK_KHR_external_fence_capabilities")]
+#[cfg(feature = "VK_KHR_external_fence_capabilities")]
 pub use external_fence_capabilities_khr::*;
 
-#[cfg(features = "VK_KHR_external_fence")]
+#[cfg(feature = "VK_KHR_external_fence")]
 mod external_fence_khr;
-#[cfg(features = "VK_KHR_external_fence")]
+#[cfg(feature = "VK_KHR_external_fence")]
 pub use external_fence_khr::*;
 
-#[cfg(features = "VK_KHR_external_fence_win32")]
+#[cfg(feature = "VK_KHR_external_fence_win32")]
 mod external_fence_win32_khr;
-#[cfg(features = "VK_KHR_external_fence_win32")]
+#[cfg(feature = "VK_KHR_external_fence_win32")]
 pub use external_fence_win32_khr::*;
 
-#[cfg(features = "VK_KHR_external_fence_fd")]
+#[cfg(feature = "VK_KHR_external_fence_fd")]
 mod external_fence_fd_khr;
-#[cfg(features = "VK_KHR_external_fence_fd")]
+#[cfg(feature = "VK_KHR_external_fence_fd")]
 pub use external_fence_fd_khr::*;
 
 #[cfg(feature = "VK_KHR_get_surface_capabilities2")]
