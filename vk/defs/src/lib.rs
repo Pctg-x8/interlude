@@ -2787,3 +2787,13 @@ pub use clip_space_w_scaling_nv::*;
 mod direct_mode_display_ext;
 #[cfg(feature = "VK_EXT_direct_mode_display")]
 pub use direct_mode_display_ext::*;
+
+#[cfg(feature = "VK_EXT_acquire_xlib_display")]
+mod acquire_xlib_display_ext;
+#[cfg(feature = "VK_EXT_acquire_xlib_display")]
+pub use acquire_xlib_display_ext::*;
+
+#[cfg(feature = "VK_EXT_display_surface_counter")]
+mod display_surface_counter_ext;
+#[cfg(feature = "VK_EXT_display_surface_counter")]
+pub use display_surface_counter_ext::*;
