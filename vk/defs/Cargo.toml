@@ -42,6 +42,9 @@ VK_KHR_dedicated_allocation = []
 VK_KHR_storage_buffer_storage_class = []
 VK_KHR_get_memory_requirements2 = []
 VK_EXT_debug_report = []
+VK_NV_glsl_shader = []
+VK_IMG_filter_cubic = []
+VK_AMD_rasterization_order = []
 
 [dependencies]
 libc = "0.2"

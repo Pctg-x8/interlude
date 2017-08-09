@@ -2657,3 +2657,18 @@ mod debug_report_ext;
 #[cfg(feature = "VK_EXT_debug_report")]
 pub use debug_report_ext::*;
 
+#[cfg(feature = "VK_NV_glsl_shader")]
+mod glsl_shader_nv;
+#[cfg(feature = "VK_NV_glsl_shader")]
+pub use glsl_shader_nv::*;
+
+#[cfg(feature = "VK_IMG_filter_cubic")]
+mod filter_cubic_img;
+#[cfg(feature = "VK_IMG_filter_cubic")]
+pub use filter_cubic_img::*;
+
+#[cfg(feature = "VK_AMD_rasterization_order")]
+mod rasterization_order_amd;
+#[cfg(feature = "VK_AMD_rasterization_order")]
+pub use rasterization_order_amd::*;
+
