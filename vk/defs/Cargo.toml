@@ -45,6 +45,9 @@ VK_EXT_debug_report = []
 VK_NV_glsl_shader = []
 VK_IMG_filter_cubic = []
 VK_AMD_rasterization_order = []
+VK_AMD_shader_trinary_minmax = []
+VK_AMD_shader_explicit_vertex_parameter = []
+VK_EXT_debug_marker = []
 
 [dependencies]
 libc = "0.2"
