@@ -16,7 +16,7 @@
 ** limitations under the License.
 */
 
-#![allow(private_in_public, non_upper_case_globals, non_camel_case_types, non_snake_case)]
+#![allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
 
 extern crate libc;
 use libc::*;
@@ -74,12 +74,12 @@ pub type VkBool32 = u32;
 pub type VkDeviceSize = u64;
 pub type VkSampleMask = u32;
 
-pub type VkInstance = *mut VkInstanceT; enum VkInstanceT {}
-pub type VkPhysicalDevice = *mut VkPhysicalDeviceT; enum VkPhysicalDeviceT {}
+pub type VkInstance = *mut VkInstanceT; pub enum VkInstanceT {}
+pub type VkPhysicalDevice = *mut VkPhysicalDeviceT; pub enum VkPhysicalDeviceT {}
 pub type VkDevice = *mut VkDeviceT; pub enum VkDeviceT {}
-pub type VkQueue = *mut VkQueueT; enum VkQueueT {}
+pub type VkQueue = *mut VkQueueT; pub enum VkQueueT {}
 pub type VkSemaphore = VK_NON_DISPATCHABLE_HANDLE!(VkSemaphore);
-pub type VkCommandBuffer = *mut VkCommandBufferT; enum VkCommandBufferT {}
+pub type VkCommandBuffer = *mut VkCommandBufferT; pub enum VkCommandBufferT {}
 pub type VkFence = VK_NON_DISPATCHABLE_HANDLE!(VkFence);
 pub type VkDeviceMemory = VK_NON_DISPATCHABLE_HANDLE!(VkDeviceMemory);
 pub type VkBuffer = VK_NON_DISPATCHABLE_HANDLE!(VkBuffer);

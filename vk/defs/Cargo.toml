@@ -1,7 +1,7 @@
 [package]
 name = "interlude-vk-defs"
 description = "Interlude: Vulkan Definitions"
-version = "1.0.54"
+version = "1.0.55"
 authors = ["S.Percentage"]
 
 [features]

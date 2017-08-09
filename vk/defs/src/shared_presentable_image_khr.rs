@@ -9,7 +9,7 @@ use super::*;
 #[repr(C)] #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VkSharedPresentSurfaceCapabilitiesKHR
 {
-	pub sType: VkStructureType, pub pNext: *mut c_void.
+	pub sType: VkStructureType, pub pNext: *mut c_void,
 	pub sharedPresentSupportedUsageFlags: VkImageUsageFlags
 }
 impl Default for VkSharedPresentSurfaceCapabilitiesKHR
