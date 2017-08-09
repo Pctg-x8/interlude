@@ -60,6 +60,8 @@ VK_IMG_format_pvrtc = []
 VK_NV_external_memory_capabilities = []
 VK_NV_external_memory = []
 VK_NV_external_memory_win32 = ["winapi"]
+VK_NV_win32_keyed_mutex = []
+VK_KHX_device_group = []
 
 [dependencies]
 libc = "0.2"

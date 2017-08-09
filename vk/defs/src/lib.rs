@@ -2737,3 +2737,13 @@ pub use external_memory_nv::*;
 mod external_memory_win32_nv;
 #[cfg(feature = "VK_NV_external_memory_win32")]
 pub use external_memory_win32_nv::*;
+
+#[cfg(feature = "VK_NV_win32_keyed_mutex")]
+mod win32_keyed_mutex_nv;
+#[cfg(feature = "VK_NV_win32_keyed_mutex")]
+pub use win32_keyed_mutex_nv::*;
+
+#[cfg(feature = "VK_KHX_device_group")]
+mod device_group_khx;
+#[cfg(feature = "VK_KHX_device_group")]
+pub use device_group_khx::*;
