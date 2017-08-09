@@ -2462,6 +2462,8 @@ pub type PFN_vkCmdExecuteCommands = extern "system" fn(commandBuffer: VkCommandB
     feature = "VK_NV_external_memory_win32"
 ))]
 extern crate winapi;
+#[cfg(any(feature = "VK_KHR_xlib_surface", feature = "VK_EXT_acquire_xlib_display"))]
+extern crate x11;
 
 #[cfg(feature = "VK_KHR_surface")]
 mod surface_khr;
@@ -2483,8 +2485,6 @@ mod display_swapchain_khr;
 #[cfg(feature = "VK_KHR_display_swapchain")]
 pub use display_swapchain_khr::*;
 
-#[cfg(feature = "VK_KHR_xlib_surface")]
-extern crate x11;
 #[cfg(feature = "VK_KHR_xlib_surface")]
 mod xlib_surface_khr;
 #[cfg(feature = "VK_KHR_xlib_surface")]

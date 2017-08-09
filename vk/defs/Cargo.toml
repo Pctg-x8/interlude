@@ -71,6 +71,7 @@ VK_NVX_device_generated_commands = []
 VK_NV_clip_space_w_scaling = []
 VK_EXT_direct_mode_display = []
 VK_EXT_acquire_xlib_display = ["x11"]
+VK_EXT_display_surface_counter = []
 
 [dependencies]
 libc = "0.2"
