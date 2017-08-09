@@ -39,6 +39,8 @@ VK_KHR_external_fence_fd = []
 VK_KHR_get_surface_capabilities2 = []
 VK_KHR_variable_pointers = []
 VK_KHR_dedicated_allocation = []
+VK_KHR_storage_buffer_storage_class = []
+VK_KHR_get_memory_requirements2 = []
 
 [dependencies]
 libc = "0.2"

@@ -2642,3 +2642,13 @@ mod dedicated_allocation_khr;
 #[cfg(feature = "VK_KHR_dedicated_allocation")]
 pub use dedicated_allocation_khr::*;
 
+#[cfg(feature = "VK_KHR_storage_buffer_storage_class")]
+mod storage_buffer_storage_class_khr;
+#[cfg(feature = "VK_KHR_storage_buffer_storage_class")]
+pub use storage_buffer_storage_class_khr::*;
+
+#[cfg(feature = "VK_KHR_get_memory_requirements2")]
+mod get_memory_requirements2_khr;
+#[cfg(feature = "VK_KHR_get_memory_requirements2")]
+pub use get_memory_requirements2_khr::*;
+
