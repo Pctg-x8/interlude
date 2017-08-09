@@ -2652,3 +2652,8 @@ mod get_memory_requirements2_khr;
 #[cfg(feature = "VK_KHR_get_memory_requirements2")]
 pub use get_memory_requirements2_khr::*;
 
+#[cfg(feature = "VK_EXT_debug_report")]
+mod debug_report_ext;
+#[cfg(feature = "VK_EXT_debug_report")]
+pub use debug_report_ext::*;
+

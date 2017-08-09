@@ -41,6 +41,7 @@ VK_KHR_variable_pointers = []
 VK_KHR_dedicated_allocation = []
 VK_KHR_storage_buffer_storage_class = []
 VK_KHR_get_memory_requirements2 = []
+VK_EXT_debug_report = []
 
 [dependencies]
 libc = "0.2"
