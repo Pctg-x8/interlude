@@ -2672,3 +2672,8 @@ mod rasterization_order_amd;
 #[cfg(feature = "VK_AMD_rasterization_order")]
 pub use rasterization_order_amd::*;
 
+#[cfg(feature = "VK_EXT_debug_marker")]
+mod debug_marker_ext;
+#[cfg(feature = "VK_EXT_debug_marker")]
+pub use debug_marker_ext::*;
+
