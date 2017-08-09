@@ -2632,3 +2632,13 @@ mod get_surface_capabilities2_khr;
 #[cfg(feature = "VK_KHR_get_surface_capabilities2")]
 pub use get_surface_capabilities2_khr::*;
 
+#[cfg(feature = "VK_KHR_variable_pointers")]
+mod variable_pointers_khr;
+#[cfg(feature = "VK_KHR_variable_pointers")]
+pub use variable_pointers_khr::*;
+
+#[cfg(feature = "VK_KHR_dedicated_allocation")]
+mod dedicated_allocation_khr;
+#[cfg(feature = "VK_KHR_dedicated_allocation")]
+pub use dedicated_allocation_khr::*;
+
