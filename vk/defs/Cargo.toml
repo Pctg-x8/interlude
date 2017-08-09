@@ -67,6 +67,7 @@ VK_NN_vi_surface = []
 VK_EXT_shader_group_ballot = []
 VK_EXT_shader_subgroup_vote = []
 VK_KHX_device_group_creation = []
+VK_NVX_device_generated_commands = []
 
 [dependencies]
 libc = "0.2"

@@ -2772,3 +2772,8 @@ pub use shader_subgroup_vote_ext::*;
 mod device_group_creation_khx;
 #[cfg(feature = "VK_KHX_device_group_creation")]
 pub use device_group_creation_khx::*;
+
+#[cfg(feature = "VK_NVX_device_generated_commands")]
+mod device_generated_commands_nvx;
+#[cfg(feature = "VK_NVX_device_generated_commands")]
+pub use device_generated_commands_nvx::*;
