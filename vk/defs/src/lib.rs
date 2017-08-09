@@ -2837,3 +2837,23 @@ pub use viewport_swizzle_nv::*;
 mod discard_rectangles_ext;
 #[cfg(feature = "VK_EXT_discard_rectangles")]
 pub use discard_rectangles_ext::*;
+
+#[cfg(feature = "VK_EXT_swapchain_colorspace")]
+mod swapchain_colorspace_ext;
+#[cfg(feature = "VK_EXT_swapchain_colorspace")]
+pub use swapchain_colorspace_ext::*;
+
+#[cfg(feature = "VK_EXT_hdr_metadata")]
+mod hdr_metadata_ext;
+#[cfg(feature = "VK_EXT_hdr_metadata")]
+pub use hdr_metadata_ext::*;
+
+#[cfg(feature = "VK_MVK_ios_surface")]
+mod ios_surface_mvk;
+#[cfg(feature = "VK_MVK_ios_surface")]
+pub use ios_surface_mvk::*;
+
+#[cfg(feature = "VK_MVK_macos_surface")]
+mod macos_surface_mvk;
+#[cfg(feature = "VK_MVK_macos_surface")]
+pub use macos_surface_mvk::*;

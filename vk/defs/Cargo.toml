@@ -80,6 +80,10 @@ VK_NV_viewport_array2 = []
 VK_NVX_multiview_per_view_attributes = []
 VK_NV_viewport_swizzle = []
 VK_EXT_discard_rectangles = []
+VK_EXT_swapchain_colorspace = []
+VK_EXT_hdr_metadata = []
+VK_MVK_ios_surface = []
+VK_MVK_macos_surface = []
 
 [dependencies]
 libc = "0.2"
