@@ -2797,3 +2797,38 @@ pub use acquire_xlib_display_ext::*;
 mod display_surface_counter_ext;
 #[cfg(feature = "VK_EXT_display_surface_counter")]
 pub use display_surface_counter_ext::*;
+
+#[cfg(feature = "VK_EXT_display_control")]
+mod display_control_ext;
+#[cfg(feature = "VK_EXT_display_control")]
+pub use display_control_ext::*;
+
+#[cfg(feature = "VK_GOOGLE_display_timing")]
+mod display_timing_google;
+#[cfg(feature = "VK_GOOGLE_display_timing")]
+pub use display_timing_google::*;
+
+#[cfg(feature = "VK_NV_sample_mask_override_coverage")]
+mod sample_mask_override_coverage_nv;
+#[cfg(feature = "VK_NV_sample_mask_override_coverage")]
+pub use sample_mask_override_coverage_nv::*;
+
+#[cfg(feature = "VK_NV_geometry_shader_passthrough")]
+mod geometry_shader_passthrough_nv;
+#[cfg(feature = "VK_NV_geometry_shader_passthrough")]
+pub use geometry_shader_passthrough_nv::*;
+
+#[cfg(feature = "VK_NV_viewport_array2")]
+mod viewport_array2_nv;
+#[cfg(feature = "VK_NV_viewport_array2")]
+pub use viewport_array2_nv::*;
+
+#[cfg(feature = "VK_NVX_multiview_per_view_attributes")]
+mod multiview_per_view_attributes_nvx;
+#[cfg(feature = "VK_NVX_multiview_per_view_attributes")]
+pub use multiview_per_view_attributes_nvx::*;
+
+#[cfg(feature = "VK_NV_viewport_swizzle")]
+mod viewport_swizzle_nv;
+#[cfg(feature = "VK_NV_viewport_swizzle")]
+pub use viewport_swizzle_nv::*;
