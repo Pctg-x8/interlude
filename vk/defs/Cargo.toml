@@ -62,6 +62,11 @@ VK_NV_external_memory = []
 VK_NV_external_memory_win32 = ["winapi"]
 VK_NV_win32_keyed_mutex = []
 VK_KHX_device_group = []
+VK_EXT_validation_flags = []
+VK_NN_vi_surface = []
+VK_EXT_shader_group_ballot = []
+VK_EXT_shader_subgroup_vote = []
+VK_KHX_device_group_creation = []
 
 [dependencies]
 libc = "0.2"

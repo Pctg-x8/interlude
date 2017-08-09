@@ -2747,3 +2747,28 @@ pub use win32_keyed_mutex_nv::*;
 mod device_group_khx;
 #[cfg(feature = "VK_KHX_device_group")]
 pub use device_group_khx::*;
+
+#[cfg(feature = "VK_EXT_validation_flags")]
+mod validation_flags_ext;
+#[cfg(feature = "VK_EXT_validation_flags")]
+pub use validation_flags_ext::*;
+
+#[cfg(feature = "VK_NN_vi_surface")]
+mod vi_surface_nn;
+#[cfg(feature = "VK_NN_vi_surface")]
+pub use vi_surface_nn::*;
+
+#[cfg(feature = "VK_EXT_shader_group_ballot")]
+mod shader_group_ballot_ext;
+#[cfg(feature = "VK_EXT_shader_group_ballot")]
+pub use shader_group_ballot_ext::*;
+
+#[cfg(feature = "VK_EXT_shader_subgroup_vote")]
+mod shader_subgroup_vote_ext;
+#[cfg(feature = "VK_EXT_shader_subgroup_vote")]
+pub use shader_subgroup_vote_ext::*;
+
+#[cfg(feature = "VK_KHX_device_group_creation")]
+mod device_group_creation_khx;
+#[cfg(feature = "VK_KHX_device_group_creation")]
+pub use device_group_creation_khx::*;
