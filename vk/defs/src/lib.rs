@@ -2627,3 +2627,8 @@ mod external_fence_fd_khr;
 #[cfg(features = "VK_KHR_external_fence_fd")]
 pub use external_fence_fd_khr::*;
 
+#[cfg(feature = "VK_KHR_get_surface_capabilities2")]
+mod get_surface_capabilities2_khr;
+#[cfg(feature = "VK_KHR_get_surface_capabilities2")]
+pub use get_surface_capabilities2_khr::*;
+

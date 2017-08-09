@@ -36,6 +36,7 @@ VK_KHR_external_fence_capabilities = []
 VK_KHR_external_fence = []
 VK_KHR_external_fence_win32 = ["winapi"]
 VK_KHR_external_fence_fd = []
+VK_KHR_get_surface_capabilities2 = []
 
 [dependencies]
 libc = "0.2"
