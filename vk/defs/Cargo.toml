@@ -68,6 +68,8 @@ VK_EXT_shader_group_ballot = []
 VK_EXT_shader_subgroup_vote = []
 VK_KHX_device_group_creation = []
 VK_NVX_device_generated_commands = []
+VK_NV_clip_space_w_scaling = []
+VK_EXT_direct_mode_display = []
 
 [dependencies]
 libc = "0.2"

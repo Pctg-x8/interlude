@@ -2777,3 +2777,13 @@ pub use device_group_creation_khx::*;
 mod device_generated_commands_nvx;
 #[cfg(feature = "VK_NVX_device_generated_commands")]
 pub use device_generated_commands_nvx::*;
+
+#[cfg(feature = "VK_NV_clip_space_w_scaling")]
+mod clip_space_w_scaling_nv;
+#[cfg(feature = "VK_NV_clip_space_w_scaling")]
+pub use clip_space_w_scaling_nv::*;
+
+#[cfg(feature = "VK_EXT_direct_mode_display")]
+mod direct_mode_display_ext;
+#[cfg(feature = "VK_EXT_direct_mode_display")]
+pub use direct_mode_display_ext::*;
