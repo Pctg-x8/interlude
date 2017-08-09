@@ -2857,3 +2857,33 @@ pub use ios_surface_mvk::*;
 mod macos_surface_mvk;
 #[cfg(feature = "VK_MVK_macos_surface")]
 pub use macos_surface_mvk::*;
+
+#[cfg(feature = "VK_EXT_sampler_filter_minmax")]
+mod sampler_filter_minmax_ext;
+#[cfg(feature = "VK_EXT_sampler_filter_minmax")]
+pub use sampler_filter_minmax_ext::*;
+
+#[cfg(feature = "VK_AMD_gpu_shader_int16")]
+mod gpu_shader_int16_amd;
+#[cfg(feature = "VK_AMD_gpu_shader_int16")]
+pub use gpu_shader_int16_amd::*;
+
+#[cfg(feature = "VK_EXT_blend_operation_advanced")]
+mod blend_operation_advanced_ext;
+#[cfg(feature = "VK_EXT_blend_operation_advanced")]
+pub use blend_operation_advanced_ext::*;
+
+#[cfg(feature = "VK_NV_fragment_coverage_to_color")]
+mod fragment_coverage_to_color_nv;
+#[cfg(feature = "VK_NV_fragment_coverage_to_color")]
+pub use fragment_coverage_to_color_nv::*;
+
+#[cfg(feature = "VK_NV_framebuffer_mixed_samples")]
+mod framebuffer_mixed_samples_nv;
+#[cfg(feature = "VK_NV_framebuffer_mixed_samples")]
+pub use framebuffer_mixed_samples_nv::*;
+
+#[cfg(feature = "VK_NV_fill_rectangle")]
+mod fill_rectangle_nv;
+#[cfg(feature = "VK_NV_fill_rectangle")]
+pub use fill_rectangle_nv::*;

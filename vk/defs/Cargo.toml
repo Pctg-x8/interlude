@@ -84,6 +84,12 @@ VK_EXT_swapchain_colorspace = []
 VK_EXT_hdr_metadata = []
 VK_MVK_ios_surface = []
 VK_MVK_macos_surface = []
+VK_EXT_sampler_filter_minmax = []
+VK_AMD_gpu_shader_int16 = []
+VK_EXT_blend_operation_advanced = []
+VK_NV_fragment_coverage_to_color = []
+VK_NV_framebuffer_mixed_samples = []
+VK_NV_fill_rectangle = []
 
 [dependencies]
 libc = "0.2"
