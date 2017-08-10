@@ -1586,6 +1586,17 @@ pub struct VkComponentMapping
     pub r: VkComponentSwizzle, pub g: VkComponentSwizzle,
     pub b: VkComponentSwizzle, pub a: VkComponentSwizzle
 }
+impl Default for VkComponentMapping
+{
+    fn default() -> Self
+    {
+        VkComponentMapping
+        {
+            r: VK_COMPONENT_SWIZZLE_R, g: VK_COMPONENT_SWIZZLE_G,
+            b: VK_COMPONENT_SWIZZLE_B, a: VK_COMPONENT_SWIZZLE_A
+        }
+    }
+}
 #[repr(C)] #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VkImageSubresourceRange
 {
