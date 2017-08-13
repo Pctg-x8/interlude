@@ -6,7 +6,7 @@ use device::Device;
 use {
 	ImageSubresourceLayers, EngineResult, ImageResource, BufferResource, Filter, AttachmentClearValue, GraphicsInterface,
 	Framebuffer, ShaderStage, PipelineLayout, DescriptorSetArrayView, GraphicsPipeline, QueueFence, PreciseRenderPass,
-	ImageSubresourceRange, Size3, Offset3
+	ImageSubresourceRange, Size3, Offset3, UnrecoverableExt, AccessFlags
 };
 use shading::ShaderStageSet;
 use std::ops::{Deref, Range};
@@ -44,12 +44,12 @@ impl CommandPool
 // Memory Barriers //
 /// Defines a Memory Barrier
 #[derive(Clone)]
-pub struct MemoryBarrier { pub src_mask: VkAccessFlags, pub dst_mask: VkAccessFlags }
+pub struct MemoryBarrier { pub src_access: AccessFlags, pub dst_access: AccessFlags }
 /// Defines a Buffer Memory Barrier
 #[derive(Clone)]
 pub struct BufferMemoryBarrier<'a>
 {
-	pub src_mask: VkAccessFlags, pub dst_mask: VkAccessFlags,
+	pub src_access: AccessFlags, pub dst_access: AccessFlags,
 	pub src_queue_family_index: u32, pub dst_queue_family_index: u32,
 	pub buffer: &'a BufferResource, pub range: Range<usize>
 }
@@ -67,11 +67,12 @@ impl<'a> Default for BufferMemoryBarrier<'a>
 }
 impl<'a> BufferMemoryBarrier<'a>
 {
-	pub fn flipped_access_mask(&self) -> Self
+	/// Flip Access Mask and Queue Family Index
+	pub fn flip(&self) -> Self
 	{
 		BufferMemoryBarrier
 		{
-			src_mask: self.dst_mask, dst_mask: self.src_mask,
+			src_access: self.dst_access, dst_access: self.src_access,
 			src_queue_family_index: self.src_queue_family_index, dst_queue_family_index: self.dst_queue_family_index,
 			buffer: self.buffer, range: self.range.clone()
 		}
@@ -118,7 +119,7 @@ impl<'a> Into<VkMemoryBarrier> for &'a MemoryBarrier
 	{
 		VkMemoryBarrier
 		{
-			srcAccessMask: self.src_mask, dstAccessMask: self.dst_mask, .. Default::default()
+			srcAccessMask: self.src_access.into(), dstAccessMask: self.dst_access.into(), .. Default::default()
 		}
 	}
 }
@@ -128,7 +129,7 @@ impl<'a> Into<VkBufferMemoryBarrier> for &'a BufferMemoryBarrier<'a>
 	{
 		VkBufferMemoryBarrier
 		{
-			srcAccessMask: self.src_mask, dstAccessMask: self.dst_mask,
+			srcAccessMask: self.src_access.into(), dstAccessMask: self.dst_access.into(),
 			srcQueueFamilyIndex: self.src_queue_family_index, dstQueueFamilyIndex: self.dst_queue_family_index,
 			buffer: self.buffer.internal() as _, offset: self.range.start as _, size: (self.range.end - self.range.start) as _,
 			.. Default::default()
@@ -380,7 +381,7 @@ impl<'a> PrimaryCommandBuffers<'a> for TransientGraphicsCommandBuffers<'a>
 	}
 }
 
-impl <'a> TransientTransferCommandBuffers<'a>
+impl<'a> TransientTransferCommandBuffers<'a>
 {
 	pub fn execute(self) -> EngineResult<()>
 	{
@@ -405,6 +406,67 @@ impl<'a> TransientGraphicsCommandBuffers<'a>
 	}
 }
 
+/// Immediately submitted commands for transfer operations
+pub struct ImmediateTransferCommandSubmission<'a>(VkCommandBuffer, &'a NativeCommandPool, VkQueue);
+/// Immediately submitted commands for graphics operations
+pub struct ImmediateGraphicsCommandSubmission<'a>(VkCommandBuffer, &'a NativeCommandPool, VkQueue);
+impl<'a> ImmediateTransferCommandSubmission<'a>
+{
+	/// Begin recording commands for immediate submission
+	pub fn begin(engine: &'a GraphicsInterface) -> EngineResult<Self>
+	{
+		let mut v = unsafe { reserved() };
+		let cs = unsafe { vkAllocateCommandBuffers(engine.device().native(), &VkCommandBufferAllocateInfo
+		{
+			commandPool: engine.pools().transfer.transient.native(), level: VK_COMMAND_BUFFER_LEVEL_PRIMARY, commandBufferCount: 1,
+			.. Default::default()
+		}, &mut v) }.make_result_with(|| ImmediateTransferCommandSubmission(v, &engine.pools().transfer.transient, engine.device().transfer_queue))?;
+		unsafe { vkBeginCommandBuffer(cs.0, &Default::default()) }.make_result(cs)
+	}
+}
+impl<'a> ImmediateGraphicsCommandSubmission<'a>
+{
+	/// Begin recording commands for immediate submission
+	pub fn begin(engine: &'a GraphicsInterface) -> EngineResult<Self>
+	{
+		let mut v = unsafe { reserved() };
+		let cs = unsafe { vkAllocateCommandBuffers(engine.device().native(), &VkCommandBufferAllocateInfo
+		{
+			commandPool: engine.pools().graphics.transient.native(), level: VK_COMMAND_BUFFER_LEVEL_PRIMARY, commandBufferCount: 1,
+			.. Default::default()
+		}, &mut v) }.make_result_with(|| ImmediateGraphicsCommandSubmission(v, &engine.pools().graphics.transient, engine.device().graphics_queue))?;
+		unsafe { vkBeginCommandBuffer(cs.0, &Default::default()) }.make_result(cs)
+	}
+}
+impl<'a> Drop for ImmediateTransferCommandSubmission<'a>
+{
+	/// Close recording state and execute
+	fn drop(&mut self)
+	{
+		unsafe { vkEndCommandBuffer(self.0) }.into_result().or_crash();
+		unsafe { vkQueueSubmit(self.2, 1, &VkSubmitInfo
+		{
+			commandBufferCount: 1, pCommandBuffers: &self.0, .. Default::default()
+		}, zeroed()) }.into_result().or_crash();
+		unsafe { vkQueueWaitIdle(self.2) }.into_result().or_crash();
+		unsafe { vkFreeCommandBuffers((self.1).1.native(), self.1.native(), 1, &self.0) };
+	}
+}
+impl<'a> Drop for ImmediateGraphicsCommandSubmission<'a>
+{
+	/// Close recording state and execute
+	fn drop(&mut self)
+	{
+		unsafe { vkEndCommandBuffer(self.0) }.into_result().or_crash();
+		unsafe { vkQueueSubmit(self.2, 1, &VkSubmitInfo
+		{
+			commandBufferCount: 1, pCommandBuffers: &self.0, .. Default::default()
+		}, zeroed()) }.into_result().or_crash();
+		unsafe { vkQueueWaitIdle(self.2) }.into_result().or_crash();
+		unsafe { vkFreeCommandBuffers((self.1).1.native(), self.1.native(), 1, &self.0) };
+	}
+}
+
 /// An recording state of Graphics Command Buffer
 pub struct GraphicsCommandRecorder<'a>(&'a VkCommandBuffer);
 /// An recording state of Bundle(Secondary) Command Buffer
@@ -423,6 +485,8 @@ pub trait CommandRecorder
 impl<'a> CommandRecorder for GraphicsCommandRecorder<'a> { fn buffer(&self) -> VkCommandBuffer { *self.0 } }
 impl<'a> CommandRecorder for BundleCommandRecorder<'a> { fn buffer(&self) -> VkCommandBuffer { *self.0 } }
 impl<'a> CommandRecorder for TransferCommandRecorder<'a> { fn buffer(&self) -> VkCommandBuffer { *self.0 } }
+impl<'a> CommandRecorder for ImmediateGraphicsCommandSubmission<'a> { fn buffer(&self) -> VkCommandBuffer { self.0 } }
+impl<'a> CommandRecorder for ImmediateTransferCommandSubmission<'a> { fn buffer(&self) -> VkCommandBuffer { self.0 } }
 /// Provides how to record some drawing commands
 pub trait DrawingCommandRecorder: CommandRecorder + Sized
 {
@@ -480,12 +544,9 @@ pub trait DrawingCommandRecorder: CommandRecorder + Sized
 		self
 	}
 }
-impl<'a> DrawingCommandRecorder for GraphicsCommandRecorder<'a> {}
-impl<'a> DrawingCommandRecorder for BundleCommandRecorder<'a> {}
-// provide depending commands //
-impl<'a> GraphicsCommandRecorder<'a>
+pub trait QueueSyncOperationCommandRecorder : CommandRecorder + Sized
 {
-	pub fn pipeline_barrier(self, src_stage_mask: VkPipelineStageFlags, dst_stage_mask: VkPipelineStageFlags,
+	fn pipeline_barrier(self, src_stage_mask: VkPipelineStageFlags, dst_stage_mask: VkPipelineStageFlags,
 		depend_by_region: bool, memory_barriers: &[MemoryBarrier], buffer_barriers: &[BufferMemoryBarrier], image_barriers: &[ImageMemoryBarrier]) -> Self
 	{
 		let (mbs_native, bbs_native, ibs_native) = (
@@ -493,15 +554,21 @@ impl<'a> GraphicsCommandRecorder<'a>
 			buffer_barriers.into_iter().map(|x| x.into()).collect::<Vec<_>>(),
 			image_barriers.into_iter().map(|x| x.into()).collect::<Vec<_>>()
 		);
-		unsafe { vkCmdPipelineBarrier(*self.0, src_stage_mask, dst_stage_mask,
+		unsafe { vkCmdPipelineBarrier(self.buffer(), src_stage_mask, dst_stage_mask,
 			if depend_by_region { VK_DEPENDENCY_BY_REGION_BIT } else { 0 },
 			mbs_native.len() as u32, mbs_native.as_ptr(),
 			bbs_native.len() as u32, bbs_native.as_ptr(),
 			ibs_native.len() as u32, ibs_native.as_ptr()) };
 		self
 	}
-
-	pub fn begin_render_pass(self, framebuffer: &Framebuffer, clear_values: &[AttachmentClearValue], use_bundles: bool) -> Self
+}
+pub trait CommandInjection : Sized
+{
+	fn inject_commands<F>(self, f: F) -> Self where F: FnOnce(Self) -> Self { f(self) }
+}
+pub trait PrimaryGraphicsCommandRecorder: DrawingCommandRecorder + Sized
+{
+	fn begin_render_pass(self, framebuffer: &Framebuffer, clear_values: &[AttachmentClearValue], use_bundles: bool) -> Self
 	{
 		let clear_values_native = clear_values.into_iter().map(|x| x.into()).collect::<Vec<_>>();
 		let begin_info = VkRenderPassBeginInfo
@@ -510,79 +577,76 @@ impl<'a> GraphicsCommandRecorder<'a>
 			renderArea: VkRect2D { extent: framebuffer.area().clone(), .. Default::default() },
 			clearValueCount: clear_values_native.len() as _, pClearValues: clear_values_native.as_ptr(), .. Default::default()
 		};
-		unsafe { vkCmdBeginRenderPass(*self.0, &begin_info,
+		unsafe { vkCmdBeginRenderPass(self.buffer(), &begin_info,
 			if use_bundles { VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS } else { VK_SUBPASS_CONTENTS_INLINE }) };
 		self
 	}
-	pub fn next_subpass(self, use_bundles: bool) -> Self
+	fn next_subpass(self, use_bundles: bool) -> Self
 	{
-		unsafe { vkCmdNextSubpass(*self.0, if use_bundles { VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS } else { VK_SUBPASS_CONTENTS_INLINE }) };
+		unsafe { vkCmdNextSubpass(self.buffer(), if use_bundles { VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS } else { VK_SUBPASS_CONTENTS_INLINE }) };
 		self
 	}
-	pub fn end_render_pass(self) -> Self { unsafe { vkCmdEndRenderPass(*self.0) }; self }
+	fn end_render_pass(self) -> Self { unsafe { vkCmdEndRenderPass(self.buffer()) }; self }
 
-	pub fn execute_commands(self, buffers: &BundledCommandBuffersView) -> Self
+	fn execute_commands(self, buffers: &BundledCommandBuffersView) -> Self
 	{
-		unsafe { vkCmdExecuteCommands(*self.0, buffers.len() as _, buffers.as_ptr()) };
+		unsafe { vkCmdExecuteCommands(self.buffer(), buffers.len() as _, buffers.as_ptr()) };
 		self
 	}
 	
-	pub fn blit_image(self, src: &ImageResource, dst: &ImageResource, src_layout: VkImageLayout, dst_layout: VkImageLayout,
+	fn blit_image(self, src: &ImageResource, dst: &ImageResource, src_layout: VkImageLayout, dst_layout: VkImageLayout,
 		regions: &[ImageBlitRegion], filter: Filter) -> Self
 	{
 		let regions_native = regions.into_iter().map(Into::into).collect::<Vec<_>>();
-		unsafe { vkCmdBlitImage(*self.0, transmute(src.internal()), src_layout, transmute(dst.internal()), dst_layout,
+		unsafe { vkCmdBlitImage(self.buffer(), transmute(src.internal()), src_layout, transmute(dst.internal()), dst_layout,
 			regions_native.len() as _, regions_native.as_ptr(), filter as _) };
 		self
 	}
 }
-impl<'a> TransferCommandRecorder<'a>
+pub trait PrimaryTransferCommandRecorder : CommandRecorder + Sized
 {
-	pub fn pipeline_barrier(self, src_stage_mask: VkPipelineStageFlags, dst_stage_mask: VkPipelineStageFlags,
-		depend_by_region: bool, memory_barriers: &[MemoryBarrier], buffer_barriers: &[BufferMemoryBarrier], image_barriers: &[ImageMemoryBarrier]) -> Self
-	{
-		let (mbs_native, bbs_native, ibs_native) = (
-			memory_barriers.into_iter().map(|x| x.into()).collect::<Vec<_>>(),
-			buffer_barriers.into_iter().map(|x| x.into()).collect::<Vec<_>>(),
-			image_barriers.into_iter().map(|x| x.into()).collect::<Vec<_>>()
-		);
-		unsafe { vkCmdPipelineBarrier(*self.0, src_stage_mask, dst_stage_mask,
-			if depend_by_region { VK_DEPENDENCY_BY_REGION_BIT } else { 0 },
-			mbs_native.len() as _, mbs_native.as_ptr(),
-			bbs_native.len() as _, bbs_native.as_ptr(),
-			ibs_native.len() as _, ibs_native.as_ptr()) };
-		self
-	}
-
-	pub fn copy_buffer(self, src: &BufferResource, dst: &BufferResource, regions: &[BufferCopyRegion]) -> Self
+	fn copy_buffer(self, src: &BufferResource, dst: &BufferResource, regions: &[BufferCopyRegion]) -> Self
 	{
 		let regions_native = regions.into_iter().map(Into::into).collect::<Vec<_>>();
-		unsafe { vkCmdCopyBuffer(*self.0, transmute(src.internal()), transmute(dst.internal()), regions_native.len() as _, regions_native.as_ptr()) };
+		unsafe { vkCmdCopyBuffer(self.buffer(), transmute(src.internal()), transmute(dst.internal()), regions_native.len() as _, regions_native.as_ptr()) };
 		self
 	}
-	pub fn copy_image(self, src: &ImageResource, dst: &ImageResource, regions: &[ImageCopyRegion]) -> Self
+	fn copy_image(self, src: &ImageResource, dst: &ImageResource, regions: &[ImageCopyRegion]) -> Self
 	{
 		let regions_native = regions.into_iter().map(Into::into).collect::<Vec<_>>();
-		unsafe { vkCmdCopyImage(*self.0, transmute(src.internal()), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		unsafe { vkCmdCopyImage(self.buffer(), transmute(src.internal()), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			transmute(dst.internal()), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regions_native.len() as _, regions_native.as_ptr()) };
 		self
 	}
 }
-impl<'a> GraphicsCommandRecorder<'a>
+pub trait ClosableCommandRecorder : CommandRecorder + Sized
 {
-	pub fn end(self) -> EngineResult<()> { unsafe { vkEndCommandBuffer(*self.0) }.into_result()?; forget(self); Ok(()) }
-	pub fn inject_commands<F>(self, f: F) -> Self where F: FnOnce(Self) -> Self { f(self) }
+	fn end(self) -> EngineResult<()> { unsafe { vkEndCommandBuffer(self.buffer()) }.into_result()?; forget(self); Ok(()) }
 }
-impl<'a> BundleCommandRecorder<'a>
-{
-	pub fn end(self) -> EngineResult<()> { unsafe { vkEndCommandBuffer(*self.0) }.into_result()?; forget(self); Ok(()) }
-	pub fn inject_commands<F>(self, f: F) -> Self where F: FnOnce(Self) -> Self { f(self) }
-}
-impl<'a> TransferCommandRecorder<'a>
-{
-	pub fn end(self) -> EngineResult<()> { unsafe { vkEndCommandBuffer(*self.0) }.into_result()?; forget(self); Ok(()) }
-	pub fn inject_commands<F>(self, f: F) -> Self where F: FnOnce(Self) -> Self { f(self) }
-}
+
+impl<'a> DrawingCommandRecorder for GraphicsCommandRecorder<'a> {}
+impl<'a> PrimaryGraphicsCommandRecorder for GraphicsCommandRecorder<'a> {}
+impl<'a> QueueSyncOperationCommandRecorder for GraphicsCommandRecorder<'a> {}
+impl<'a> CommandInjection for GraphicsCommandRecorder<'a> {}
+impl<'a> ClosableCommandRecorder for GraphicsCommandRecorder<'a> {}
+
+impl<'a> DrawingCommandRecorder for ImmediateGraphicsCommandSubmission<'a> {}
+impl<'a> PrimaryGraphicsCommandRecorder for ImmediateGraphicsCommandSubmission<'a> {}
+impl<'a> QueueSyncOperationCommandRecorder for ImmediateGraphicsCommandSubmission<'a> {}
+impl<'a> CommandInjection for ImmediateGraphicsCommandSubmission<'a> {}
+
+impl<'a> DrawingCommandRecorder for BundleCommandRecorder<'a> {}
+impl<'a> CommandInjection for BundleCommandRecorder<'a> {}
+impl<'a> ClosableCommandRecorder for BundleCommandRecorder<'a> {}
+
+impl<'a> PrimaryTransferCommandRecorder for TransferCommandRecorder<'a> {}
+impl<'a> QueueSyncOperationCommandRecorder for TransferCommandRecorder<'a> {}
+impl<'a> CommandInjection for TransferCommandRecorder<'a> {}
+impl<'a> ClosableCommandRecorder for TransferCommandRecorder<'a> {}
+
+impl<'a> PrimaryTransferCommandRecorder for ImmediateTransferCommandSubmission<'a> {}
+impl<'a> QueueSyncOperationCommandRecorder for ImmediateTransferCommandSubmission<'a> {}
+impl<'a> CommandInjection for ImmediateTransferCommandSubmission<'a> {}
 
 #[derive(Clone)]
 pub struct BufferCopyRegion(pub usize, pub usize, pub usize);		// src, dst, size
