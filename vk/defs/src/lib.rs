@@ -21,6 +21,7 @@
 extern crate libc;
 use libc::*;
 
+#[macro_export]
 macro_rules! VK_MAKE_VERSION
 {
     ($major: expr, $minor: expr, $patch: expr) => ($major << 22 | $minor << 12 | $patch)
@@ -28,6 +29,7 @@ macro_rules! VK_MAKE_VERSION
 /// Vulkan 1.0 version number
 pub const VK_API_VERSION_1_0: usize = VK_MAKE_VERSION!(1, 0, 0);
 
+#[allow(unused_macros)]
 macro_rules! VK_VERSION
 {
     (MAJOR $v: expr) => ($v as usize >> 22);
@@ -752,7 +754,7 @@ pub const VK_SAMPLER_MIPMAP_MODE_NEAREST: VkSamplerMipmapMode = 0;
 pub const VK_SAMPLER_MIPMAP_MODE_LINEAR: VkSamplerMipmapMode = 1;
 
 pub type VkSamplerAddressMode = isize;
-pub const VK_SAMPLER_ADRESS_MODE_REPEAT: VkSamplerAddressMode = 0;
+pub const VK_SAMPLER_ADDRESS_MODE_REPEAT: VkSamplerAddressMode = 0;
 pub const VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT: VkSamplerAddressMode = 1;
 pub const VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE: VkSamplerAddressMode = 2;
 pub const VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER: VkSamplerAddressMode = 3;
@@ -1780,7 +1782,12 @@ impl Default for VkPipelineRasterizationStateCreateInfo
 {
     fn default() -> Self
     {
-        VkPipelineRasterizationStateCreateInfo { sType: VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, .. unsafe { std::mem::zeroed() } }
+        VkPipelineRasterizationStateCreateInfo
+        {
+            sType: VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            lineWidth: 1.0,
+            .. unsafe { std::mem::zeroed() }
+        }
     }
 }
 
@@ -1874,7 +1881,7 @@ pub struct VkGraphicsPipelineCreateInfo
     pub pTessellationState: *const VkPipelineTessellationStateCreateInfo, pub pViewportState: *const VkPipelineViewportStateCreateInfo,
     pub pRasterizationState: *const VkPipelineRasterizationStateCreateInfo, pub pMultisampleState: *const VkPipelineMultisampleStateCreateInfo,
     pub pDepthStencilState: *const VkPipelineDepthStencilStateCreateInfo, pub pColorBlendState: *const VkPipelineColorBlendStateCreateInfo,
-    pub pDynamicState: *const VkPipelineDynamicStateCreateInfo, pub layout: VkPipelineLayout, pub renderPas: VkRenderPass,
+    pub pDynamicState: *const VkPipelineDynamicStateCreateInfo, pub layout: VkPipelineLayout, pub renderPass: VkRenderPass,
     pub subpass: u32, pub basePipelineHandle: VkPipeline, pub basePipelineIndex: i32
 }
 impl Default for VkGraphicsPipelineCreateInfo
@@ -1945,6 +1952,16 @@ pub struct VkDescriptorSetLayoutCreateInfo
 {
     pub sType: VkStructureType, pub pNext: *const c_void, pub flags: VkDescriptorSetLayoutCreateFlags,
     pub bindingCount: u32, pub pBindings: *const VkDescriptorSetLayoutBinding
+}
+impl Default for VkDescriptorSetLayoutCreateInfo
+{
+    fn default() -> Self
+    {
+        VkDescriptorSetLayoutCreateInfo
+        {
+            sType: VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, .. unsafe { std::mem::zeroed() }
+        }
+    }
 }
 
 #[repr(C)] #[derive(Debug, Clone, PartialEq, Eq)]
