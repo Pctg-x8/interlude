@@ -9,7 +9,7 @@ use super::*;
 mod nd_handle_base_ts { pub enum VkDebugReportCallbackEXT {} }
 pub type VkDebugReportCallbackEXT = VK_NON_DISPATCHABLE_HANDLE!(VkDebugReportCallbackEXT);
 
-pub type VkDebugReportObjectTypeEXT = isize;
+pub type VkDebugReportObjectTypeEXT = i32;
 pub const VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT: VkDebugReportObjectTypeEXT = 0;
 pub const VK_DEBUG_REPORT_OBJECT_TYPE_INSTANCE_EXT: VkDebugReportObjectTypeEXT = 1;
 pub const VK_DEBUG_REPORT_OBJECT_TYPE_PHYSICAL_DEVICE_EXT: VkDebugReportObjectTypeEXT = 2;

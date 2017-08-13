@@ -6,7 +6,7 @@ pub static VK_AMD_RASTERIZATION_ORDER_EXTENSION_NAME: &'static str = "VK_AMD_ras
 use libc::*;
 use super::*;
 
-pub type VkRasterizationOrderAMD = isize;
+pub type VkRasterizationOrderAMD = i32;
 pub const VK_RASTERIZATION_ORDER_STRICT_AMD: VkRasterizationOrderAMD = 0;
 pub const VK_RASTERIZATION_ORDER_RELAXED_AMD: VkRasterizationOrderAMD = 1;
 

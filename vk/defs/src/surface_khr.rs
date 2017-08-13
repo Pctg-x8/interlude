@@ -10,7 +10,7 @@ pub const VK_KHR_SURFACE_SPEC_VERSION: usize = 25;
 pub static VK_KHR_SURFACE_EXTENSION_NAME: &'static str = "VK_KHR_surface";
 pub const VK_COLORSPACE_SRGB_NONLINEAR_KHR: VkColorSpaceKHR = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
-pub type VkColorSpaceKHR = isize;
+pub type VkColorSpaceKHR = i32;
 pub const VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: VkColorSpaceKHR = 0;
 pub const VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT: VkColorSpaceKHR = 100_0104_001;
 pub const VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT: VkColorSpaceKHR = 100_0104_002;
@@ -26,7 +26,7 @@ pub const VK_COLOR_SPACE_ADOBERGB_LINEAR_EXT: VkColorSpaceKHR = 100_0104_011;
 pub const VK_COLOR_SPACE_ADOBERGB_NONLINEAR_EXT: VkColorSpaceKHR = 100_0104_012;
 pub const VK_COLOR_SPACE_PASS_THROUGH_EXT: VkColorSpaceKHR = 100_0104_013;
 
-pub type VkPresentModeKHR = isize;
+pub type VkPresentModeKHR = i32;
 pub const VK_PRESENT_MODE_IMMEDIATE_KHR: VkPresentModeKHR = 0;
 pub const VK_PRESENT_MODE_MAILBOX_KHR: VkPresentModeKHR = 1;
 pub const VK_PRESENT_MODE_FIFO_KHR: VkPresentModeKHR = 2;

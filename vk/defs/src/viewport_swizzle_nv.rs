@@ -6,7 +6,7 @@ pub static VK_NV_VIEWPORT_SWIZZLE_EXTENSION_NAME: &'static str = "VK_NV_viewport
 use libc::*;
 use super::*;
 
-pub type VkViewportCoordinateSwizzleNV = isize;
+pub type VkViewportCoordinateSwizzleNV = i32;
 pub const VK_VIEWPORT_COORDINATE_SWIZZLE_POSITIVE_X_NV: VkViewportCoordinateSwizzleNV = 0;
 pub const VK_VIEWPORT_COORDINATE_SWIZZLE_NEGATIVE_X_NV: VkViewportCoordinateSwizzleNV = 1;
 pub const VK_VIEWPORT_COORDINATE_SWIZZLE_POSITIVE_Y_NV: VkViewportCoordinateSwizzleNV = 2;

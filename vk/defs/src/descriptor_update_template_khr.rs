@@ -8,7 +8,7 @@ use super::*;
 mod nd_handle_base_ts { pub enum VkDescriptorUpdateTemplateKHR {} }
 pub type VkDescriptorUpdateTemplateKHR = VK_NON_DISPATCHABLE_HANDLE!(VkDescriptorUpdateTemplateKHR);
 
-pub type VkDescriptorUpdateTemplateTypeKHR = isize;
+pub type VkDescriptorUpdateTemplateTypeKHR = i32;
 pub const VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_DESCRIPTOR_SET_KHR: VkDescriptorUpdateTemplateTypeKHR = 0;
 pub const VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_PUSH_DESCRIPTORS_KHR: VkDescriptorUpdateTemplateTypeKHR = 1;
 

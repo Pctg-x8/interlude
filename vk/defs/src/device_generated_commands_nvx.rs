@@ -10,7 +10,7 @@ mod nd_handle_base_ts { pub enum VkObjectTableNVX {} pub enum VkIndirectCommands
 pub type VkObjectTableNVX = VK_NON_DISPATCHABLE_HANDLE!(VkObjectTableNVX);
 pub type VkIndirectCommandsLayoutNVX = VK_NON_DISPATCHABLE_HANDLE!(VkIndirectCommandsLayoutNVX);
 
-pub type VkIndirectCommandsTokenTypeNVX = isize;
+pub type VkIndirectCommandsTokenTypeNVX = i32;
 pub const VK_INDIRECT_COMMANDS_TOKEN_TYPE_PIPELINE_NVX: VkIndirectCommandsTokenTypeNVX = 0;
 pub const VK_INDIRECT_COMMANDS_TOKEN_TYPE_DESCRIPTOR_SET_NVX: VkIndirectCommandsTokenTypeNVX = 1;
 pub const VK_INDIRECT_COMMANDS_TOKEN_TYPE_INDEX_BUFFER_NVX: VkIndirectCommandsTokenTypeNVX = 2;
@@ -20,7 +20,7 @@ pub const VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_INDEXED_NVX: VkIndirectCommandsTo
 pub const VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_NXV: VkIndirectCommandsTokenTypeNVX = 6;
 pub const VK_INDIRECT_COMMANDS_TOKEN_TYPE_DISPATCH_NVX: VkIndirectCommandsTokenTypeNVX = 7;
 
-pub type VkObjectEntryTypeNVX = isize;
+pub type VkObjectEntryTypeNVX = i32;
 pub const VK_OBJECT_ENTRY_TYPE_DESCRIPTOR_SET_NVX: VkObjectEntryTypeNVX = 0;
 pub const VK_OBJECT_ENTRY_TYPE_PIPELINE_NVX: VkObjectEntryTypeNVX = 1;
 pub const VK_OBJECT_ENTRY_TYPE_INDEX_BUFFER_NVX: VkObjectEntryTypeNVX = 2;

@@ -6,7 +6,7 @@ pub static VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME: &'static str = "VK_EX
 use libc::*;
 use super::*;
 
-pub type VkBlendOverlapEXT = isize;
+pub type VkBlendOverlapEXT = i32;
 pub const VK_BLEND_OVERLAP_UNCORRELATED_EXT: VkBlendOverlapEXT = 0;
 pub const VK_BLEND_OVERLAP_DISJOINT_EXT: VkBlendOverlapEXT = 1;
 pub const VK_BLEND_OVERLAP_CONJOINT_EXT: VkBlendOverlapEXT = 2;

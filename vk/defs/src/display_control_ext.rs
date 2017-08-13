@@ -6,15 +6,15 @@ pub static VK_EXT_DISPLAY_CONTROL_EXTENSION_NAME: &'static str = "VK_EXT_display
 use libc::*;
 use super::*;
 
-pub type VkDisplayPowerStateEXT = isize;
+pub type VkDisplayPowerStateEXT = i32;
 pub const VK_DISPLAY_POWER_STATE_OFF_EXT: VkDisplayPowerStateEXT = 0;
 pub const VK_DISPLAY_POWER_STATE_SUSPEND_EXT: VkDisplayPowerStateEXT = 1;
 pub const VK_DISPLAY_POWER_STATE_ON_EXT: VkDisplayPowerStateEXT = 2;
 
-pub type VkDeviceEventTypeEXT = isize;
+pub type VkDeviceEventTypeEXT = i32;
 pub const VK_DEVICE_EVENT_TYPE_DISPLAY_HOTPLUG_EXT: VkDeviceEventTypeEXT = 0;
 
-pub type VkDisplayEventTypeEXT = isize;
+pub type VkDisplayEventTypeEXT = i32;
 pub const VK_DISPLAY_EVENT_TYPE_FIRST_PIXEL_OUT_EXT: VkDisplayEventTypeEXT = 0;
 
 #[repr(C)] #[derive(Debug, Clone, PartialEq, Eq)]

@@ -6,7 +6,7 @@ pub static VK_EXT_DISCARD_RECTANGLES_EXTENSION_NAME: &'static str = "VK_EXT_disc
 use libc::*;
 use super::*;
 
-pub type VkDiscardRectangleModeEXT = isize;
+pub type VkDiscardRectangleModeEXT = i32;
 pub const VK_DISCARD_RECTANGLE_MODE_INCLUSIVE_EXT: VkDiscardRectangleModeEXT = 0;
 pub const VK_DISCARD_RECTANGLE_MODE_EXCLUSIVE_EXT: VkDiscardRectangleModeEXT = 1;
 

@@ -6,7 +6,7 @@ pub static VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME: &'static str = "VK_EXT_s
 use libc::*;
 use super::*;
 
-pub type VkSamplerReductionModeEXT = isize;
+pub type VkSamplerReductionModeEXT = i32;
 pub const VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE_EXT: VkSamplerReductionModeEXT = 0;
 pub const VK_SAMPLER_REDUCTION_MODE_MIN_EXT: VkSamplerReductionModeEXT = 1;
 pub const VK_SAMPLER_REDUCTION_MODE_MAX_EXT: VkSamplerReductionModeEXT = 2;

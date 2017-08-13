@@ -6,7 +6,7 @@ pub static VK_NV_FRAMEBUFFER_MIXED_SAMPLES_EXTENSION_NAME: &'static str = "VK_NV
 use libc::*;
 use super::*;
 
-pub type VkCoverageModulationModeNV = isize;
+pub type VkCoverageModulationModeNV = i32;
 pub const VK_COVERAGE_MODULATION_MODE_NONE_NV: VkCoverageModulationModeNV = 0;
 pub const VK_COVERAGE_MODULATION_MODE_RGB_NV: VkCoverageModulationModeNV = 1;
 pub const VK_COVERAGE_MODULATION_MODE_ALPHA_NV: VkCoverageModulationModeNV = 2;
