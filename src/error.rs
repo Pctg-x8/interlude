@@ -1,7 +1,7 @@
 // Prelude: Error Enums and Crash Handling
 
 use std;
-use vk::defs::*;
+use interlude_vk_defs::VkResult;
 use std::os::raw::*;
 use freetype_sys::*;
 
@@ -10,6 +10,7 @@ pub enum EngineError
 	DeviceError(VkResult), IOError(std::io::Error),
 	XServerError(c_int), FreeTypeError(FT_Error),
 	GenericError(&'static str), Win32ErrorWith(&'static str, std::io::Error),
+	NullError(std::ffi::NulError),
 	// Specific Errors //
 	AllocateMemoryWithEmptyResources
 }
@@ -21,9 +22,9 @@ impl std::convert::From<std::io::Error> for EngineError
 {
 	fn from(ie: std::io::Error) -> EngineError { EngineError::IOError(ie) }
 }
-impl std::convert::From<FT_Error> for EngineError
+impl From<std::ffi::NulError> for EngineError
 {
-	fn from(fe: FT_Error) -> EngineError { EngineError::FreeTypeError(fe) }
+	fn from(fnl: std::ffi::NulError) -> EngineError { EngineError::NullError(fnl) }
 }
 impl std::fmt::Debug for EngineError
 {
@@ -37,6 +38,7 @@ impl std::fmt::Debug for EngineError
 			&EngineError::XServerError(ref c) => write!(formatter, "XServerError: {:?}", c),
 			&EngineError::FreeTypeError(ref f) => write!(formatter, "FreeTypeError: {:?}", f),
 			&EngineError::GenericError(ref e) => write!(formatter, "GenericError: {}", e),
+			&EngineError::NullError(ref n) => write!(formatter, "NulError: {:?}", n),
 			&EngineError::AllocateMemoryWithEmptyResources => write!(formatter, "GenericError: Attempting to allocate device memory with empty resources")
 		}
 	}
@@ -51,6 +53,7 @@ pub fn crash(err: EngineError) -> !
 		EngineError::Win32ErrorWith(_, _) => "Win32Error",
 		EngineError::XServerError(_) => "XServer Communication Error",
 		EngineError::FreeTypeError(_) => "FreeType Internal Error",
+		EngineError::NullError(_) => "Internal Error",
 		EngineError::GenericError(_) | EngineError::AllocateMemoryWithEmptyResources => "Generic Error"
 	})
 }

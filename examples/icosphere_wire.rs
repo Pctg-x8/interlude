@@ -5,16 +5,16 @@ extern crate nalgebra;
 extern crate time;
 extern crate alga;
 use interlude::*;
-use interlude::ffi::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use nalgebra::*;
 
-fn main()
+fn main() { game().or_crash(); }
+fn game() -> EngineResult<()>
 {
-	let engine = EngineBuilder::<EmptyInput>::new("com.cterm2.interlude.examples.icosphere_wire".into(), (0, 1, 0),
+	let engine = EngineBuilder::<EmptyInput>::new("com.cterm2.interlude.examples.icosphere_wire", (0, 1, 0),
 		"Rendering Icosphere[Wireframe]".into(), &Size2(640, 480))
-		.asset_base(std::env::current_dir().unwrap().into()).device_feature_nonsolid_fillmode().launch().or_crash();
+		.asset_base(std::env::current_dir().unwrap().into()).device_feature_nonsolid_fillmode().launch()?;
 
 	// make framebuffer
 	let &Size2(w, h) = engine.render_window().size();
@@ -181,6 +181,8 @@ fn main()
 		exit_signal.store(true, Ordering::Release);
 		update_observer.join()
 	};
+
+	Ok(())
 }
 
 /// Interlude:drafting Generate Icosphere mesh and indices

@@ -1,26 +1,31 @@
 // Interlude: Engine and EngineLogger
 
-#![allow(dead_code)]
-
-use super::*;
-use render_surface;
-use tuple_tools::*;
+use interlude_vk_defs::*;
+use interlude_vk_funport::vkQueueSubmit;
+use subsystem_layer::{NativeResultValueHandler, NativeHandleProvider};
+use render_surface::{make_render_window, PlatformWindowType};
+use wsi::NativeWindow;
 use device::Device;
-use rawexports::*;
 use ginterface::DeviceFeatures;
-use {std, log};
-use vk::defs::*;
+use {
+	log, EngineResult, Fence, QueueFence, GraphicsCommandBuffersView, TransferCommandBuffersView, GraphicsInterface,
+	RenderPass, AttachmentDesc, PassDesc, VertexAttribute, VertexBinding, PosUV, VertexShader, ApplicationState, Event,
+	RenderWindow, Size2
+};
 use ansi_term::*;
 use std::sync::{Arc, RwLock};
 use std::path::{Path, PathBuf};
-use std::collections::HashMap;
 use std::borrow::Cow;
 use std::ops::Deref;
 use std::rc::Rc;
+use std::mem::{transmute, size_of, zeroed};
+use std::ptr::null;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::env;
+use std::marker::PhantomData;
 
-// Select WindowSystem and InputSystem
-#[cfg(windows)] use win32::NativeWindow;
-#[cfg(unix)] use linux::NativeWindowAndServerCon as NativeWindow;
+#[cfg(unix)] use linux::NativeInput as Input;
 
 struct EngineLogger;
 impl log::Log for EngineLogger
@@ -72,18 +77,18 @@ pub trait EngineCoreExports
 }
 pub struct EngineBuilder<'p, InputNames: Eq + Copy + Ord>
 {
-	app_name: Cow<'static, str>, app_version: u32, asset_base: Option<Cow<'p, Path>>, extra_features: DeviceFeatures,
-	caption: Cow<'static, str>, size: Size2, resizable: bool, ph: std::marker::PhantomData<InputNames>
+	app_name: &'static str, app_version: u32, asset_base: Option<Cow<'p, Path>>, extra_features: DeviceFeatures,
+	caption: &'static str, size: Size2, resizable: bool, ph: PhantomData<InputNames>
 }
 impl<'p, InputNames: Eq + Copy + Ord> EngineBuilder<'p, InputNames>
 {
-	pub fn new(app_name: Cow<'static, str>, app_version: (u32, u32, u32), caption: Cow<'static, str>, size: &Size2) -> Self
+	pub fn new(app_name: &'static str, app_version: (u32, u32, u32), caption: &'static str, size: &Size2) -> Self
 	{
 		EngineBuilder
 		{
-			app_name: app_name, app_version: VK_MAKE_VERSION!(app_version.0, app_version.1, app_version.2),
-			caption: caption, size: size.clone(), resizable: false,
-			asset_base: None, extra_features: DeviceFeatures::new(), ph: std::marker::PhantomData
+			app_name, app_version: VK_MAKE_VERSION!(app_version.0, app_version.1, app_version.2),
+			caption, size: size.clone(), resizable: false,
+			asset_base: None, extra_features: DeviceFeatures::new(), ph: PhantomData
 		}
 	}
 	pub fn asset_base(mut self, asset_base: Cow<'p, Path>) -> Self
@@ -107,29 +112,29 @@ impl<'p, InputNames: Eq + Copy + Ord> EngineBuilder<'p, InputNames>
 		self
 	}
 
-	pub fn launch(self) -> Result<Engine<InputNames>, EngineError> { Engine::new(self) }
+	pub fn launch(self) -> EngineResult<Engine<InputNames>> { Engine::new(self) }
 }
 pub struct LazyLoadedResource<T>(Option<T>);
 impl<T> LazyLoadedResource<T>
 {
 	fn new() -> Self { LazyLoadedResource(None) }
-	fn get<'s, F>(&'s self, initializer: F) -> Result<&'s T, EngineError> where F: FnOnce() -> Result<T, EngineError>
+	fn get<'s, F>(&'s self, initializer: F) -> EngineResult<&'s T> where F: FnOnce() -> EngineResult<T>
 	{
 		if self.0.is_none()
 		{
-			unsafe { *std::mem::transmute::<_, *mut Option<T>>(&self.0) = Some(try!{initializer()}); }
+			unsafe { *(&self.0 as *const _ as *mut _) = Some(initializer()?) };
 		}
 		Ok(self.0.as_ref().unwrap())
 	}
 }
 pub struct EngineResources
 {
-	postprocess_vsh: LazyLoadedResource<Rc<VertexShader>>, postprocess_vsh_nouv: LazyLoadedResource<Rc<VertexShader>>,
+	postprocess_vsh: LazyLoadedResource<VertexShader>, postprocess_vsh_nouv: LazyLoadedResource<VertexShader>,
 	default_renderpass: HashMap<(Option<bool>, VkFormat), RenderPass>, presenting_renderpass: HashMap<(Option<bool>, VkFormat), RenderPass>
 }
 pub struct Engine<InputNames: Eq + Copy + Ord>
 {
-	window: Arc<RenderWindow>, input_system: Arc<RwLock<Input<InputNames>>>, gi: GraphicsInterface,
+	window: Rc<RenderWindow>, input_system: Arc<RwLock<Input<InputNames>>>, gi: GraphicsInterface,
 	asset_dir: PathBuf, common_resources: EngineResources
 }
 unsafe impl<InputNames: Eq + Copy + Ord> Send for Engine<InputNames> {}
@@ -143,28 +148,23 @@ macro_rules! FunComposite1
 }
 impl<InputNames: Eq + Copy + Ord> Engine<InputNames>
 {
-	pub fn new(info: EngineBuilder<InputNames>) -> Result<Self, EngineError>
+	pub fn new(info: EngineBuilder<InputNames>) -> EngineResult<Self>
 	{
 		EngineLogger::setup();
 
 		let EngineBuilder { app_name, app_version, extra_features, size, caption, resizable, asset_base, .. } = info;
+		let gi = GraphicsInterface::new(app_name, app_version, &extra_features)?;
+		let window = make_render_window(&gi, &size, caption, resizable).map(Rc::new)?;
+		let input_system = Input::new().map(FunComposite1!(Arc::new; RwLock::new))?;
 
-		GraphicsInterface::new(app_name, app_version, &extra_features).and_then(|gi|
+		Ok(Engine
 		{
-			let window = NativeWindow::new(&size, &caption, resizable).and_then(|n| render_surface::make_render_window(n, &gi, &size));
-			let ni = Input::new().map(FunComposite1!(Arc::new; RwLock::new));
-
-			(window, ni).flatten().map(move |(window, ni)| Engine
-			{
-				window: Arc::new(window), input_system: ni, gi: gi,
-				asset_dir: asset_base.map(Cow::into_owned).or_else(|| std::env::current_exe().unwrap().parent().map(Path::to_path_buf))
-					.unwrap().join("assets"),
-				common_resources: EngineResources::new()
-			})
+			window, input_system, gi, common_resources: EngineResources::new(),
+			asset_dir: asset_base.map(Cow::into_owned).or_else(|| env::current_exe().unwrap().parent().map(Path::to_path_buf)).unwrap().join("assets")
 		})
 	}
 
-	pub fn render_window(&self) -> &Arc<RenderWindow> { &self.window }
+	pub fn render_window(&self) -> &Rc<RenderWindow> { &self.window }
 }
 // For any WindowSystems
 impl<InputNames: Eq + Copy + Ord> Engine<InputNames>
@@ -180,7 +180,7 @@ pub trait AssetProvider
 {
 	fn parse_asset<P: AssetPath>(&self, path: P, extension: &str) -> PathBuf;
 
-	fn postprocess_vsh(&self, require_uv: bool) -> EngineResult<&Rc<VertexShader>>;
+	fn postprocess_vsh(&self, require_uv: bool) -> EngineResult<&VertexShader>;
 	fn default_renderpass(&self, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>;
 	fn presenting_renderpass(&self, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>;
 }
@@ -191,7 +191,7 @@ impl<InputNames: Eq + Copy + Ord> AssetProvider for Engine<InputNames>
 		path.decode(&self.asset_dir, extension)
 	}
 
-	fn postprocess_vsh(&self, require_uv: bool) -> EngineResult<&Rc<VertexShader>>
+	fn postprocess_vsh(&self, require_uv: bool) -> EngineResult<&VertexShader>
 	{
 		if require_uv { self.common_resources.postprocess_vsh(self) } else { self.common_resources.postprocess_vsh_nouv(self) }
 	}
@@ -246,89 +246,94 @@ impl EngineResources
 		}
 	}
 
-	fn postprocess_vsh<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(&self, context: &Engine) -> EngineResult<&Rc<VertexShader>>
+	fn postprocess_vsh<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(&self, context: &Engine) -> EngineResult<&VertexShader>
 	{
 		self.postprocess_vsh.get(|| VertexShader::from_asset(context, "engine.shaders.PostProcessVertex", "main",
-			&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
+			&[VertexBinding::PerVertex(size_of::<PosUV>() as u32)], &[VertexAttribute(0, VK_FORMAT_R32G32B32A32_SFLOAT, 0)]))
 	}
-	fn postprocess_vsh_nouv<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(&self, context: &Engine) -> EngineResult<&Rc<VertexShader>>
+	fn postprocess_vsh_nouv<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(&self, context: &Engine) -> EngineResult<&VertexShader>
 	{
 		self.postprocess_vsh_nouv.get(|| VertexShader::from_asset(context, "engine.shaders.PostProcessVertexNoUV", "main",
-			&[VertexBinding::PerVertex(std::mem::size_of::<PosUV>() as u32)], &[VertexAttribute(0, VkFormat::R32G32B32A32_SFLOAT, 0)]))
+			&[VertexBinding::PerVertex(size_of::<PosUV>() as u32)], &[VertexAttribute(0, VK_FORMAT_R32G32B32A32_SFLOAT, 0)]))
 	}
 	fn default_renderpass(&self, context: &GraphicsInterface, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>
 	{
-		Ok(unsafe { &mut *std::mem::transmute::<_, *mut HashMap<(Option<bool>, VkFormat), RenderPass>>(&self.default_renderpass) }.entry((clear_mode, format)).or_insert({
-			let attachment = AttachmentDesc
+		let map: &mut HashMap<(Option<bool>, VkFormat), RenderPass> = unsafe { &mut *(&self.default_renderpass as *const _ as *mut _) };
+		match map.entry((clear_mode, format))
+		{
+			Entry::Occupied(v) => Ok(v.into_mut()),
+			Entry::Vacant(v) =>
 			{
-				format: format, clear_on_load: clear_mode, preserve_stored_value: true,
-				initial_layout: VkImageLayout::ColorAttachmentOptimal, final_layout: VkImageLayout::ShaderReadOnlyOptimal,
-				.. Default::default()
-			};
-			let pass = PassDesc::single_fragment_output(0);
-			try!(RenderPass::new(context, &[attachment], &[pass], &[]))
-		}))
+				let attachment = AttachmentDesc
+				{
+					format: format, clear_on_load: clear_mode, preserve_stored_value: true,
+					initial_layout: VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, final_layout: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					.. Default::default()
+				};
+				Ok(v.insert(RenderPass::new(context, &[attachment], &[PassDesc::single_fragment_output(0)], &[])?))
+			}
+		}
 	}
 	fn presenting_renderpass(&self, context: &GraphicsInterface, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>
 	{
-		Ok(unsafe { &mut *std::mem::transmute::<_, *mut HashMap<(Option<bool>, VkFormat), RenderPass>>(&self.presenting_renderpass) }.entry((clear_mode, format)).or_insert({
-			let attachment = AttachmentDesc
+		let map: &mut HashMap<(Option<bool>, VkFormat), RenderPass> = unsafe { &mut *(&self.presenting_renderpass as *const _ as *mut _) };
+		match map.entry((clear_mode, format))
+		{
+			Entry::Occupied(v) => Ok(v.into_mut()),
+			Entry::Vacant(v) =>
 			{
-				format: format, clear_on_load: clear_mode, preserve_stored_value: true,
-				initial_layout: VkImageLayout::ColorAttachmentOptimal, final_layout: VkImageLayout::PresentSrcKHR,
-				.. Default::default()
-			};
-			let pass = PassDesc::single_fragment_output(0);
-			try!(RenderPass::new(context, &[attachment], &[pass], &[]))
-		}))
+				let attachment = AttachmentDesc
+				{
+					format: format, clear_on_load: clear_mode, preserve_stored_value: true,
+					initial_layout: VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, final_layout: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+					.. Default::default()
+				};
+				Ok(v.insert(RenderPass::new(context, &[attachment], &[PassDesc::single_fragment_output(0)], &[])?))
+			}
+		}
 	}
 }
 impl<InputNames: Eq + Copy + Ord> Deref for Engine<InputNames> { type Target = GraphicsInterface; fn deref(&self) -> &Self::Target { &self.gi } }
 
 // support function for as_ptr: returns null when the container is empty
-fn as_ptr_emp<T>(v: &[T]) -> *const T { if v.is_empty() { std::ptr::null() } else { v.as_ptr() } }
+fn as_ptr_emp<T>(v: &[T]) -> *const T { if v.is_empty() { null() } else { v.as_ptr() } }
 
 pub trait CommandSubmitter
 {
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
-		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>;
+		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>;
 	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
-		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>;
+		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>;
 }
 impl<InputNames: Eq + Copy + Ord> CommandSubmitter for Engine<InputNames>
 {
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
-		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
+		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>
 	{
-		let signals_on_complete = signal_on_complete.into_iter().map(qfence_raw).collect::<Vec<_>>();
+		let signals_on_complete = signal_on_complete.into_iter().map(NativeHandleProvider::native).collect::<Vec<_>>();
 		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>();
-		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| qfence_raw(q)).collect::<Vec<_>>();
+		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| q.native()).collect::<Vec<_>>();
 
-		let subinfo = VkSubmitInfo
+		unsafe { vkQueueSubmit(self.gi.device().graphics_queue, 1, &VkSubmitInfo
 		{
-			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
 			commandBufferCount: commands.len() as u32, pCommandBuffers: commands.as_ptr(),
 			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: as_ptr_emp(&wait_stages),
-			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
-		};
-		self.gi.device().graphics_queue.submit(&[subinfo], signal_on_complete_host.map(fence_raw)).map_err(EngineError::from)
+			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr(), .. Default::default()
+		}, signal_on_complete_host.map(NativeHandleProvider::native).unwrap_or(zeroed())) }.into_result()
 	}
 	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
-		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
+		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>
 	{
-		let signals_on_complete = signal_on_complete.into_iter().map(qfence_raw).collect::<Vec<_>>();
-		let (wait_semaphores, wait_stages): (Vec<_>, Vec<_>) = wait_for_execute.into_iter().map(|&(q, s)| (qfence_raw(q), s)).unzip();
+		let signals_on_complete = signal_on_complete.into_iter().map(NativeHandleProvider::native).collect::<Vec<_>>();
+		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>();
+		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| q.native()).collect::<Vec<_>>();
 
-		let subinfo = VkSubmitInfo
+		unsafe { vkQueueSubmit(self.gi.device().transfer_queue, 1, &VkSubmitInfo
 		{
-			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
 			commandBufferCount: commands.len() as u32, pCommandBuffers: commands.as_ptr(),
-			waitSemaphoreCount: wait_semaphores.len() as u32,
-			pWaitSemaphores: wait_semaphores.as_ptr(),
-			pWaitDstStageMask: as_ptr_emp(&wait_stages),
-			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
-		};
-		self.gi.device().transfer_queue.submit(&[subinfo], signal_on_complete_host.map(fence_raw)).map_err(EngineError::from)
+			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: as_ptr_emp(&wait_stages),
+			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr(), .. Default::default()
+		}, signal_on_complete_host.map(NativeHandleProvider::native).unwrap_or(zeroed())) }.into_result()
 	}
 }
 pub struct CommandSender<'a>(&'a Device);
@@ -336,35 +341,31 @@ unsafe impl<'a> Send for CommandSender<'a> {}
 impl<'a> CommandSubmitter for CommandSender<'a>
 {
 	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
-		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
+		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>
 	{
-		let signals_on_complete = signal_on_complete.into_iter().map(qfence_raw).collect::<Vec<_>>();
+		let signals_on_complete = signal_on_complete.into_iter().map(NativeHandleProvider::native).collect::<Vec<_>>();
 		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>();
-		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| qfence_raw(q)).collect::<Vec<_>>();
+		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| q.native()).collect::<Vec<_>>();
 
-		let subinfo = VkSubmitInfo
+		unsafe { vkQueueSubmit(self.0.graphics_queue, 1, &VkSubmitInfo
 		{
-			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
 			commandBufferCount: commands.len() as u32, pCommandBuffers: commands.as_ptr(),
 			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: as_ptr_emp(&wait_stages),
-			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
-		};
-		self.0.graphics_queue.submit(&[subinfo], signal_on_complete_host.map(fence_raw)).map_err(EngineError::from)
+			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr(), .. Default::default()
+		}, signal_on_complete_host.map(NativeHandleProvider::native).unwrap_or(zeroed())) }.into_result()
 	}
 	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
-		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> Result<(), EngineError>
+		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>
 	{
-		let signals_on_complete = signal_on_complete.into_iter().map(qfence_raw).collect::<Vec<_>>();
+		let signals_on_complete = signal_on_complete.into_iter().map(NativeHandleProvider::native).collect::<Vec<_>>();
 		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>();
-		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| qfence_raw(q)).collect::<Vec<_>>();
+		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| q.native()).collect::<Vec<_>>();
 
-		let subinfo = VkSubmitInfo
+		unsafe { vkQueueSubmit(self.0.transfer_queue, 1, &VkSubmitInfo
 		{
-			sType: VkStructureType::SubmitInfo, pNext: std::ptr::null(),
 			commandBufferCount: commands.len() as u32, pCommandBuffers: commands.as_ptr(),
 			waitSemaphoreCount: wait_semaphores.len() as u32, pWaitSemaphores: wait_semaphores.as_ptr(), pWaitDstStageMask: as_ptr_emp(&wait_stages),
-			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr()
-		};
-		self.0.transfer_queue.submit(&[subinfo], signal_on_complete_host.map(fence_raw)).map_err(EngineError::from)
+			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr(), .. Default::default()
+		}, signal_on_complete_host.map(NativeHandleProvider::native).unwrap_or(zeroed())) }.into_result()
 	}
 }

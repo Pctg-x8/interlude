@@ -12,11 +12,13 @@ extern crate nalgebra;
 extern crate freetype_sys;
 extern crate unicode_normalization;
 extern crate ansi_term;
-#[cfg(unix)] extern crate xcb;
 extern crate mio;
+#[cfg(feature = "target_xlib")] extern crate x11;
+#[macro_use] extern crate interlude_vk_defs;
+extern crate interlude_vk_funport;
 
-#[macro_use] mod vk;
 // Interlude
+mod subsystem_layer;
 mod error;
 mod engine;
 mod ginterface;
@@ -32,7 +34,7 @@ mod input;
 mod data;
 mod internal_traits;
 mod concurrent;
-mod tuple_tools;
+mod wsi;
 
 // platform dependents
 #[cfg(unix)] mod linux;
@@ -45,7 +47,7 @@ mod tuple_tools;
 pub enum ApplicationState { Continue, EventArrived(u32), Exited }
 
 // Extra Objects
-mod debug_info;
+// mod debug_info;
 
 // --- Exported APIs --- //
 pub use error::*;
@@ -58,64 +60,43 @@ pub use command::{
 };
 pub use resource::{
 	ImageSubresourceRange, ImageSubresourceLayers, BufferContent, BufferOffsets,
-	ImageDescriptor1, ImageDescriptor2, ImageDescriptor3, ImagePreallocator,
+	ImageDescriptor1, ImageDescriptor2, ImageDescriptor3,
 	SamplerState, ComponentSwizzle, ComponentMapping, Filter
 };
 pub use shading::{
-	ConstantEntry, VertexBinding, VertexAttribute, PushConstantDesc,
+	ShaderStage, ConstantEntry, VertexBinding, VertexAttribute, PushConstantDesc,
 	PrimitiveTopology, ViewportWithScissorRect, RasterizerState, AttachmentBlendState,
 	GraphicsPipelineBuilder
 };
 pub use framebuffer::AccessFlags;
-pub use descriptor::{ShaderStage, Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo, DescriptorSetArrayView};
-pub use debug_info::DebugLine;
+pub use descriptor::{Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo, DescriptorSetArrayView};
+// pub use debug_info::DebugLine;
 pub use input::*;
 pub use data::*;
 pub use concurrent::*;
 pub use render_surface::*;
 // Transient or Stateful APIs //
 pub use command::{GraphicsCommandRecorder, TransferCommandRecorder};
-// Re-exporting defs by enclosing into ffi module
-pub mod ffi { pub use vk::defs::*; }
 
 // traits
 pub use engine::{AssetProvider, AssetPath, CommandSubmitter};
 pub use command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
-pub use resource::{Resource, ImageView, BufferResource, ImageResource};
+pub use resource::{ImageView, BufferResource, ImageResource};
 pub use shading::Shader;
 // exported objects
 pub use engine::Engine;
 pub use synchronize::{QueueFence, Fence};
 pub use framebuffer::{RenderPass, Framebuffer};
 pub use command::{GraphicsCommandBuffers, BundledCommandBuffers, TransferCommandBuffers, TransientTransferCommandBuffers, TransientGraphicsCommandBuffers};
-pub use resource::{
-	Buffer, Image1D, Image2D, Image3D, LinearImage2D, DeviceBuffer, StagingBuffer,
-	DeviceImage, StagingImage, MemoryMappedRange, ImageView1D, ImageView2D, ImageView3D,
-	Sampler, BufferPreallocator
-};
+pub use resource::{Image1D, Image2D, Image3D, LinearImage, DeviceBuffer, StagingBuffer, DeviceImages, StagingImages};
+pub use resource::{ImageView1D, ImageView2D, ImageView3D, Sampler, BufferPreallocator, ImagePreallocator, MappedRange};
 pub use shading::{VertexShader, TessellationControlShader, TessellationEvaluationShader, GeometryShader, FragmentShader, ShaderModule};
 pub use shading::{PipelineShaderProgram, PipelineLayout, GraphicsPipelines, GraphicsPipeline};
 pub use descriptor::{DescriptorSetLayout, DescriptorSets};
-pub use debug_info::DebugInfo;
-
-// For internal exports //
-mod rawexports
-{
-	pub use internal_traits::InternalExports;
-	pub use synchronize::{fence_raw, qfence_raw};
-}
+// pub use debug_info::DebugInfo;
 
 pub type EngineResult<T> = Result<T, EngineError>;
-// Result<_, EngineError> as Unrecoverable(Crashes immediately)
-#[macro_export]
-macro_rules! Unrecoverable
-{
-	($e: expr) => {match $e
-	{
-		Err(e) => $crate::crash(e),
-		Ok(o) => o
-	}}
-}
+/// Result<_, EngineError> as Unrecoverable(Crashes immediately)
 pub trait UnrecoverableExt<T> { fn or_crash(self) -> T; }
 impl<T> UnrecoverableExt<T> for EngineResult<T>
 {

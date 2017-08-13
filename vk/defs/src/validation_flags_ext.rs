@@ -6,7 +6,7 @@ pub static VK_EXT_VALIDATION_FLAGS_EXTENSION_NAME: &'static str = "VK_EXT_valida
 use libc::*;
 use super::*;
 
-pub type VkValidationCheckEXT = isize;
+pub type VkValidationCheckEXT = i32;
 pub const VK_VALIDATION_CHECK_ALL_EXT: VkValidationCheckEXT = 0;
 pub const VK_VALIDATION_CHECK_SHADERS_EXT: VkValidationCheckEXT = 1;
 
