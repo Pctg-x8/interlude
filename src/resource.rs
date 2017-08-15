@@ -398,11 +398,13 @@ impl Drop for StagingBuffer
 		unsafe { vkDestroyBuffer(self.parent.native(), self.buffer, null()) };
 	}
 }
+impl BufferResource for StagingBuffer { fn internal(&self) -> u64 { self.buffer as _ } fn size(&self) -> VkDeviceSize { self.size } }
 impl BufferResource for DeviceBuffer { fn internal(&self) -> u64 { self.buffer as _ } fn size(&self) -> VkDeviceSize { self.size } }
 
 pub struct DeviceImages
 {
-	memory: VkDeviceMemory, parent: Rc<Device>, size: VkDeviceSize, resources: (Vec<Image1D>, Vec<Image2D>, Vec<Image3D>)
+	memory: VkDeviceMemory, parent: Rc<Device>,
+	#[allow(dead_code)] size: VkDeviceSize, resources: (Vec<Image1D>, Vec<Image2D>, Vec<Image3D>)
 }
 impl DeviceImages
 {
@@ -691,3 +693,20 @@ impl ImageView for ImageView3D
 impl Drop for ImageView1D { fn drop(&mut self) { unsafe { vkDestroyImageView(self.parent.0 .1.native(), self.internal, null()) }; } }
 impl Drop for ImageView2D { fn drop(&mut self) { unsafe { vkDestroyImageView(self.parent.0 .1.native(), self.internal, null()) }; } }
 impl Drop for ImageView3D { fn drop(&mut self) { unsafe { vkDestroyImageView(self.parent.0 .1.native(), self.internal, null()) }; } }
+
+/// Image Layout Constant
+#[repr(C)] #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ImageLayout
+{
+	Undefined = VK_IMAGE_LAYOUT_UNDEFINED as _,
+	General = VK_IMAGE_LAYOUT_GENERAL as _,
+	ColorAttachmentOptimal = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL as _,
+	DepthStencilAttachmentOptimal = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL as _,
+	DepthStencilReadOnlyOptimal = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL as _,
+	ShaderReadOnlyOptimal = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL as _,
+	TransferSrcOptimal = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL as _,
+	TransferDstOptimal = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL as _,
+	Preinitialized = VK_IMAGE_LAYOUT_PREINITIALIZED as _,
+	PresentSrc = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR as _,
+	SharedPresent = VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR as _
+}

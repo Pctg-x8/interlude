@@ -1,14 +1,14 @@
 //! xlib target window system intergration code
 
 use subsystem_layer::{NativeInstance, NativeHandleProvider, NativeResultValueHandler};
+use x11::xlib;
 use x11::xlib::*;
 use std::ffi::CString;
-use std::mem::{uninitialized as reserved, transmute};
+use std::mem::uninitialized as reserved;
 use std::ptr::null;
-use std::rc::Rc;
 use std::usize;
 use std::os::unix::io::AsRawFd;
-use interlude_vk_defs::{VkInstance, VkXlibSurfaceCreateInfoKHR, VkBool32, VkPhysicalDevice, VkSurfaceKHR};
+use interlude_vk_defs::{VkXlibSurfaceCreateInfoKHR, VkBool32, VkPhysicalDevice, VkSurfaceKHR};
 use interlude_vk_funport::{vkCreateXlibSurfaceKHR, vkGetPhysicalDeviceXlibPresentationSupportKHR};
 use {ApplicationState, Event, EngineResult, EngineError, Size2};
 use mio::*;
@@ -22,9 +22,9 @@ pub struct NativeWindowWithServer
 	display: *mut Display, window: Window, close_id: Atom,
 	fixed_size: Option<Size2>
 }
-impl super::NativeWindow for NativeWindowWithServer
+impl NativeWindowWithServer
 {
-	fn new(size: &Size2, caption: &str, resizable: bool) -> EngineResult<Self>
+	pub fn new(size: &Size2, caption: &str, resizable: bool) -> EngineResult<Self>
 	{
 		let &Size2(w, h) = size;
 		let display = unsafe { XOpenDisplay(null()) };
@@ -42,19 +42,19 @@ impl super::NativeWindow for NativeWindowWithServer
 			display, window, close_id, fixed_size: if resizable { Some(size.clone()) } else { None }
 		})
 	}
-	fn show(&self) { unsafe { XMapWindow(self.display, self.window) }; }
-	fn make_vk_surface(&self, instance: &NativeInstance) -> EngineResult<VkSurfaceKHR>
+	pub fn show(&self) { unsafe { XMapWindow(self.display, self.window) }; }
+	pub fn make_vk_surface(&self, instance: &NativeInstance) -> EngineResult<VkSurfaceKHR>
 	{
 		let cinfo = VkXlibSurfaceCreateInfoKHR { pdy: self.display, window: self.window, .. Default::default() };
 		let mut surface = unsafe { reserved() };
 		unsafe { vkCreateXlibSurfaceKHR(instance.native(), &cinfo, null(), &mut surface) }.make_result(surface)
 	}
-	fn can_vk_present(&self, adapter: VkPhysicalDevice, queue_family_index: u32) -> bool
+	pub fn can_vk_present(&self, adapter: VkPhysicalDevice, queue_family_index: u32) -> bool
 	{
 		unsafe { vkGetPhysicalDeviceXlibPresentationSupportKHR(adapter, queue_family_index, self.display, self.window) == true as VkBool32 }
 	}
 
-	fn process_events_and_messages(&self, events: &[&Event]) -> ApplicationState
+	pub fn process_events_and_messages(&self, events: &[&Event]) -> ApplicationState
 	{
 		let polling = Poll::new().expect("Failed to create polling instance");
 		polling.register(&unix::EventedFd(unsafe { &XConnectionNumber(self.display) }), T_SERVER, Ready::readable(), PollOpt::level())
@@ -70,7 +70,7 @@ impl super::NativeWindow for NativeWindowWithServer
 			Token(v) => ApplicationState::EventArrived(v as _)
 		}).unwrap_or(ApplicationState::Exited)
 	}
-	fn process_messages(&self) -> ApplicationState
+	pub fn process_messages(&self) -> ApplicationState
 	{
 		while unsafe { XPending(self.display) } > 0
 		{
@@ -78,13 +78,14 @@ impl super::NativeWindow for NativeWindowWithServer
 			unsafe { XNextEvent(self.display, &mut event) };
 			match event.get_type()
 			{
-				ClientMessage if (&event as &AsRef<XClientMessageEvent>).as_ref().data.get_long(0) as c_ulong == self.close_id =>
+				xlib::ClientMessage if (&event as &AsRef<XClientMessageEvent>).as_ref().data.get_long(0) as c_ulong == self.close_id =>
 					return ApplicationState::Exited,
 				ty => info!(target: "Interlude <- X11", "Unhandled Event: {}", ty)
 			}
 		}
 		ApplicationState::Continue
 	}
+	pub fn process_all_messages(&self) { while self.process_messages() == ApplicationState::Continue {} }
 }
 impl Drop for NativeWindowWithServer
 {

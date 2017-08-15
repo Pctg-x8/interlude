@@ -3,12 +3,11 @@
 use interlude_vk_defs::*;
 use interlude_vk_funport::*;
 use {ImageView, GraphicsInterface, Size2, AssetProvider, EngineResult};
-use device::Device;
 use subsystem_layer::{NativeHandleProvider, NativeResultValueHandler};
 use std::rc::Rc;
 use std::ops::{Deref, BitOr, BitOrAssign};
 use std::mem::{transmute, zeroed, uninitialized as reserved};
-use std::ptr::{null, null_mut};
+use std::ptr::null;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AttachmentDesc
@@ -132,8 +131,8 @@ impl Default for PassDependency
 			src: 0, dst: 0,
 			src_stage_mask: VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
 			dst_stage_mask: VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-			src_access_mask: AccessFlags::MemoryRead,
-			dst_access_mask: AccessFlags::MemoryRead,
+			src_access_mask: AccessFlag::MemoryRead.into(),
+			dst_access_mask: AccessFlag::MemoryRead.into(),
 			depend_by_region: false
 		}
 	}
@@ -146,7 +145,7 @@ impl<'a> Into<VkSubpassDependency> for &'a PassDependency
 		{
 			srcSubpass: self.src, dstSubpass: self.dst,
 			srcStageMask: self.src_stage_mask, dstStageMask: self.dst_stage_mask,
-			srcAccessMask: self.src_access_mask as VkAccessFlags, dstAccessMask: self.dst_access_mask as VkAccessFlags,
+			srcAccessMask: self.src_access_mask.into(), dstAccessMask: self.dst_access_mask.into(),
 			dependencyFlags: if self.depend_by_region { VK_DEPENDENCY_BY_REGION_BIT } else { 0 }
 		}
 	}
@@ -159,7 +158,7 @@ impl PassDependency
 		{
 			src: src_pass, dst: dst_pass,
 			src_stage_mask: VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, dst_stage_mask: VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			src_access_mask: AccessFlags::ColorAttachmentWrite, dst_access_mask: AccessFlags::ShaderRead,
+			src_access_mask: AccessFlag::ColorAttachmentWrite.into(), dst_access_mask: AccessFlag::ShaderRead.into(),
 			depend_by_region: dep_by_region
 		}
 	}
@@ -240,7 +239,7 @@ impl NativeHandleProvider for Framebuffer { type NativeT = VkFramebuffer; fn nat
 
 /// Access Flags Mask
 #[repr(u32)] #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub enum AccessFlags
+pub enum AccessFlag
 {
 	IndirectCommandRead = VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
 	IndexRead = VK_ACCESS_INDEX_READ_BIT,
@@ -260,13 +259,15 @@ pub enum AccessFlags
 	MemoryRead = VK_ACCESS_MEMORY_READ_BIT,
 	MemoryWrite = VK_ACCESS_MEMORY_WRITE_BIT
 }
+#[repr(C)] #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+pub struct AccessFlags(VkFlags);
 
-impl BitOr for AccessFlags
-{
-	type Output = AccessFlags;
-	fn bitor(self, rhs: Self) -> Self { unsafe { transmute(self as u32 | rhs as u32) } }
-}
-impl BitOrAssign for AccessFlags
-{
-	fn bitor_assign(&mut self, rhs: Self) { *self = unsafe { transmute(*self as u32 | rhs as u32) }; }
-}
+impl Into<VkAccessFlags> for AccessFlag { fn into(self) -> VkAccessFlags { self as _ } }
+impl Into<AccessFlags> for AccessFlag { fn into(self) -> AccessFlags { AccessFlags(self as _) } }
+impl Into<VkAccessFlags> for AccessFlags { fn into(self) -> VkAccessFlags { self.0 } }
+impl BitOr for AccessFlag { type Output = AccessFlags; fn bitor(self, rhs: Self) -> AccessFlags { AccessFlags(self as VkFlags | rhs as VkFlags) } }
+impl BitOr for AccessFlags { type Output = AccessFlags; fn bitor(self, rhs: Self) -> AccessFlags { AccessFlags(self.0 | rhs.0) } }
+impl BitOr<AccessFlags> for AccessFlag { type Output = AccessFlags; fn bitor(self, rhs: AccessFlags) -> AccessFlags { AccessFlags(self as _) | rhs } }
+impl BitOr<AccessFlag> for AccessFlags { type Output = AccessFlags; fn bitor(self, rhs: AccessFlag) -> AccessFlags { self | AccessFlags(rhs as _) } }
+impl BitOrAssign for AccessFlags { fn bitor_assign(&mut self, rhs: Self) { self.0 |= rhs.0; } }
+impl BitOrAssign<AccessFlag> for AccessFlags { fn bitor_assign(&mut self, rhs: AccessFlag) { self.0 |= rhs as VkFlags; } }

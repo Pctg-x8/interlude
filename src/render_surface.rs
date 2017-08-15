@@ -1,18 +1,17 @@
 // Interlude: Window and RenderWindow(Traits Provider)
 
 use std::rc::Rc;
-use {EngineResult, EngineError, GraphicsInterface, QueueFence, ImageView};
+use {EngineResult, EngineError, GraphicsInterface, QueueFence, ImageView, ImageResource};
 use interlude_vk_defs::*;
 use interlude_vk_funport::*;
 use data::Size2;
 use std::ops::Deref;
-use std::mem::{transmute, uninitialized as reserved, zeroed};
+use std::mem::uninitialized as reserved;
 use std::ptr::{null, null_mut};
 use std::cmp::max;
 use std::{u32, u64};
 use subsystem_layer::{NativeInstance, NativeHandleProvider, NativeResultValueHandler};
 use device::Device;
-use wsi::NativeWindow;
 
 // Platform dependent selection
 #[cfg(windows)] pub use win32::NativeWindow as PlatformWindowType;
@@ -26,6 +25,10 @@ pub fn make_render_window(g: &GraphicsInterface, size: &Size2, caption: &str, re
 }
 
 pub struct WindowRenderTargetView(VkImage, VkImageView, VkFormat);
+impl ImageResource for WindowRenderTargetView
+{
+	fn internal(&self) -> u64 { self.0 as _ }
+}
 impl ImageView for WindowRenderTargetView
 {
 	fn internal(&self) -> u64 { self.1 as _ }
@@ -35,7 +38,7 @@ pub struct RenderWindow
 {
 	underlying: PlatformWindowType, parent: Rc<Device>, apiroot: Rc<NativeInstance>,
 	swapchain: VkSwapchainKHR, surface: VkSurfaceKHR, render_targets: Vec<WindowRenderTargetView>,
-	format: VkFormat, extent: Size2, has_vsync: bool
+	format: VkFormat, extent: Size2, #[allow(dead_code)] has_vsync: bool
 }
 struct SupportedSurface<'a>(VkSurfaceKHR, &'a GraphicsInterface);
 impl<'a> SupportedSurface<'a>
@@ -103,7 +106,7 @@ impl RenderWindow
 		unsafe { vkGetSwapchainImagesKHR(g.device().native(), swapchain, &mut bi_count, back_images.as_mut_ptr()) }.into_result()?;
 		let back_views = back_images.into_iter().map(|res| unsafe
 		{
-			let mut iv = unsafe { reserved() };
+			let mut iv = reserved();
 			vkCreateImageView(g.device().native(), &VkImageViewCreateInfo
 			{
 				image: res, subresourceRange: VkImageSubresourceRange { aspectMask: VK_IMAGE_ASPECT_COLOR_BIT, layerCount: 1, .. Default::default() },

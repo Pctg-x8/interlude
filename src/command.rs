@@ -5,14 +5,13 @@ use interlude_vk_funport::*;
 use device::Device;
 use {
 	ImageSubresourceLayers, EngineResult, ImageResource, BufferResource, Filter, AttachmentClearValue, GraphicsInterface,
-	Framebuffer, ShaderStage, PipelineLayout, DescriptorSetArrayView, GraphicsPipeline, QueueFence, PreciseRenderPass,
-	ImageSubresourceRange, Size3, Offset3, UnrecoverableExt, AccessFlags
+	Framebuffer, PipelineLayout, DescriptorSetArrayView, GraphicsPipeline, QueueFence, PreciseRenderPass,
+	ImageSubresourceRange, Size3, Offset3, UnrecoverableExt, AccessFlags, ImageLayout, PipelineStageFlag
 };
 use shading::ShaderStageSet;
 use std::ops::{Deref, Range};
 use std::mem::{forget, size_of, uninitialized as reserved, zeroed, transmute};
-use std::ptr::{null, null_mut};
-use std::vec::IntoIter as VecIntoIter;
+use std::ptr::null;
 use subsystem_layer::{NativeResultValueHandler, NativeHandleProvider};
 use std::rc::Rc;
 
@@ -82,8 +81,8 @@ impl<'a> BufferMemoryBarrier<'a>
 #[derive(Clone)]
 pub struct ImageMemoryBarrier<'a>
 {
-	src_mask: VkAccessFlags, dst_mask: VkAccessFlags,
-	src_layout: VkImageLayout, dst_layout: VkImageLayout,
+	src_access: AccessFlags, dst_access: AccessFlags,
+	src_layout: ImageLayout, dst_layout: ImageLayout,
 	src_queue_family_index: u32, dst_queue_family_index: u32,
 	image: &'a ImageResource, subresource_range: ImageSubresourceRange
 }
@@ -94,7 +93,6 @@ impl<'a> Default for ImageMemoryBarrier<'a>
 	{
 		ImageMemoryBarrier
 		{
-			src_mask: 0, dst_mask: 0, src_layout: VK_IMAGE_LAYOUT_UNDEFINED, dst_layout: VK_IMAGE_LAYOUT_UNDEFINED,
 			src_queue_family_index: VK_QUEUE_FAMILY_IGNORED, dst_queue_family_index: VK_QUEUE_FAMILY_IGNORED,
 			.. unsafe { zeroed() }
 		}
@@ -102,13 +100,20 @@ impl<'a> Default for ImageMemoryBarrier<'a>
 }
 impl<'a> ImageMemoryBarrier<'a>
 {
-	/// Initialize operation(set image layout to Preinitialized)
-	pub fn initialize(img: &'a ImageResource, subresource_range: ImageSubresourceRange, dst_mask: VkAccessFlags, dst_layout: VkImageLayout) -> Self
+	/// Initialize operation(set image layout from Preinitialized)
+	pub fn initialize(image: &'a ImageResource, subresource_range: ImageSubresourceRange, dst_access: AccessFlags, dst_layout: ImageLayout) -> Self
 	{
 		ImageMemoryBarrier
 		{
-			dst_mask: dst_mask, src_layout: VK_IMAGE_LAYOUT_PREINITIALIZED, dst_layout: dst_layout,
-			image: img, subresource_range: subresource_range, .. Default::default()
+			dst_access, src_layout: ImageLayout::Preinitialized, dst_layout, image, subresource_range, .. Default::default()
+		}
+	}
+	/// Initialize operation(set image layout from Undefined)
+	pub fn initialize_undef(image: &'a ImageResource, subresource_range: ImageSubresourceRange, dst_access: AccessFlags, dst_layout: ImageLayout) -> Self
+	{
+		ImageMemoryBarrier
+		{
+			dst_access, src_layout: ImageLayout::Undefined, dst_layout, image, subresource_range, .. Default::default()
 		}
 	}
 }
@@ -142,8 +147,8 @@ impl<'a> Into<VkImageMemoryBarrier> for &'a ImageMemoryBarrier<'a>
 	{
 		VkImageMemoryBarrier
 		{
-			srcAccessMask: self.src_mask, dstAccessMask: self.dst_mask,
-			oldLayout: self.src_layout, newLayout: self.dst_layout,
+			srcAccessMask: self.src_access.into(), dstAccessMask: self.dst_access.into(),
+			oldLayout: self.src_layout as _, newLayout: self.dst_layout as _,
 			srcQueueFamilyIndex: self.src_queue_family_index, dstQueueFamilyIndex: self.dst_queue_family_index,
 			image: self.image.internal() as _, subresourceRange: (&self.subresource_range).into(), .. Default::default()
 		}
@@ -394,9 +399,9 @@ impl<'a> TransientTransferCommandBuffers<'a>
 }
 impl<'a> TransientGraphicsCommandBuffers<'a>
 {
-	pub fn execute(self, wait_semaphore: Option<(&QueueFence, VkPipelineStageFlags)>) -> EngineResult<()>
+	pub fn execute<PS: PipelineStageFlag>(self, wait_semaphore: Option<(&QueueFence, PS)>) -> EngineResult<()>
 	{
-		let (wsem, stage) = wait_semaphore.map(|(x, w)| (vec![x.native()], vec![w])).unwrap_or_else(|| (Vec::new(), Vec::new()));
+		let (wsem, stage) = wait_semaphore.map(|(x, w)| (vec![x.native()], vec![w.into()])).unwrap_or_else(|| (Vec::new(), Vec::new()));
 		unsafe { vkQueueSubmit(self.2, 1, &VkSubmitInfo
 		{
 			waitSemaphoreCount: wsem.len() as _, pWaitSemaphores: wsem.as_ptr(), pWaitDstStageMask: stage.as_ptr(),
@@ -505,6 +510,10 @@ pub trait DrawingCommandRecorder: CommandRecorder + Sized
 		unsafe { vkCmdPushConstants(self.buffer(), layout.native(), shader_stage.into(), range.start, range.len() as _, transmute(data)) };
 		self
 	}
+	fn bind_vertex_buffers(self, buffer_offsets: &[(&BufferResource, usize)]) -> Self
+	{
+		self.bind_vertex_buffers_partial(0, buffer_offsets)
+	}
 	fn bind_vertex_buffers_partial(self, start_binding: u32, buffer_offsets: &[(&BufferResource, usize)]) -> Self
 	{
 		let (buffer_native, offsets_native): (Vec<_>, Vec<_>) = buffer_offsets.into_iter()
@@ -546,7 +555,7 @@ pub trait DrawingCommandRecorder: CommandRecorder + Sized
 }
 pub trait QueueSyncOperationCommandRecorder : CommandRecorder + Sized
 {
-	fn pipeline_barrier(self, src_stage_mask: VkPipelineStageFlags, dst_stage_mask: VkPipelineStageFlags,
+	fn pipeline_barrier<PSs: PipelineStageFlag, PSd: PipelineStageFlag>(self, src_stage_mask: PSs, dst_stage_mask: PSd,
 		depend_by_region: bool, memory_barriers: &[MemoryBarrier], buffer_barriers: &[BufferMemoryBarrier], image_barriers: &[ImageMemoryBarrier]) -> Self
 	{
 		let (mbs_native, bbs_native, ibs_native) = (
@@ -554,12 +563,17 @@ pub trait QueueSyncOperationCommandRecorder : CommandRecorder + Sized
 			buffer_barriers.into_iter().map(|x| x.into()).collect::<Vec<_>>(),
 			image_barriers.into_iter().map(|x| x.into()).collect::<Vec<_>>()
 		);
-		unsafe { vkCmdPipelineBarrier(self.buffer(), src_stage_mask, dst_stage_mask,
+		unsafe { vkCmdPipelineBarrier(self.buffer(), src_stage_mask.into(), dst_stage_mask.into(),
 			if depend_by_region { VK_DEPENDENCY_BY_REGION_BIT } else { 0 },
 			mbs_native.len() as u32, mbs_native.as_ptr(),
 			bbs_native.len() as u32, bbs_native.as_ptr(),
 			ibs_native.len() as u32, ibs_native.as_ptr()) };
 		self
+	}
+	fn pipeline_barrier_on<PS: PipelineStageFlag>(self, stage_mask: PS, depend_by_region: bool,
+		memory_barriers: &[MemoryBarrier], buffer_barriers: &[BufferMemoryBarrier], image_barriers: &[ImageMemoryBarrier]) -> Self
+	{
+		self.pipeline_barrier(stage_mask, stage_mask, depend_by_region, memory_barriers, buffer_barriers, image_barriers)
 	}
 }
 pub trait CommandInjection : Sized

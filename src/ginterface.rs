@@ -12,7 +12,6 @@ use command::CommandPool;
 use device::Device;
 use descriptor::IntoWriteDescriptorSetNativeStruct;
 use std::rc::Rc;
-use std::borrow::Cow;
 
 #[cfg(windows)]
 static PLATFORM_SURFACE_EXTENSION_NAME: &&'static str = &VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
@@ -70,16 +69,16 @@ impl DebugReportCallback
 		let create_fn: PFN_vkCreateDebugReportCallbackEXT = unsafe { transmute(vkGetInstanceProcAddr(instance.native(), "vkCreateDebugReportCallbackEXT\x00".as_ptr() as _)) };
 		let destroy_fn = unsafe { transmute(vkGetInstanceProcAddr(instance.native(), "vkDestroyDebugReportCallbackEXT\x00".as_ptr() as _)) };
 		let mut obj = unsafe { reserved() };
-		unsafe { create_fn(instance.native(), &VkDebugReportCallbackCreateInfoEXT
+		create_fn(instance.native(), &VkDebugReportCallbackCreateInfoEXT
 		{
 			flags: VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT,
 			pfnCallback: debug_callback, .. Default::default()
-		}, null(), &mut obj) }.make_result_with(|| DebugReportCallback { obj, destroy_fn, parent: instance.clone() })
+		}, null(), &mut obj).make_result_with(|| DebugReportCallback { obj, destroy_fn, parent: instance.clone() })
 	}
 }
 impl Drop for DebugReportCallback
 {
-	fn drop(&mut self) { unsafe { (self.destroy_fn)(self.parent.native(), self.obj, null()) }; }
+	fn drop(&mut self) { (self.destroy_fn)(self.parent.native(), self.obj, null()); }
 }
 
 macro_rules! LogAdapterFeature

@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 use interlude_vk_defs::*;
 use interlude_vk_funport::*;
-use std::ops::{BitOr, BitOrAssign, Range, Deref};
+use std::ops::{Range, Deref};
 use device::Device;
 use shading::ShaderStageSet;
 use std::rc::Rc;
@@ -32,9 +32,7 @@ impl Descriptor
 			&InputAttachment(c, s) => (VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, c, shader_stage_flags(s))
 		}
 	}
-	fn native_type(&self) -> VkDescriptorType { self.deconstruct().0 }
-	fn count(&self) -> u32 { self.deconstruct().1 }
-	fn pool_size(&self) -> VkDescriptorPoolSize { VkDescriptorPoolSize { _type: self.native_type(), descriptorCount: self.count() } }
+	#[allow(non_snake_case)]
 	fn into_binding(&self, index: u32) -> VkDescriptorSetLayoutBinding
 	{
 		let (descriptorType, descriptorCount, stageFlags) = self.deconstruct();
@@ -67,7 +65,7 @@ pub struct DescriptorSets(VkDescriptorPool, Rc<Device>, Vec<VkDescriptorSet>);
 pub type DescriptorSetArrayView = [VkDescriptorSet];
 impl DescriptorSets
 {
-	pub fn preallocate(engine: &GraphicsInterface, layouts: &[&DescriptorSetLayout]) -> EngineResult<Self>
+	pub fn new(engine: &GraphicsInterface, layouts: &[&DescriptorSetLayout]) -> EngineResult<Self>
 	{
 		let (mut uniform_total, mut storage_total, mut combined_sampler_total, mut input_attachment_total) = (0, 0, 0, 0);
 		let mut dsls = Vec::with_capacity(layouts.len());

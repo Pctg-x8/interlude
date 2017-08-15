@@ -49,6 +49,12 @@ pub enum ApplicationState { Continue, EventArrived(u32), Exited }
 // Extra Objects
 // mod debug_info;
 
+// Enum Flags //
+pub use framebuffer::{AccessFlag, AccessFlags};
+pub use shading::{ShaderStage, ShaderStageSet};
+pub use shading::{PipelineStageFlag, PipelineStage, PipelineStages};
+pub use resource::{ImageAspect, ImageAspectSet};
+
 // --- Exported APIs --- //
 pub use error::*;
 pub use engine::{EngineBuilder, EmptyInput};
@@ -61,14 +67,13 @@ pub use command::{
 pub use resource::{
 	ImageSubresourceRange, ImageSubresourceLayers, BufferContent, BufferOffsets,
 	ImageDescriptor1, ImageDescriptor2, ImageDescriptor3,
-	SamplerState, ComponentSwizzle, ComponentMapping, Filter
+	SamplerState, ComponentSwizzle, ComponentMapping, Filter, ImageLayout
 };
 pub use shading::{
-	ShaderStage, ConstantEntry, VertexBinding, VertexAttribute, PushConstantDesc,
+	ConstantEntry, VertexBinding, VertexAttribute, PushConstantDesc,
 	PrimitiveTopology, ViewportWithScissorRect, RasterizerState, AttachmentBlendState,
 	GraphicsPipelineBuilder
 };
-pub use framebuffer::AccessFlags;
 pub use descriptor::{Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo, DescriptorSetArrayView};
 // pub use debug_info::DebugLine;
 pub use input::*;
@@ -76,12 +81,14 @@ pub use data::*;
 pub use concurrent::*;
 pub use render_surface::*;
 // Transient or Stateful APIs //
-pub use command::{GraphicsCommandRecorder, TransferCommandRecorder};
+pub use command::{GraphicsCommandRecorder, TransferCommandRecorder, BundleCommandRecorder};
+pub use command::{ImmediateGraphicsCommandSubmission, ImmediateTransferCommandSubmission};
 
 // traits
 pub use engine::{AssetProvider, AssetPath, CommandSubmitter};
-pub use command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
-pub use resource::{ImageView, BufferResource, ImageResource};
+pub use command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder, QueueSyncOperationCommandRecorder};
+pub use command::{PrimaryGraphicsCommandRecorder, PrimaryTransferCommandRecorder, ClosableCommandRecorder, CommandInjection};
+pub use resource::{ImageView, BufferResource, ImageResource, StagingResource};
 pub use shading::Shader;
 // exported objects
 pub use engine::Engine;

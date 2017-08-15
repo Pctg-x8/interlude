@@ -3,14 +3,12 @@
 use interlude_vk_defs::*;
 use interlude_vk_funport::vkQueueSubmit;
 use subsystem_layer::{NativeResultValueHandler, NativeHandleProvider};
-use render_surface::{make_render_window, PlatformWindowType};
-use wsi::NativeWindow;
-use device::Device;
+use render_surface::make_render_window;
 use ginterface::DeviceFeatures;
 use {
 	log, EngineResult, Fence, QueueFence, GraphicsCommandBuffersView, TransferCommandBuffersView, GraphicsInterface,
 	RenderPass, AttachmentDesc, PassDesc, VertexAttribute, VertexBinding, PosUV, VertexShader, ApplicationState, Event,
-	RenderWindow, Size2
+	RenderWindow, Size2, PipelineStageFlag
 };
 use ansi_term::*;
 use std::sync::{Arc, RwLock};
@@ -18,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::borrow::Cow;
 use std::ops::Deref;
 use std::rc::Rc;
-use std::mem::{transmute, size_of, zeroed};
+use std::mem::{size_of, zeroed};
 use std::ptr::null;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -56,7 +54,7 @@ impl EngineLogger
 	}
 }
 
-fn mtflags_decomposite(flags: VkMemoryPropertyFlags) -> Vec<&'static str>
+/*fn mtflags_decomposite(flags: VkMemoryPropertyFlags) -> Vec<&'static str>
 {
 	let mut temp = Vec::new();
 	if (flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0 { temp.push("Device Local"); }
@@ -65,7 +63,7 @@ fn mtflags_decomposite(flags: VkMemoryPropertyFlags) -> Vec<&'static str>
 	if (flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) != 0 { temp.push("Host Cached"); }
 	if (flags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) != 0 { temp.push("Lazily Allocated"); }
 	temp
-}
+}*/
 
 /// Placeholder for applications that never uses any inputs.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -300,18 +298,18 @@ fn as_ptr_emp<T>(v: &[T]) -> *const T { if v.is_empty() { null() } else { v.as_p
 
 pub trait CommandSubmitter
 {
-	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
+	fn submit_graphics_commands<PS: PipelineStageFlag>(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, PS)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>;
-	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
+	fn submit_transfer_commands<PS: PipelineStageFlag>(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, PS)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>;
 }
 impl<InputNames: Eq + Copy + Ord> CommandSubmitter for Engine<InputNames>
 {
-	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
+	fn submit_graphics_commands<PS: PipelineStageFlag>(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, PS)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>
 	{
 		let signals_on_complete = signal_on_complete.into_iter().map(NativeHandleProvider::native).collect::<Vec<_>>();
-		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>();
+		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s.into()).collect::<Vec<_>>();
 		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| q.native()).collect::<Vec<_>>();
 
 		unsafe { vkQueueSubmit(self.gi.device().graphics_queue, 1, &VkSubmitInfo
@@ -321,11 +319,11 @@ impl<InputNames: Eq + Copy + Ord> CommandSubmitter for Engine<InputNames>
 			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr(), .. Default::default()
 		}, signal_on_complete_host.map(NativeHandleProvider::native).unwrap_or(zeroed())) }.into_result()
 	}
-	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
+	fn submit_transfer_commands<PS: PipelineStageFlag>(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, PS)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>
 	{
 		let signals_on_complete = signal_on_complete.into_iter().map(NativeHandleProvider::native).collect::<Vec<_>>();
-		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>();
+		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s.into()).collect::<Vec<_>>();
 		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| q.native()).collect::<Vec<_>>();
 
 		unsafe { vkQueueSubmit(self.gi.device().transfer_queue, 1, &VkSubmitInfo
@@ -336,15 +334,16 @@ impl<InputNames: Eq + Copy + Ord> CommandSubmitter for Engine<InputNames>
 		}, signal_on_complete_host.map(NativeHandleProvider::native).unwrap_or(zeroed())) }.into_result()
 	}
 }
+/*
 pub struct CommandSender<'a>(&'a Device);
 unsafe impl<'a> Send for CommandSender<'a> {}
 impl<'a> CommandSubmitter for CommandSender<'a>
 {
-	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
+	fn submit_graphics_commands<PS: PipelineStageFlag>(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, PS)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>
 	{
 		let signals_on_complete = signal_on_complete.into_iter().map(NativeHandleProvider::native).collect::<Vec<_>>();
-		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>();
+		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s.into()).collect::<Vec<_>>();
 		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| q.native()).collect::<Vec<_>>();
 
 		unsafe { vkQueueSubmit(self.0.graphics_queue, 1, &VkSubmitInfo
@@ -354,11 +353,11 @@ impl<'a> CommandSubmitter for CommandSender<'a>
 			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr(), .. Default::default()
 		}, signal_on_complete_host.map(NativeHandleProvider::native).unwrap_or(zeroed())) }.into_result()
 	}
-	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, VkPipelineStageFlags)],
+	fn submit_transfer_commands<PS: PipelineStageFlag>(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, PS)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>
 	{
 		let signals_on_complete = signal_on_complete.into_iter().map(NativeHandleProvider::native).collect::<Vec<_>>();
-		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s).collect::<Vec<_>>();
+		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s.into()).collect::<Vec<_>>();
 		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| q.native()).collect::<Vec<_>>();
 
 		unsafe { vkQueueSubmit(self.0.transfer_queue, 1, &VkSubmitInfo
@@ -369,3 +368,4 @@ impl<'a> CommandSubmitter for CommandSender<'a>
 		}, signal_on_complete_host.map(NativeHandleProvider::native).unwrap_or(zeroed())) }.into_result()
 	}
 }
+*/

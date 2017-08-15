@@ -11,7 +11,7 @@ use std::fs::File;
 use std::rc::Rc;
 use std::path::Path;
 use std::mem::{size_of, transmute, zeroed};
-use std::ptr::{null, null_mut};
+use std::ptr::null;
 use subsystem_layer::{NativeHandleProvider, NativeResultValueHandler};
 use data::*;
 use libc::c_char;
@@ -38,7 +38,6 @@ impl ShaderStageSet
 	pub fn has_fragment_bit(&self) -> bool { (self.0 & ShaderStage::Fragment as VkFlags) != 0 }
 }
 pub fn shader_stage_flags(set: ShaderStageSet) -> VkShaderStageFlags { set.0 as _ }
-pub fn retrieve_shader_stage_flags(sss: ShaderStageSet) -> VkShaderStageFlags { sss.0 as _ }
 impl BitOr for ShaderStage
 {
 	type Output = ShaderStageSet;
@@ -239,7 +238,7 @@ impl<'a> Into<VkPushConstantRange> for &'a PushConstantDesc
 use descriptor::addref_dsl;
 use subsystem_layer::{NativePipelineLayout, NativeDescriptorSetLayout};
 /// Data Layout which required while rocessing in pipeline
-pub struct PipelineLayout { obj: Rc<NativePipelineLayout>, subrefs: Vec<Rc<NativeDescriptorSetLayout>> }
+pub struct PipelineLayout { obj: Rc<NativePipelineLayout>, #[allow(dead_code)] subrefs: Vec<Rc<NativeDescriptorSetLayout>> }
 impl PipelineLayout
 {
 	pub fn new(engine: &GraphicsInterface, descriptor_set_layouts: &[&DescriptorSetLayout], push_constants: &[&PushConstantDesc]) -> EngineResult<Self>
@@ -606,7 +605,7 @@ impl GraphicsPipelines
 		let builders_n1 = builders.into_iter().map(|&x| x.into()).collect::<Vec<IntoNativeGraphicsPipelineCreateInfoStruct>>();
 		let builders_n = builders_n1.iter().map(|x| x.into()).collect::<Vec<_>>();
 		let mut pipelines = vec![unsafe { zeroed() }; builders.len()];
-		unsafe { vkCreateGraphicsPipelines(engine.device().native(), unsafe { zeroed() }, builders_n.len() as _, builders_n.as_ptr(), null(), pipelines.as_mut_ptr()) }
+		unsafe { vkCreateGraphicsPipelines(engine.device().native(), zeroed(), builders_n.len() as _, builders_n.as_ptr(), null(), pipelines.as_mut_ptr()) }
 			.make_result_with(|| GraphicsPipelines(pipelines.into_iter().map(|p| GraphicsPipeline(p, engine.device().clone())).collect()))
 	}
 }
@@ -626,3 +625,42 @@ impl Drop for GraphicsPipeline
 {
 	fn drop(&mut self) { unsafe { vkDestroyPipeline(self.1.native(), self.0, null()) }; }
 }
+
+/// Pipeline Stage
+#[repr(u32)] #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PipelineStage
+{
+	Top = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT as _,
+	DrawIndirect = VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT as _,
+	VertexInput = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT as _,
+	VertexShader = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT as _,
+	TessellationControlShader = VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT as _,
+	TessellationEvaluationShader = VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT as _,
+	GeometryShader = VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT as _,
+	FragmentShader = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT as _,
+	EarlyFragmentTests = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT as _,
+	LateFragmentTests = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT as _,
+	ColorAttachmentOutput = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT as _,
+	ComputeShader = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT as _,
+	Transfer = VK_PIPELINE_STAGE_TRANSFER_BIT as _,
+	Bottom = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT as _,
+	Host = VK_PIPELINE_STAGE_HOST_BIT as _,
+	AllGraphics = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT as _,
+	AllCommands = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT as _
+}
+/// Combination of zero or more Pipeline Stages
+#[repr(C)] #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PipelineStages(VkFlags);
+/// Act as Pipeline Stage Flags
+pub trait PipelineStageFlag : Into<VkPipelineStageFlags> + Copy {}
+impl Into<VkPipelineStageFlags> for PipelineStage { fn into(self) -> VkPipelineStageFlags { self as _ } }
+impl Into<VkPipelineStageFlags> for PipelineStages { fn into(self) -> VkPipelineStageFlags { self.0 } }
+impl PipelineStageFlag for PipelineStage {}
+impl PipelineStageFlag for PipelineStages {}
+impl Into<PipelineStages> for PipelineStage { fn into(self) -> PipelineStages { PipelineStages(self as _) } }
+impl BitOr for PipelineStage { type Output = PipelineStages; fn bitor(self, rhs: Self) -> PipelineStages { PipelineStages(self as VkFlags | rhs as VkFlags) } }
+impl BitOr for PipelineStages { type Output = PipelineStages; fn bitor(self, rhs: Self) -> Self { PipelineStages(self.0 | rhs.0) } }
+impl BitOr<PipelineStages> for PipelineStage { type Output = PipelineStages; fn bitor(self, rhs: PipelineStages) -> PipelineStages { PipelineStages(self as VkFlags | rhs.0) } }
+impl BitOr<PipelineStage> for PipelineStages { type Output = PipelineStages; fn bitor(self, rhs: PipelineStage) -> PipelineStages { PipelineStages(self.0 | rhs as VkFlags) } }
+impl BitOrAssign for PipelineStages { fn bitor_assign(&mut self, rhs: Self) { self.0 |= rhs.0; } }
+impl BitOrAssign<PipelineStage> for PipelineStages { fn bitor_assign(&mut self, rhs: PipelineStage) { self.0 |= rhs as VkFlags; } }
