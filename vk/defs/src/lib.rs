@@ -29,7 +29,7 @@ macro_rules! VK_MAKE_VERSION
 /// Vulkan 1.0 version number
 pub const VK_API_VERSION_1_0: usize = VK_MAKE_VERSION!(1, 0, 0);
 
-#[allow(unused_macros)]
+#[macro_export]
 macro_rules! VK_VERSION
 {
     (MAJOR $v: expr) => ($v as usize >> 22);
