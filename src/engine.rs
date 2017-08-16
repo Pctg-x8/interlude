@@ -155,6 +155,7 @@ impl<InputNames: Eq + Copy + Ord> Engine<InputNames>
 		let window = make_render_window(&gi, &size, caption, resizable).map(Rc::new)?;
 		let input_system = Input::new().map(FunComposite1!(Arc::new; RwLock::new))?;
 
+		window.show(); window.flush();
 		Ok(Engine
 		{
 			window, input_system, gi, common_resources: EngineResources::new(),

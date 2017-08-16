@@ -43,6 +43,7 @@ impl NativeWindowWithServer
 		})
 	}
 	pub fn show(&self) { unsafe { XMapWindow(self.display, self.window) }; }
+	pub fn flush(&self) { unsafe { XFlush(self.display) }; }
 	pub fn make_vk_surface(&self, instance: &NativeInstance) -> EngineResult<VkSurfaceKHR>
 	{
 		let cinfo = VkXlibSurfaceCreateInfoKHR { pdy: self.display, window: self.window, .. Default::default() };
