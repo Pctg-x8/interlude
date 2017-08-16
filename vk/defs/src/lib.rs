@@ -1607,7 +1607,10 @@ pub struct VkImageSubresourceRange
 }
 impl Default for VkImageSubresourceRange
 {
-    fn default() -> Self { unsafe { std::mem::zeroed() } }
+    fn default() -> Self
+    {
+        VkImageSubresourceRange { levelCount: 1, layerCount: 1, .. unsafe { std::mem::zeroed() } }
+    }
 }
 #[repr(C)] #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VkImageViewCreateInfo
