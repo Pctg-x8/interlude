@@ -5,6 +5,7 @@ use interlude::*;
 const VERTEX_FORMAT: Format = Format::Component(32, PackedPixelOrder::RGBA, FormatType::Float);
 
 fn main() { game().or_crash(); }
+#[allow(unused_variables)]
 fn game() -> EngineResult<()>
 {
 	let color_subres = ImageSubresourceRange { aspect: ImageAspect::Color.into(), .. Default::default() };
@@ -78,32 +79,26 @@ fn game() -> EngineResult<()>
 		engine.wait_device()?;
 	}*/
 
-	// Draw commands and submit it
-	let cb = GraphicsCommandBuffers::new(&engine, engine.render_window().render_targets().len())?;
-	for (n, recorder) in cb.begin_all().enumerate()
-	{
-		recorder?
-			.pipeline_barrier_on(PipelineStage::ColorAttachmentOutput, false, &[], &[], &[
-				ImageMemoryBarrier
-				{
-					image: &engine.render_window().render_targets()[n], subresource_range: color_subres.clone(),
-					src_access: AccessFlag::MemoryRead.into(), dst_access: AccessFlag::ColorAttachmentWrite.into(),
-					src_layout: ImageLayout::PresentSrc, dst_layout: ImageLayout::ColorAttachmentOptimal, .. Default::default()
-				}
-			])
-			.begin_render_pass(&fb[n], &[AttachmentClearValue::Color(0.0, 0.0, 0.0, 1.0)], false)
-			.bind_pipeline(&ps)
-			.bind_vertex_buffers(&[(&dev, bp.offset(0))])
-			.draw(3, 1)
-			.end_render_pass()
-		.end()?;
-	}
-
+	// Draw commands and submit them
 	let ordersem = QueueFence::new(&engine)?;
 	let render_completion = QueueFence::new(&engine)?;
-	engine.render_window().acquire_next_target_index(&ordersem).and_then(|index|
-		engine.submit_graphics_commands(&[cb[index as usize]], &[(&ordersem, &PipelineStage::ColorAttachmentOutput)], Some(&render_completion), None).map(|_| index)
-	).and_then(|index| engine.render_window().present(&engine, index, Some(&render_completion)).map(|_| index))?;
+	let index = engine.render_window().acquire_next_target_index(&ordersem)? as usize;
+	let gc = ImmediateGraphicsCommandSubmission::begin(&engine)?
+		.pipeline_barrier_on(PipelineStage::ColorAttachmentOutput, false, &[], &[], &[
+			ImageMemoryBarrier
+			{
+				image: &engine.render_window().render_targets()[index], subresource_range: color_subres.clone(),
+				src_access: AccessFlag::MemoryRead.into(), dst_access: AccessFlag::ColorAttachmentWrite.into(),
+				src_layout: ImageLayout::PresentSrc, dst_layout: ImageLayout::ColorAttachmentOptimal, .. Default::default()
+			}
+		])
+		.begin_render_pass(&fb[index], &[AttachmentClearValue::Color(0.0, 0.0, 0.0, 1.0)], false)
+		.bind_pipeline(&ps)
+		.bind_vertex_buffers(&[(&dev, bp.offset(0))])
+		.draw(3, 1)
+		.end_render_pass()
+		.submit_opt(&[(&ordersem, &PipelineStage::ColorAttachmentOutput)], Some(&render_completion), None)?;
+	engine.render_window().present(&engine, index as _, Some(&render_completion))?;
 
 	engine.process_all_messages();
 	engine.wait_device()

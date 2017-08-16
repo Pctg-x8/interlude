@@ -5,7 +5,7 @@ use interlude_vk_funport::*;
 use device::Device;
 use {
 	ImageSubresourceLayers, EngineResult, ImageResource, BufferResource, Filter, AttachmentClearValue, GraphicsInterface,
-	Framebuffer, PipelineLayout, DescriptorSetArrayView, GraphicsPipeline, QueueFence, PreciseRenderPass,
+	Framebuffer, PipelineLayout, DescriptorSetArrayView, GraphicsPipeline, QueueFence, Fence, PreciseRenderPass,
 	ImageSubresourceRange, Size3, Offset3, UnrecoverableExt, AccessFlags, ImageLayout, PipelineStageFlag
 };
 use shading::ShaderStageSet;
@@ -637,6 +637,11 @@ pub trait ClosableCommandRecorder : CommandRecorder + Sized
 {
 	fn end(self) -> EngineResult<()> { unsafe { vkEndCommandBuffer(self.buffer()) }.into_result()?; forget(self); Ok(()) }
 }
+pub trait ImmediateSubmissionCommands<'a> : CommandRecorder + Sized
+{
+	fn submit_opt(self, wait_info: &[(&QueueFence, &PipelineStageFlag)], sync_qf: Option<&QueueFence>, sync_fence: Option<&Fence>)
+		-> EngineResult<CommandBufferRef<'a>>;
+}
 
 impl<'a> DrawingCommandRecorder for GraphicsCommandRecorder<'a> {}
 impl<'a> PrimaryGraphicsCommandRecorder for GraphicsCommandRecorder<'a> {}
@@ -661,6 +666,50 @@ impl<'a> ClosableCommandRecorder for TransferCommandRecorder<'a> {}
 impl<'a> PrimaryTransferCommandRecorder for ImmediateTransferCommandSubmission<'a> {}
 impl<'a> QueueSyncOperationCommandRecorder for ImmediateTransferCommandSubmission<'a> {}
 impl<'a> CommandInjection for ImmediateTransferCommandSubmission<'a> {}
+
+/// Garbage Command Buffer(only reference)
+pub struct CommandBufferRef<'a>(VkCommandBuffer, &'a NativeCommandPool);
+impl<'a> ImmediateSubmissionCommands<'a> for ImmediateTransferCommandSubmission<'a>
+{
+	fn submit_opt(self, wait_info: &[(&QueueFence, &PipelineStageFlag)], sync_qf: Option<&QueueFence>, sync_fence: Option<&Fence>)
+		-> EngineResult<CommandBufferRef<'a>>
+	{
+		unsafe { vkEndCommandBuffer(self.0) }.into_result()?;
+
+		let (wsem, stage): (Vec<_>, Vec<_>) = wait_info.into_iter().map(|&(x, w)| (x.native(), w.into_flag())).unzip();
+		let ssem = sync_qf.into_iter().map(NativeHandleProvider::native).collect::<Vec<_>>();
+		unsafe { vkQueueSubmit(self.2, 1, &VkSubmitInfo
+		{
+			waitSemaphoreCount: wsem.len() as _, pWaitSemaphores: wsem.as_ptr(), pWaitDstStageMask: stage.as_ptr(),
+			signalSemaphoreCount: ssem.len() as _, pSignalSemaphores: ssem.as_ptr(), commandBufferCount: 1, pCommandBuffers: &self.0, .. Default::default()
+		}, sync_fence.map(NativeHandleProvider::native).unwrap_or(zeroed())) }.into_result()?;
+		if sync_qf.is_none() && sync_fence.is_none() { unsafe { vkQueueWaitIdle(self.2) }.into_result()?; }
+		let ImmediateTransferCommandSubmission(buf, cp, _) = self; forget(self);
+		Ok(CommandBufferRef(buf, cp))
+	}
+}
+impl<'a> ImmediateSubmissionCommands<'a> for ImmediateGraphicsCommandSubmission<'a>
+{
+	fn submit_opt(self, wait_info: &[(&QueueFence, &PipelineStageFlag)], sync_qf: Option<&QueueFence>, sync_fence: Option<&Fence>)
+		-> EngineResult<CommandBufferRef<'a>>
+	{
+		unsafe { vkEndCommandBuffer(self.0) }.into_result()?;
+		let (wsem, stage): (Vec<_>, Vec<_>) = wait_info.into_iter().map(|&(x, w)| (x.native(), w.into_flag())).unzip();
+		let ssem = sync_qf.into_iter().map(NativeHandleProvider::native).collect::<Vec<_>>();
+		unsafe { vkQueueSubmit(self.2, 1, &VkSubmitInfo
+		{
+			waitSemaphoreCount: wsem.len() as _, pWaitSemaphores: wsem.as_ptr(), pWaitDstStageMask: stage.as_ptr(),
+			signalSemaphoreCount: ssem.len() as _, pSignalSemaphores: ssem.as_ptr(), commandBufferCount: 1, pCommandBuffers: &self.0, .. Default::default()
+		}, sync_fence.map(NativeHandleProvider::native).unwrap_or(zeroed())) }.into_result()?;
+		if sync_qf.is_none() && sync_fence.is_none() { unsafe { vkQueueWaitIdle(self.2) }.into_result()?; }
+		let ImmediateGraphicsCommandSubmission(buf, cp, _) = self; forget(self);
+		Ok(CommandBufferRef(buf, cp))
+	}
+}
+impl<'a> Drop for CommandBufferRef<'a>
+{
+	fn drop(&mut self) { unsafe { vkFreeCommandBuffers((self.1).1.native(), self.1.native(), 1, &self.0) }; }
+}
 
 #[derive(Clone)]
 pub struct BufferCopyRegion(pub usize, pub usize, pub usize);		// src, dst, size

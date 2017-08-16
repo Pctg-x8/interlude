@@ -85,7 +85,7 @@ pub use concurrent::*;
 pub use render_surface::*;
 // Transient or Stateful APIs //
 pub use command::{GraphicsCommandRecorder, TransferCommandRecorder, BundleCommandRecorder};
-pub use command::{ImmediateGraphicsCommandSubmission, ImmediateTransferCommandSubmission};
+pub use command::{ImmediateGraphicsCommandSubmission, ImmediateTransferCommandSubmission, ImmediateSubmissionCommands};
 
 // traits
 pub use engine::{AssetProvider, AssetPath, CommandSubmitter};
