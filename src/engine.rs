@@ -8,7 +8,7 @@ use ginterface::DeviceFeatures;
 use {
 	log, EngineResult, Fence, QueueFence, GraphicsCommandBuffersView, TransferCommandBuffersView, GraphicsInterface,
 	RenderPass, AttachmentDesc, PassDesc, VertexAttribute, VertexBinding, PosUV, VertexShader, ApplicationState, Event,
-	RenderWindow, Size2, PipelineStageFlag
+	RenderWindow, Size2, PipelineStageFlag, Format, PackedPixelOrder, FormatType
 };
 use ansi_term::*;
 use std::sync::{Arc, RwLock};
@@ -39,8 +39,8 @@ impl log::Log for EngineLogger
 			println!("{}", match record.level()
 			{
 				log::LogLevel::Error => Style::new().bold().fg(Color::Red).paint(format!("!! [{}|{}] {}", record.target(), record.level(), record.args())),
-				log::LogLevel::Warn => Style::new().bold().fg(Color::Yellow).paint(format!("== [{}|{}] {}", record.target(), record.level(), record.args())),
-				_ => Style::new().bold().paint(format!("** [{}|{}] {}", record.target(), record.level(), record.args()))
+				log::LogLevel::Warn => Style::new().fg(Color::Yellow).paint(format!("== [{}|{}] {}", record.target(), record.level(), record.args())),
+				_ => Style::new().paint(format!("** [{}|{}] {}", record.target(), record.level(), record.args()))
 			});
 		}
 	}
@@ -247,12 +247,12 @@ impl EngineResources
 	fn postprocess_vsh<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(&self, context: &Engine) -> EngineResult<&VertexShader>
 	{
 		self.postprocess_vsh.get(|| VertexShader::from_asset(context, "engine.shaders.PostProcessVertex", "main",
-			&[VertexBinding::PerVertex(size_of::<PosUV>() as u32)], &[VertexAttribute(0, VK_FORMAT_R32G32B32A32_SFLOAT, 0)]))
+			&[VertexBinding::PerVertex(size_of::<PosUV>() as u32)], &[VertexAttribute(0, Format::Component(32, PackedPixelOrder::RGBA, FormatType::Float), 0)]))
 	}
 	fn postprocess_vsh_nouv<Engine: AssetProvider + Deref<Target = GraphicsInterface>>(&self, context: &Engine) -> EngineResult<&VertexShader>
 	{
 		self.postprocess_vsh_nouv.get(|| VertexShader::from_asset(context, "engine.shaders.PostProcessVertexNoUV", "main",
-			&[VertexBinding::PerVertex(size_of::<PosUV>() as u32)], &[VertexAttribute(0, VK_FORMAT_R32G32B32A32_SFLOAT, 0)]))
+			&[VertexBinding::PerVertex(size_of::<PosUV>() as u32)], &[VertexAttribute(0, Format::Component(32, PackedPixelOrder::RGBA, FormatType::Float), 0)]))
 	}
 	fn default_renderpass(&self, context: &GraphicsInterface, format: VkFormat, clear_mode: Option<bool>) -> EngineResult<&RenderPass>
 	{
@@ -298,18 +298,18 @@ fn as_ptr_emp<T>(v: &[T]) -> *const T { if v.is_empty() { null() } else { v.as_p
 
 pub trait CommandSubmitter
 {
-	fn submit_graphics_commands<PS: PipelineStageFlag>(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, PS)],
+	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, &PipelineStageFlag)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>;
-	fn submit_transfer_commands<PS: PipelineStageFlag>(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, PS)],
+	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, &PipelineStageFlag)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>;
 }
 impl<InputNames: Eq + Copy + Ord> CommandSubmitter for Engine<InputNames>
 {
-	fn submit_graphics_commands<PS: PipelineStageFlag>(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, PS)],
+	fn submit_graphics_commands(&self, commands: &GraphicsCommandBuffersView, wait_for_execute: &[(&QueueFence, &PipelineStageFlag)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>
 	{
 		let signals_on_complete = signal_on_complete.into_iter().map(NativeHandleProvider::native).collect::<Vec<_>>();
-		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s.into()).collect::<Vec<_>>();
+		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s.into_flag()).collect::<Vec<_>>();
 		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| q.native()).collect::<Vec<_>>();
 
 		unsafe { vkQueueSubmit(self.gi.device().graphics_queue, 1, &VkSubmitInfo
@@ -319,11 +319,11 @@ impl<InputNames: Eq + Copy + Ord> CommandSubmitter for Engine<InputNames>
 			signalSemaphoreCount: signals_on_complete.len() as u32, pSignalSemaphores: signals_on_complete.as_ptr(), .. Default::default()
 		}, signal_on_complete_host.map(NativeHandleProvider::native).unwrap_or(zeroed())) }.into_result()
 	}
-	fn submit_transfer_commands<PS: PipelineStageFlag>(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, PS)],
+	fn submit_transfer_commands(&self, commands: &TransferCommandBuffersView, wait_for_execute: &[(&QueueFence, &PipelineStageFlag)],
 		signal_on_complete: Option<&QueueFence>, signal_on_complete_host: Option<&Fence>) -> EngineResult<()>
 	{
 		let signals_on_complete = signal_on_complete.into_iter().map(NativeHandleProvider::native).collect::<Vec<_>>();
-		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s.into()).collect::<Vec<_>>();
+		let wait_stages = wait_for_execute.into_iter().map(|&(_, s)| s.into_flag()).collect::<Vec<_>>();
 		let wait_semaphores = wait_for_execute.into_iter().map(|&(q, _)| q.native()).collect::<Vec<_>>();
 
 		unsafe { vkQueueSubmit(self.gi.device().transfer_queue, 1, &VkSubmitInfo

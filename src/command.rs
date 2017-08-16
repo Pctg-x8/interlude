@@ -81,10 +81,10 @@ impl<'a> BufferMemoryBarrier<'a>
 #[derive(Clone)]
 pub struct ImageMemoryBarrier<'a>
 {
-	src_access: AccessFlags, dst_access: AccessFlags,
-	src_layout: ImageLayout, dst_layout: ImageLayout,
-	src_queue_family_index: u32, dst_queue_family_index: u32,
-	image: &'a ImageResource, subresource_range: ImageSubresourceRange
+	pub src_access: AccessFlags, pub dst_access: AccessFlags,
+	pub src_layout: ImageLayout, pub dst_layout: ImageLayout,
+	pub src_queue_family_index: u32, pub dst_queue_family_index: u32,
+	pub image: &'a ImageResource, pub subresource_range: ImageSubresourceRange
 }
 impl<'a> Default for ImageMemoryBarrier<'a>
 {
@@ -399,9 +399,9 @@ impl<'a> TransientTransferCommandBuffers<'a>
 }
 impl<'a> TransientGraphicsCommandBuffers<'a>
 {
-	pub fn execute<PS: PipelineStageFlag>(self, wait_semaphore: Option<(&QueueFence, PS)>) -> EngineResult<()>
+	pub fn execute(self, wait_semaphore: Option<(&QueueFence, &PipelineStageFlag)>) -> EngineResult<()>
 	{
-		let (wsem, stage) = wait_semaphore.map(|(x, w)| (vec![x.native()], vec![w.into()])).unwrap_or_else(|| (Vec::new(), Vec::new()));
+		let (wsem, stage) = wait_semaphore.map(|(x, w)| (vec![x.native()], vec![w.into_flag()])).unwrap_or_else(|| (Vec::new(), Vec::new()));
 		unsafe { vkQueueSubmit(self.2, 1, &VkSubmitInfo
 		{
 			waitSemaphoreCount: wsem.len() as _, pWaitSemaphores: wsem.as_ptr(), pWaitDstStageMask: stage.as_ptr(),
@@ -555,7 +555,7 @@ pub trait DrawingCommandRecorder: CommandRecorder + Sized
 }
 pub trait QueueSyncOperationCommandRecorder : CommandRecorder + Sized
 {
-	fn pipeline_barrier<PSs: PipelineStageFlag, PSd: PipelineStageFlag>(self, src_stage_mask: PSs, dst_stage_mask: PSd,
+	fn pipeline_barrier<PSs: Into<VkPipelineStageFlags>, PSd: Into<VkPipelineStageFlags>>(self, src_stage_mask: PSs, dst_stage_mask: PSd,
 		depend_by_region: bool, memory_barriers: &[MemoryBarrier], buffer_barriers: &[BufferMemoryBarrier], image_barriers: &[ImageMemoryBarrier]) -> Self
 	{
 		let (mbs_native, bbs_native, ibs_native) = (
@@ -570,7 +570,7 @@ pub trait QueueSyncOperationCommandRecorder : CommandRecorder + Sized
 			ibs_native.len() as u32, ibs_native.as_ptr()) };
 		self
 	}
-	fn pipeline_barrier_on<PS: PipelineStageFlag>(self, stage_mask: PS, depend_by_region: bool,
+	fn pipeline_barrier_on<PS: Into<VkPipelineStageFlags> + Copy>(self, stage_mask: PS, depend_by_region: bool,
 		memory_barriers: &[MemoryBarrier], buffer_barriers: &[BufferMemoryBarrier], image_barriers: &[ImageMemoryBarrier]) -> Self
 	{
 		self.pipeline_barrier(stage_mask, stage_mask, depend_by_region, memory_barriers, buffer_barriers, image_barriers)

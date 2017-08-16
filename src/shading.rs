@@ -2,7 +2,10 @@
 
 use interlude_vk_defs::*;
 use interlude_vk_funport::*;
-use {EngineResult, GraphicsInterface, PreciseRenderPass, AssetProvider, AssetPath, RenderPass, DescriptorSetLayout};
+use {
+	EngineResult, GraphicsInterface, PreciseRenderPass, AssetProvider, AssetPath, RenderPass, DescriptorSetLayout,
+	Format, FormatType, PackedPixelOrder
+};
 use device::Device;
 use std::ffi::CString;
 use std::ops::{Deref, DerefMut, Range, BitOr, BitOrAssign};
@@ -15,6 +18,7 @@ use std::ptr::null;
 use subsystem_layer::{NativeHandleProvider, NativeResultValueHandler};
 use data::*;
 use libc::c_char;
+use data::format as into_vkformat;
 
 /// Shader Stage bitflags
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[repr(u8)]
@@ -75,7 +79,7 @@ impl Into<VkShaderStageFlags> for ShaderStageSet { fn into(self) -> VkShaderStag
 #[derive(Clone, Debug, PartialEq)]
 pub enum VertexBinding { PerVertex(u32), PerInstance(u32) }
 #[derive(Clone, Debug, PartialEq)]
-pub struct VertexAttribute(pub u32, pub VkFormat, pub u32);
+pub struct VertexAttribute(pub u32, pub Format, pub u32);
 pub struct IntoNativeVertexInputState
 {
 	bindings: Vec<VkVertexInputBindingDescription>,
@@ -112,6 +116,9 @@ impl ShaderModule
 
 	pub fn into_vertex_shader(self, entry_point: &str, bindings: &[VertexBinding], attributes: &[VertexAttribute]) -> EngineResult<VertexShader>
 	{
+		let input_attributes = attributes.iter().enumerate().map(|(i, &VertexAttribute(binding, ref format, offset))|
+			into_vkformat(format).map(|format| VkVertexInputAttributeDescription { location: i as _, binding, format, offset }))
+			.collect::<EngineResult<_>>()?;
 		let input_state = IntoNativeVertexInputState
 		{
 			bindings: bindings.iter().enumerate().map(|(i, x)| match x
@@ -119,9 +126,7 @@ impl ShaderModule
 				&VertexBinding::PerVertex(stride) => VkVertexInputBindingDescription { binding: i as _, stride, inputRate: VK_VERTEX_INPUT_RATE_VERTEX },
 				&VertexBinding::PerInstance(stride) => VkVertexInputBindingDescription { binding: i as _, stride, inputRate: VK_VERTEX_INPUT_RATE_INSTANCE }
 			}).collect(),
-			attributes: attributes.iter().enumerate()
-				.map(|(i, &VertexAttribute(binding, format, offset))| VkVertexInputAttributeDescription { location: i as _, binding, format, offset })
-				.collect()
+			attributes: input_attributes
 		};
 		CString::new(entry_point).map(|entry_point| VertexShader(Rc::new(VertexProcessing { module: self, entry_point, input_state }))).map_err(From::from)
 	}
@@ -193,7 +198,7 @@ impl VertexShader
 		-> EngineResult<Self>
 	{
 		Self::from_asset(engine, path, entry_point, &[VertexBinding::PerVertex(size_of::<PosUV>() as u32)],
-			&[VertexAttribute(0, VK_FORMAT_R32G32B32A32_SFLOAT, 0)])
+			&[VertexAttribute(0, Format::Component(32, PackedPixelOrder::RGBA, FormatType::Float), 0)])
 	}
 }
 impl TessellationControlShader
@@ -652,11 +657,11 @@ pub enum PipelineStage
 #[repr(C)] #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PipelineStages(VkFlags);
 /// Act as Pipeline Stage Flags
-pub trait PipelineStageFlag : Into<VkPipelineStageFlags> + Copy {}
+pub trait PipelineStageFlag { fn into_flag(&self) -> VkPipelineStageFlags; }
 impl Into<VkPipelineStageFlags> for PipelineStage { fn into(self) -> VkPipelineStageFlags { self as _ } }
 impl Into<VkPipelineStageFlags> for PipelineStages { fn into(self) -> VkPipelineStageFlags { self.0 } }
-impl PipelineStageFlag for PipelineStage {}
-impl PipelineStageFlag for PipelineStages {}
+impl PipelineStageFlag for PipelineStage { fn into_flag(&self) -> VkPipelineStageFlags { (*self).into() } }
+impl PipelineStageFlag for PipelineStages { fn into_flag(&self) -> VkPipelineStageFlags { (*self).into() } }
 impl Into<PipelineStages> for PipelineStage { fn into(self) -> PipelineStages { PipelineStages(self as _) } }
 impl BitOr for PipelineStage { type Output = PipelineStages; fn bitor(self, rhs: Self) -> PipelineStages { PipelineStages(self as VkFlags | rhs as VkFlags) } }
 impl BitOr for PipelineStages { type Output = PipelineStages; fn bitor(self, rhs: Self) -> Self { PipelineStages(self.0 | rhs.0) } }

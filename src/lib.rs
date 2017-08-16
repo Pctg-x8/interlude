@@ -77,7 +77,10 @@ pub use shading::{
 pub use descriptor::{Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo, DescriptorSetArrayView};
 // pub use debug_info::DebugLine;
 pub use input::*;
-pub use data::*;
+pub use data::{Viewport, Offset2, Offset3, Size2, Size3, Rect2};
+pub use data::{Offset2F, Offset3F, Size2F, Size3F, Rect2F};
+pub use data::{Position, PosUV, CVector4, CVector2, CMatrix4};
+pub use data::{Format, FormatType, PackedPixelOrder, CompressionAlgorithm};
 pub use concurrent::*;
 pub use render_surface::*;
 // Transient or Stateful APIs //
@@ -112,3 +115,7 @@ impl<T> UnrecoverableExt<T> for EngineResult<T>
 		match self { Err(e) => self::crash(e), Ok(o) => o }
 	}
 }
+
+/// Linking xlib
+#[cfg(feature = "target_xlib")]
+#[link(name = "X11")] extern {}

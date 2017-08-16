@@ -14,9 +14,9 @@ use descriptor::IntoWriteDescriptorSetNativeStruct;
 use std::rc::Rc;
 
 #[cfg(windows)]
-static PLATFORM_SURFACE_EXTENSION_NAME: &&'static str = &VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+static PLATFORM_SURFACE_EXTENSION_NAME: &'static str = "VK_KHR_win32_surface\x00";
 #[cfg(feature = "target_xlib")]
-static PLATFORM_SURFACE_EXTENSION_NAME: &&'static str = &VK_KHR_XLIB_SURFACE_EXTENSION_NAME;
+static PLATFORM_SURFACE_EXTENSION_NAME: &'static str = "VK_KHR_xlib_surface\x00";
 
 fn bool_to_str(v: VkBool32) -> &'static str { if v == true as VkBool32 { "true" } else { "false" } }
 
@@ -95,6 +95,16 @@ impl GraphicsInterface
 {
 	pub fn new(app_name: &str, app_version: u32, device_features: &DeviceFeatures) -> EngineResult<Self>
 	{
+		info!("=== Enumerating Instance Extensions... ===");
+		let mut ext_count = 0;
+		unsafe { vkEnumerateInstanceExtensionProperties(null(), &mut ext_count, null_mut()) }.into_result()?;
+		let mut ext_props = Vec::with_capacity(ext_count as _); unsafe { ext_props.set_len(ext_count as _); }
+		unsafe { vkEnumerateInstanceExtensionProperties(null(), &mut ext_count, ext_props.as_mut_ptr()) }.into_result()?;
+		for ep in ext_props
+		{
+			info!(target: "Interlude::InstanceExtensions", "{:?} version {:?}", unsafe { CStr::from_ptr(ep.extensionName.as_ptr()).to_str()? }, ep.specVersion);
+		}
+
 		let engine_name_c = CString::new("Interlude Multimedia Framework")?;
 		let app_name_c = CString::new(app_name)?;
 		let appinfo = VkApplicationInfo
@@ -103,8 +113,8 @@ impl GraphicsInterface
 			pEngineName: engine_name_c.as_ptr(), engineVersion: VK_MAKE_VERSION!(0, 1, 0),
 			.. Default::default()
 		};
-		let enabled_layers = ["VK_LAYER_LUNARG_standard_validation\x00"];
-		let enabled_extensions = [VK_KHR_SURFACE_EXTENSION_NAME, PLATFORM_SURFACE_EXTENSION_NAME, VK_EXT_DEBUG_REPORT_EXTENSION_NAME];
+		let enabled_layers = ["VK_LAYER_LUNARG_standard_validation\x00".as_ptr()];
+		let enabled_extensions = ["VK_KHR_surface\x00".as_ptr(), PLATFORM_SURFACE_EXTENSION_NAME.as_ptr(), "VK_EXT_debug_report\x00".as_ptr()];
 		let instance = NativeInstance::new(&VkInstanceCreateInfo
 		{
 			pApplicationInfo: &appinfo, enabledLayerCount: enabled_layers.len() as _, ppEnabledLayerNames: enabled_layers.as_ptr() as _,
@@ -119,6 +129,11 @@ impl GraphicsInterface
 		unsafe { vkEnumeratePhysicalDevices(instance.native(), &mut devcount, pdevs.as_mut_ptr()) }.into_result()?;
 		if pdevs.is_empty() { return Err(EngineError::GenericError("PhysicalDevices are not found")); }
 		let pdev = pdevs.swap_remove(0);
+		let mut device_properties = unsafe { reserved() };
+		unsafe { vkGetPhysicalDeviceProperties(pdev, &mut device_properties) };
+		info!("Graphics Device: {}", unsafe { CStr::from_ptr(device_properties.deviceName.as_ptr()) }.to_str()?);
+		info!("-- API Version: {}.{}.{}", VK_VERSION!(MAJOR device_properties.apiVersion), VK_VERSION!(MINOR device_properties.apiVersion),
+			VK_VERSION!(PATCH device_properties.apiVersion));
 		Self::diagnose_pdev(pdev);
 		let mut qfcount = 0;
 		unsafe { vkGetPhysicalDeviceQueueFamilyProperties(pdev, &mut qfcount, null_mut()) };
@@ -126,14 +141,12 @@ impl GraphicsInterface
 		unsafe { vkGetPhysicalDeviceQueueFamilyProperties(pdev, &mut qfcount, queue_family_properties.as_mut_ptr()) };
 		let gqf = queue_family_properties.iter().enumerate().find(|&(_, fp)| (fp.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0).map(|(i, _)| i as u32)
 			.ok_or(EngineError::GenericError("Unable to find graphics queue"))?;
-		let tqf = queue_family_properties.iter().enumerate().find(|&(_, fp)| (fp.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0).map(|(i, _)| i as u32);
+		let tqf = queue_family_properties.iter().enumerate().find(|&(qf, fp)| (fp.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0 && qf != gqf as _).map(|(i, _)| i as u32);
 		let device = Device::new(pdev, &device_features.0, gqf, tqf, &queue_family_properties[gqf as usize]).map(Rc::new)?;
 		let pools = CommandPool::new(&device)?;
 
 		let mut memory_types = unsafe { reserved() };
 		unsafe { vkGetPhysicalDeviceMemoryProperties(pdev, &mut memory_types) };
-		let mut device_properties = unsafe { reserved() };
-		unsafe { vkGetPhysicalDeviceProperties(pdev, &mut device_properties) };
 		let mt_indices = MemoryTypeIndices::find_from(&memory_types)?;
 
 		Ok(GraphicsInterface
@@ -155,6 +168,7 @@ impl GraphicsInterface
 
 	fn diagnose_pdev(pdev: VkPhysicalDevice)
 	{
+		// Property //
 		// Feature Check //
 		let mut features = unsafe { reserved() };
 		unsafe { vkGetPhysicalDeviceFeatures(pdev, &mut features) };
@@ -204,7 +218,7 @@ extern "system" fn debug_callback(flags: VkDebugReportFlagsEXT, object_type: VkD
 	}
 	else if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) != 0
 	{
-		warn!(target: format!("Vulkan PerformanceDebug [{:?}]", object_type).as_str(), "({}){}", message_code, unsafe { CStr::from_ptr(message).to_str().unwrap() });
+		warn!(target: format!("Vulkan PerfDebug [{:?}]", object_type).as_str(), "({}){}", message_code, unsafe { CStr::from_ptr(message).to_str().unwrap() });
 	}
 	else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) != 0
 	{

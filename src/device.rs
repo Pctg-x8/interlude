@@ -39,22 +39,20 @@ impl Device
 			}]
 		};
 		let transfer_qf = transfer_qf.unwrap_or(graphics_qf);
-		let enabled_layers = ["VK_LAYER_LUNARG_standard_validation\x00"];
-		let enabled_extensions = [VK_KHR_SWAPCHAIN_EXTENSION_NAME];
+		let enabled_layers = ["VK_LAYER_LUNARG_standard_validation\x00".as_ptr()];
+		let enabled_extensions = ["VK_KHR_swapchain\x00".as_ptr()];
 		let mut dev = unsafe { reserved() };
-		let mut dev = unsafe { vkCreateDevice(adapter, &VkDeviceCreateInfo
+		unsafe { vkCreateDevice(adapter, &VkDeviceCreateInfo
 		{
 			queueCreateInfoCount: queue_info.len() as _, pQueueCreateInfos: queue_info.as_ptr(),
 			enabledLayerCount: enabled_layers.len() as _, ppEnabledLayerNames: enabled_layers.as_ptr() as _,
 			enabledExtensionCount: enabled_extensions.len() as _, ppEnabledExtensionNames: enabled_extensions.as_ptr() as _,
 			pEnabledFeatures: features, .. Default::default()
-		}, null(), &mut dev) }.make_result_with(|| Device
-		{
-			internal: dev, adapter: adapter.clone(), graphics_qf_index: graphics_qf, transfer_qf_index: transfer_qf, .. unsafe { reserved() }
-		})?;
-		unsafe { vkGetDeviceQueue(dev.internal, graphics_qf, 0, &mut dev.graphics_queue) };
-		unsafe { vkGetDeviceQueue(dev.internal, transfer_qf, queue_info[0].queueCount - 1, &mut dev.transfer_queue) };
-		Ok(dev)
+		}, null(), &mut dev) }.into_result()?;
+		let (mut graphics_queue, mut transfer_queue) = unsafe { reserved() };
+		unsafe { vkGetDeviceQueue(dev, graphics_qf, 0, &mut graphics_queue) };
+		unsafe { vkGetDeviceQueue(dev, transfer_qf, queue_info[0].queueCount - 1, &mut transfer_queue) };
+		Ok(Device { internal: dev, adapter, graphics_qf_index: graphics_qf, transfer_qf_index: transfer_qf, graphics_queue, transfer_queue })
 	}
 	pub fn wait_for_idle(&self) -> EngineResult<()>
 	{
@@ -68,16 +66,6 @@ impl Device
 			.make_result_with(|| supported == true as VkBool32)
 	}
 	pub fn adapter(&self) -> VkPhysicalDevice { self.adapter }
-
-	pub fn new_object<F: Fn(VkDevice, *const C, *const VkAllocationCallbacks, *mut T) -> VkResult, C, T>(&self, func: F, cinfo: &C) -> EngineResult<T>
-	{
-		let mut t = unsafe { reserved() };
-		func(self.internal, cinfo, null(), &mut t).make_result_with(|| t)
-	}
-	pub fn destroy_object<F: Fn(VkDevice, T, *const VkAllocationCallbacks), T>(&self, func: F, object: T)
-	{
-		func(self.internal, object, null());
-	}
 }
 impl Drop for Device
 {

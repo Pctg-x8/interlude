@@ -109,7 +109,7 @@ impl RenderWindow
 			let mut iv = reserved();
 			vkCreateImageView(g.device().native(), &VkImageViewCreateInfo
 			{
-				image: res, subresourceRange: VkImageSubresourceRange { aspectMask: VK_IMAGE_ASPECT_COLOR_BIT, layerCount: 1, .. Default::default() },
+				image: res, subresourceRange: VkImageSubresourceRange { aspectMask: VK_IMAGE_ASPECT_COLOR_BIT, .. Default::default() },
 				format: format.format, viewType: VK_IMAGE_VIEW_TYPE_2D, components: Default::default(), .. Default::default()
 			}, null(), &mut iv).make_result_with(|| WindowRenderTargetView(res, iv, format.format))
 		}).collect::<EngineResult<Vec<_>>>()?;
