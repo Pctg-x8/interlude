@@ -98,7 +98,7 @@ impl DescriptorSets
 		let mut dp = unsafe { reserved() };
 		let dp = unsafe { vkCreateDescriptorPool(engine.device().native(), &VkDescriptorPoolCreateInfo
 		{
-			poolSizeCount: pool_sizes.len() as _, pPoolSizes: pool_sizes.as_ptr() as _, .. Default::default()
+			poolSizeCount: pool_sizes.len() as _, pPoolSizes: pool_sizes.as_ptr() as _, maxSets: dsls.len() as _, .. Default::default()
 		}, null(), &mut dp) }.make_result(dp)?;
 		let mut descriptors = vec![unsafe { reserved() }; dsls.len()];
 		unsafe { vkAllocateDescriptorSets(engine.device().native(), &VkDescriptorSetAllocateInfo
