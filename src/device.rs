@@ -1,61 +1,78 @@
 // Prelude: Device Structure
 
 use EngineResult;
-use {std, vk};
-use vkdefs::*;
-use std::rc::Rc;
+use interlude_vk_defs::*;
+use interlude_vk_funport::*;
+use subsystem_layer::{NativeResultValueHandler, NativeHandleProvider};
+use std::ptr::null;
+use std::mem::uninitialized as reserved;
+use std::cmp::min;
 
 pub struct Device
 {
-	adapter: Rc<vk::PhysicalDevice>, internal: Rc<vk::Device>,
-	pub graphics_qf_index: u32,
-	pub graphics_queue: vk::Queue, pub transfer_queue: vk::Queue
+	adapter: VkPhysicalDevice, internal: VkDevice,
+	pub graphics_queue: VkQueue, pub transfer_queue: VkQueue,
+	pub graphics_qf_index: u32, pub transfer_qf_index: u32
 }
-impl std::ops::Deref for Device { type Target = Rc<vk::Device>; fn deref(&self) -> &Self::Target { &self.internal } }
 impl Device
 {
-	pub fn new(adapter: &Rc<vk::PhysicalDevice>, features: &VkPhysicalDeviceFeatures,
+	pub fn new(adapter: VkPhysicalDevice, features: &VkPhysicalDeviceFeatures,
 		graphics_qf: u32, transfer_qf: Option<u32>, qf_props: &VkQueueFamilyProperties) -> EngineResult<Self>
 	{
-		fn device_queue_create_info(family_index: u32, count: u32, priorities: &[f32]) -> VkDeviceQueueCreateInfo
-		{
-			VkDeviceQueueCreateInfo
-			{
-				sType: VkStructureType::DeviceQueueCreateInfo, pNext: std::ptr::null(), flags: 0,
-				queueFamilyIndex: family_index, queueCount: count, pQueuePriorities: priorities.as_ptr()
-			}
-		}
 		// Ready Parameters //
 		static QUEUE_PRIORITIES: [f32; 2] = [0.0f32; 2];
 		match transfer_qf
 		{
-			Some(t) => info!(target: "Interlude", "Not sharing queue family: g={}, t={}", graphics_qf, t),
+			Some(t) => info!(target: "Interlude", "Individual queue family: g={}, t={}", graphics_qf, t),
 			None => info!(target: "Interlude", "Sharing queue family: {}", graphics_qf)
 		};
 		let queue_info = match transfer_qf
 		{
 			Some(transfer_qf) => vec![
-				device_queue_create_info(graphics_qf, 1, &QUEUE_PRIORITIES[0..1]),
-				device_queue_create_info(transfer_qf, 1, &QUEUE_PRIORITIES[1..2])
+				VkDeviceQueueCreateInfo { queueFamilyIndex: graphics_qf, queueCount: 1, pQueuePriorities: &QUEUE_PRIORITIES[0], .. Default::default() },
+				VkDeviceQueueCreateInfo { queueFamilyIndex: transfer_qf, queueCount: 1, pQueuePriorities: &QUEUE_PRIORITIES[1], .. Default::default() },
 			],
-			None => vec![device_queue_create_info(graphics_qf, std::cmp::min(qf_props.queueCount, 2), &QUEUE_PRIORITIES)]
+			None => vec![VkDeviceQueueCreateInfo
+			{
+				queueFamilyIndex: graphics_qf, queueCount: min(qf_props.queueCount, 2),
+				pQueuePriorities: QUEUE_PRIORITIES.as_ptr(), .. Default::default()
+			}]
 		};
-		vk::Device::new(adapter, &queue_info, &["VK_LAYER_LUNARG_standard_validation"], &["VK_KHR_swapchain"], features).map(|device| Device
+		let transfer_qf = transfer_qf.unwrap_or(graphics_qf);
+		let enabled_layers = ["VK_LAYER_LUNARG_standard_validation\x00".as_ptr()];
+		let enabled_extensions = ["VK_KHR_swapchain\x00".as_ptr()];
+		let mut dev = unsafe { reserved() };
+		unsafe { vkCreateDevice(adapter, &VkDeviceCreateInfo
 		{
-			graphics_qf_index: graphics_qf,
-			graphics_queue: device.queue_at(graphics_qf, 0),
-			transfer_queue: device.queue_at(transfer_qf.unwrap_or(graphics_qf), queue_info[0].queueCount - 1),
-			internal: Rc::new(device), adapter: adapter.clone()
-		}).map_err(From::from)
+			queueCreateInfoCount: queue_info.len() as _, pQueueCreateInfos: queue_info.as_ptr(),
+			enabledLayerCount: enabled_layers.len() as _, ppEnabledLayerNames: enabled_layers.as_ptr() as _,
+			enabledExtensionCount: enabled_extensions.len() as _, ppEnabledExtensionNames: enabled_extensions.as_ptr() as _,
+			pEnabledFeatures: features, .. Default::default()
+		}, null(), &mut dev) }.into_result()?;
+		let (mut graphics_queue, mut transfer_queue) = unsafe { reserved() };
+		unsafe { vkGetDeviceQueue(dev, graphics_qf, 0, &mut graphics_queue) };
+		unsafe { vkGetDeviceQueue(dev, transfer_qf, queue_info[0].queueCount - 1, &mut transfer_queue) };
+		Ok(Device { internal: dev, adapter, graphics_qf_index: graphics_qf, transfer_qf_index: transfer_qf, graphics_queue, transfer_queue })
 	}
 	pub fn wait_for_idle(&self) -> EngineResult<()>
 	{
-		self.internal.wait_for_idle().map_err(From::from)
+		unsafe { vkDeviceWaitIdle(self.internal) }.into_result()
 	}
 
-	pub fn is_surface_support(&self, surface: &VkSurfaceKHR) -> bool
+	pub fn has_surface_support(&self, surface: VkSurfaceKHR) -> EngineResult<bool>
 	{
-		self.adapter.is_surface_support(self.graphics_queue.family_index(), surface)
+		let mut supported = 0;
+		unsafe { vkGetPhysicalDeviceSurfaceSupportKHR(self.adapter, self.graphics_qf_index, surface, &mut supported) }
+			.make_result_with(|| supported == true as VkBool32)
 	}
-	pub fn adapter(&self) -> &Rc<vk::PhysicalDevice> { &self.adapter }
+	pub fn adapter(&self) -> VkPhysicalDevice { self.adapter }
+}
+impl Drop for Device
+{
+	fn drop(&mut self) { unsafe { vkDestroyDevice(self.internal, null()) }; }
+}
+impl NativeHandleProvider for Device
+{
+	type NativeT = VkDevice;
+	fn native(&self) -> VkDevice { self.internal }
 }

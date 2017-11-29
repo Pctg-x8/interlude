@@ -1,6 +1,6 @@
 // Interlude: Input System
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum InputKeys
 {
 	/* Keyboard */
@@ -16,7 +16,7 @@ pub enum InputKeys
 	ButtonA, ButtonB, ButtonC, ButtonX, ButtonY, ButtonZ, ButtonTrigLeft, ButtonTrigRight, ButtonTrigLeft2, ButtonTrigRight2,
 	ButtonSelect, ButtonStart, ButtonMode, ButtonThumbL, ButtonThumbR
 }
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum InputAxis
 {
 	X, Y, Z, RX, RY, RZ, Hat0x, Hat0y, Hat1x, Hat1y, Unhandled

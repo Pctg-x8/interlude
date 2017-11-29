@@ -1,153 +1,133 @@
-// Prelude: Descriptor and its layout in shader
+// Interlude: Descriptor and its layout in shader
 
-#![allow(dead_code)]
-
-use rawexports::InternalExports;
-use Resource;
-use {std, vk};
-use vkdefs::*;
-use {EngineResult, GraphicsInterface, Sampler, ImageView};
 use std::borrow::Cow;
+use interlude_vk_defs::*;
+use interlude_vk_funport::*;
+use std::ops::{Range, Deref};
+use device::Device;
+use shading::ShaderStageSet;
+use std::rc::Rc;
+use std::ptr::null;
+use std::mem::{transmute, uninitialized as reserved};
+use {ImageView, Sampler, BufferResource, EngineResult, GraphicsInterface};
+use subsystem_layer::{NativeHandleProvider, NativeResultValueHandler};
 
-#[derive(Clone, Copy)] #[repr(u8)]
-pub enum ShaderStage
-{
-	Vertex = VK_SHADER_STAGE_VERTEX_BIT as u8,
-	TessControl = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT as u8,
-	TessEvaluate = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT as u8,
-	Geometry = VK_SHADER_STAGE_GEOMETRY_BIT as u8,
-	Fragment = VK_SHADER_STAGE_FRAGMENT_BIT as u8
-}
-impl std::ops::BitOr for ShaderStage
-{
-	type Output = Self;
-	fn bitor(self, rhs: Self) -> Self { unsafe { std::mem::transmute(self as u8 | rhs as u8) } }
-}
-
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub enum Descriptor
 {
-	Uniform(u32, ShaderStage), Storage(u32, ShaderStage),
-	CombinedSampler(u32, ShaderStage),
-	InputAttachment(u32, ShaderStage)
-}
-pub trait DescriptorInternals
-{
-	fn count(&self) -> u32;
-	fn into_binding(&self, index: u32) -> VkDescriptorSetLayoutBinding;
-	fn into_pool_size(&self) -> VkDescriptorPoolSize;
+	Uniform(u32, ShaderStageSet), Storage(u32, ShaderStageSet),
+	CombinedSampler(u32, ShaderStageSet), InputAttachment(u32, ShaderStageSet)
 }
 impl Descriptor
 {
-	fn native_type(&self) -> VkDescriptorType
+	fn deconstruct(&self) -> (VkDescriptorType, u32, VkShaderStageFlags)
 	{
+		use Descriptor::*;
 		match self
 		{
-			&Descriptor::Uniform(_, _) => VkDescriptorType::UniformBuffer,
-			&Descriptor::Storage(_, _) => VkDescriptorType::StorageBuffer,
-			&Descriptor::CombinedSampler(_, _) => VkDescriptorType::CombinedImageSampler,
-			&Descriptor::InputAttachment(_, _) => VkDescriptorType::InputAttachment
+			&Uniform(c, s) => (VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, c, s.unwrap()),
+			&Storage(c, s) => (VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, c, s.unwrap()),
+			&CombinedSampler(c, s) => (VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, c, s.unwrap()),
+			&InputAttachment(c, s) => (VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, c, s.unwrap())
 		}
 	}
-	fn stage_mask(&self) -> VkShaderStageFlags
-	{
-		match self
-		{
-			&Descriptor::Uniform(_, s) => s as VkShaderStageFlags,
-			&Descriptor::Storage(_, s) => s as VkShaderStageFlags,
-			&Descriptor::CombinedSampler(_, s) => s as VkShaderStageFlags,
-			&Descriptor::InputAttachment(_, s) => s as VkShaderStageFlags
-		}
-	}
-}
-impl DescriptorInternals for Descriptor
-{
-	fn count(&self) -> u32
-	{
-		match self
-		{
-			&Descriptor::Uniform(n, _) => n, &Descriptor::Storage(n, _) => n,
-			&Descriptor::CombinedSampler(n, _) => n,
-			&Descriptor::InputAttachment(n, _) => n
-		}
-	}
+	#[allow(non_snake_case)]
 	fn into_binding(&self, index: u32) -> VkDescriptorSetLayoutBinding
 	{
+		let (descriptorType, descriptorCount, stageFlags) = self.deconstruct();
 		VkDescriptorSetLayoutBinding
 		{
-			binding: index, descriptorType: self.native_type(), descriptorCount: self.count(),
-			stageFlags: self.stage_mask(), pImmutableSamplers: std::ptr::null()
+			binding: index, descriptorType, descriptorCount, stageFlags, pImmutableSamplers: null()
 		}
-	}
-	fn into_pool_size(&self) -> VkDescriptorPoolSize
-	{
-		VkDescriptorPoolSize(self.native_type(), self.count())
 	}
 }
 
-pub struct DescriptorSetLayout(vk::DescriptorSetLayout, Vec<Descriptor>);
+use subsystem_layer::NativeDescriptorSetLayout;
+pub struct DescriptorSetLayout(Rc<NativeDescriptorSetLayout>, Vec<Descriptor>);
 impl DescriptorSetLayout
 {
 	pub fn new<'a>(engine: &GraphicsInterface, bindings: Cow<'a, [Descriptor]>) -> EngineResult<Self>
 	{
-		let native = bindings.iter().enumerate().map(|(i, x)| x.into_binding(i as u32)).collect::<Vec<_>>();
-		vk::DescriptorSetLayout::new(engine.device(), &native).map(|d| DescriptorSetLayout(d, bindings.into_owned())).map_err(From::from)
+		let native_bindings = bindings.iter().enumerate().map(|(i, x)| x.into_binding(i as u32)).collect::<Vec<_>>();
+		let mut dsl = unsafe { reserved() };
+		unsafe { vkCreateDescriptorSetLayout(engine.device().native(), &VkDescriptorSetLayoutCreateInfo
+		{
+			bindingCount: native_bindings.len() as _, pBindings: native_bindings.as_ptr(), .. Default::default()
+		}, null(), &mut dsl) }.make_result_with(|| DescriptorSetLayout(Rc::new(NativeDescriptorSetLayout(dsl, engine.device().clone())), bindings.into_owned()))
 	}
 	pub fn descriptors(&self) -> &[Descriptor] { &self.1 }
 }
-pub struct DescriptorSets(vk::DescriptorPool, Vec<VkDescriptorSet>);
+pub fn addref_dsl(dsl: &DescriptorSetLayout) -> Rc<NativeDescriptorSetLayout> { dsl.0.clone() }
+impl NativeHandleProvider for DescriptorSetLayout { type NativeT = VkDescriptorSetLayout; fn native(&self) -> Self::NativeT { self.0.native() } }
+
+pub struct DescriptorSets(VkDescriptorPool, Rc<Device>, Vec<VkDescriptorSet>);
+pub type DescriptorSetArrayView = [VkDescriptorSet];
 impl DescriptorSets
 {
-	pub fn preallocate(engine: &GraphicsInterface, layouts: &[&DescriptorSetLayout]) -> EngineResult<Self>
+	pub fn new(engine: &GraphicsInterface, layouts: &[&DescriptorSetLayout]) -> EngineResult<Self>
 	{
-		let set_count = layouts.len();
-		let (uniform_total, storage_total, combined_sampler_total, ia_total) = layouts.iter().map(|&&DescriptorSetLayout(_, ref ds)|
-			ds.iter().fold((0, 0, 0, 0), |(u, s, cs, ia), desc| match desc
+		let (mut uniform_total, mut storage_total, mut combined_sampler_total, mut input_attachment_total) = (0, 0, 0, 0);
+		let mut dsls = Vec::with_capacity(layouts.len());
+		for &&DescriptorSetLayout(ref dsl, ref ds) in layouts
+		{
+			dsls.push(dsl.native());
+			for desc in ds
 			{
-				&Descriptor::Uniform(n, _) => (u + n, s, cs, ia),
-				&Descriptor::Storage(n, _) => (u, s + n, cs, ia),
-				&Descriptor::CombinedSampler(n, _) => (u, s, cs + n, ia),
-				&Descriptor::InputAttachment(n, _) => (u, s, cs, ia + n)
-			})
-		).fold((0, 0, 0, 0), |(u, s, cs, ia), (u2, s2, cs2, ia2)| (u + u2, s + s2, cs + cs2, ia + ia2));
+				match desc
+				{
+					&Descriptor::Uniform(n, _) => uniform_total += n,
+					&Descriptor::Storage(n, _) => storage_total += n,
+					&Descriptor::CombinedSampler(n, _) => combined_sampler_total += n,
+					&Descriptor::InputAttachment(n, _) => input_attachment_total += n
+				}
+			}
+		}
 		let mut pool_sizes = Vec::new();
-		if uniform_total > 0 { pool_sizes.push(VkDescriptorPoolSize(VkDescriptorType::UniformBuffer, uniform_total)); }
-		if storage_total > 0 { pool_sizes.push(VkDescriptorPoolSize(VkDescriptorType::StorageBuffer, storage_total)); }
-		if combined_sampler_total > 0 { pool_sizes.push(VkDescriptorPoolSize(VkDescriptorType::CombinedImageSampler, combined_sampler_total)); }
-		if ia_total > 0 { pool_sizes.push(VkDescriptorPoolSize(VkDescriptorType::InputAttachment, ia_total)); }
-
-		vk::DescriptorPool::new(engine.device(), set_count, &pool_sizes).and_then(|pool|
-			pool.allocate(&layouts.iter().map(|&&DescriptorSetLayout(ref l, _)| **l).collect::<Vec<_>>())
-				.map(|sets| DescriptorSets(pool, sets))).map_err(From::from)
+		if uniform_total > 0 { pool_sizes.push(VkDescriptorPoolSize { _type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount: uniform_total }); }
+		if storage_total > 0 { pool_sizes.push(VkDescriptorPoolSize { _type: VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptorCount: storage_total }); }
+		if combined_sampler_total > 0
+		{
+			pool_sizes.push(VkDescriptorPoolSize { _type: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount: combined_sampler_total });
+		}
+		if input_attachment_total > 0
+		{
+			pool_sizes.push(VkDescriptorPoolSize { _type: VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, descriptorCount: input_attachment_total });
+		}
+		
+		let mut dp = unsafe { reserved() };
+		let dp = unsafe { vkCreateDescriptorPool(engine.device().native(), &VkDescriptorPoolCreateInfo
+		{
+			poolSizeCount: pool_sizes.len() as _, pPoolSizes: pool_sizes.as_ptr() as _, maxSets: dsls.len() as _, .. Default::default()
+		}, null(), &mut dp) }.make_result(dp)?;
+		let mut descriptors = vec![unsafe { reserved() }; dsls.len()];
+		unsafe { vkAllocateDescriptorSets(engine.device().native(), &VkDescriptorSetAllocateInfo
+		{
+			descriptorPool: dp, descriptorSetCount: dsls.len() as _, pSetLayouts: dsls.as_ptr(), .. Default::default()
+		}, descriptors.as_mut_ptr()) }.make_result_with(|| DescriptorSets(dp, engine.device().clone(), descriptors))
 	}
 }
-impl InternalExports for DescriptorSetLayout { type InternalT = vk::DescriptorSetLayout; fn get_internal(&self) -> &Self::InternalT { &self.0 } }
-
-pub type DescriptorSetArrayView = [VkDescriptorSet];
-impl std::ops::Deref for DescriptorSets
+impl Deref for DescriptorSets
 {
 	type Target = DescriptorSetArrayView;
-	fn deref(&self) -> &Self::Target { &self.1 }
+	fn deref(&self) -> &Self::Target { &self.2 }
 }
 
 #[derive(Clone)]
-pub struct BufferInfo<'a>(pub &'a Resource<Type = VkBuffer>, pub std::ops::Range<usize>);
-impl<'a> std::convert::Into<VkDescriptorBufferInfo> for &'a BufferInfo<'a>
+pub struct BufferInfo<'a>(pub &'a BufferResource, pub Range<usize>);
+impl<'a> Into<VkDescriptorBufferInfo> for &'a BufferInfo<'a>
 {
 	fn into(self) -> VkDescriptorBufferInfo
 	{
-		let &BufferInfo(res, ref range) = self;
-		VkDescriptorBufferInfo(res.resource(), range.start as VkDeviceSize, (range.end - range.start) as VkDeviceSize)
+		VkDescriptorBufferInfo { buffer: unsafe { transmute(self.0.internal()) } , offset: self.1.start as _, range: self.1.len() as _ }
 	}
 }
 #[derive(Clone)]
 pub struct ImageInfo<'a>(pub &'a Sampler, pub &'a ImageView, pub VkImageLayout);
-impl<'a> std::convert::Into<VkDescriptorImageInfo> for &'a ImageInfo<'a>
+impl<'a> Into<VkDescriptorImageInfo> for &'a ImageInfo<'a>
 {
 	fn into(self) -> VkDescriptorImageInfo
 	{
-		let &ImageInfo(smp, view, layout) = self;
-		VkDescriptorImageInfo(**smp.get_internal(), view.get_native(), layout)
+		VkDescriptorImageInfo { sampler: self.0.native(), imageView: unsafe { transmute(self.1.internal()) }, imageLayout: self.2 }
 	}
 }
 
@@ -159,6 +139,7 @@ pub enum DescriptorSetWriteInfo<'a>
 	CombinedImageSampler(VkDescriptorSet, u32, Vec<ImageInfo<'a>>),
 	InputAttachment(VkDescriptorSet, u32, Vec<ImageInfo<'a>>)
 }
+
 pub enum IntoWriteDescriptorSetNativeStruct
 {
 	Buffers
@@ -172,7 +153,8 @@ pub enum IntoWriteDescriptorSetNativeStruct
 		dtype: VkDescriptorType, images: Vec<VkDescriptorImageInfo>
 	}
 }
-impl<'a> std::convert::Into<IntoWriteDescriptorSetNativeStruct> for &'a DescriptorSetWriteInfo<'a>
+
+impl<'a> Into<IntoWriteDescriptorSetNativeStruct> for &'a DescriptorSetWriteInfo<'a>
 {
 	fn into(self) -> IntoWriteDescriptorSetNativeStruct
 	{
@@ -180,28 +162,28 @@ impl<'a> std::convert::Into<IntoWriteDescriptorSetNativeStruct> for &'a Descript
 		{
 			&DescriptorSetWriteInfo::UniformBuffer(target, binding, ref bufs) => IntoWriteDescriptorSetNativeStruct::Buffers
 			{
-				target: target, binding: binding, buffers: bufs.iter().map(|x| x.into()).collect(),
-				dtype: VkDescriptorType::UniformBuffer
+				target: target, binding: binding, buffers: bufs.iter().map(Into::into).collect(),
+				dtype: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
 			},
 			&DescriptorSetWriteInfo::StorageBuffer(target, binding, ref bufs) => IntoWriteDescriptorSetNativeStruct::Buffers
 			{
-				target: target, binding: binding, buffers: bufs.iter().map(|x| x.into()).collect(),
-				dtype: VkDescriptorType::StorageBuffer
+				target: target, binding: binding, buffers: bufs.iter().map(Into::into).collect(),
+				dtype: VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
 			},
 			&DescriptorSetWriteInfo::CombinedImageSampler(target, binding, ref imgs) => IntoWriteDescriptorSetNativeStruct::Images
 			{
-				target: target, binding: binding, images: imgs.iter().map(|x| x.into()).collect(),
-				dtype: VkDescriptorType::CombinedImageSampler
+				target: target, binding: binding, images: imgs.iter().map(Into::into).collect(),
+				dtype: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
 			},
 			&DescriptorSetWriteInfo::InputAttachment(target, binding, ref imgs) => IntoWriteDescriptorSetNativeStruct::Images
 			{
-				target: target, binding: binding, images: imgs.iter().map(|x| x.into()).collect(),
-				dtype: VkDescriptorType::InputAttachment
+				target: target, binding: binding, images: imgs.iter().map(Into::into).collect(),
+				dtype: VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT
 			}
 		}
 	}
 }
-impl <'a> std::convert::Into<VkWriteDescriptorSet> for &'a IntoWriteDescriptorSetNativeStruct
+impl<'a> Into<VkWriteDescriptorSet> for &'a IntoWriteDescriptorSetNativeStruct
 {
 	fn into(self) -> VkWriteDescriptorSet
 	{
@@ -209,17 +191,15 @@ impl <'a> std::convert::Into<VkWriteDescriptorSet> for &'a IntoWriteDescriptorSe
 		{
 			&IntoWriteDescriptorSetNativeStruct::Buffers { target, binding, dtype, ref buffers } => VkWriteDescriptorSet
 			{
-				sType: VkStructureType::WriteDescriptorSet, pNext: std::ptr::null(),
-				dstSet: target, dstBinding: binding, dstArrayElement: 0,
+				dstSet: target, dstBinding: binding,
 				descriptorType: dtype, descriptorCount: buffers.len() as u32,
-				pBufferInfo: buffers.as_ptr(), pImageInfo: std::ptr::null(), pTexelBufferView: std::ptr::null()
+				pBufferInfo: buffers.as_ptr(), pImageInfo: null(), pTexelBufferView: null(), .. Default::default()
 			},
 			&IntoWriteDescriptorSetNativeStruct::Images { target, binding, dtype, ref images } => VkWriteDescriptorSet
 			{
-				sType: VkStructureType::WriteDescriptorSet, pNext: std::ptr::null(),
-				dstSet: target, dstBinding: binding, dstArrayElement: 0,
+				dstSet: target, dstBinding: binding,
 				descriptorType: dtype, descriptorCount: images.len() as u32,
-				pBufferInfo: std::ptr::null(), pImageInfo: images.as_ptr(), pTexelBufferView: std::ptr::null()
+				pBufferInfo: null(), pImageInfo: images.as_ptr(), pTexelBufferView: null(), .. Default::default()
 			}
 		}
 	}
