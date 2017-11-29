@@ -33,6 +33,18 @@ pub enum ShaderStage
 /// Set of Shader Stage bitflags
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct ShaderStageSet(VkFlags);
+macro_rules! BitCombinationWrapper
+{
+	(for $t: ident ( $b: ty )) =>
+	{
+		impl BitOr for $b { type Output = $t; fn bitor(self, rhs: Self) -> $t { $t(self as VkFlags | rhs as VkFlags) } }
+		impl BitOr for $t { type Output = Self; fn bitor(self, rhs: Self) -> Self { $t(self.0 | rhs.0) } }
+		impl BitOr<$b> for $t { type Output = Self; fn bitor(self, rhs: $b) -> Self { $t(self.0 | rhs as VkFlags) } }
+		impl BitOr<$t> for $b { type Output = $t; fn bitor(self, rhs: $t) -> $t { $t(self as VkFlags | rhs.0) } }
+		impl BitOrAssign for $t { fn bitor_assign(&mut self, rhs: Self) { self.0 |= rhs.0; } }
+		impl BitOrAssign<$b> for $t { fn bitor_assign(&mut self, rhs: $b) { self.0 |= rhs as VkFlags; } }
+	}
+}
 impl ShaderStageSet
 {
 	pub fn has_vertex_bit(&self) -> bool { (self.0 & ShaderStage::Vertex as VkFlags) != 0 }
@@ -40,40 +52,10 @@ impl ShaderStageSet
 	pub fn has_tessellation_evaluation_bit(&self) -> bool { (self.0 & ShaderStage::TessEvaluation as VkFlags) != 0 }
 	pub fn has_geometry_bit(&self) -> bool { (self.0 & ShaderStage::Geometry as VkFlags) != 0 }
 	pub fn has_fragment_bit(&self) -> bool { (self.0 & ShaderStage::Fragment as VkFlags) != 0 }
+	pub(crate) fn unwrap(self) -> VkShaderStageFlags { self.0 as _ }
 }
-pub fn shader_stage_flags(set: ShaderStageSet) -> VkShaderStageFlags { set.0 as _ }
-impl BitOr for ShaderStage
-{
-	type Output = ShaderStageSet;
-	fn bitor(self, rhs: Self) -> ShaderStageSet { ShaderStageSet(self as VkFlags | rhs as VkFlags) }
-}
-impl BitOr for ShaderStageSet
-{
-	type Output = ShaderStageSet;
-	fn bitor(self, rhs: Self) -> ShaderStageSet { ShaderStageSet(self.0 | rhs.0) }
-}
-impl BitOr<ShaderStage> for ShaderStageSet
-{
-	type Output = ShaderStageSet;
-	fn bitor(self, rhs: ShaderStage) -> ShaderStageSet { ShaderStageSet(self.0 | rhs as VkFlags) }
-}
-impl BitOr<ShaderStageSet> for ShaderStage
-{
-	type Output = ShaderStageSet;
-	fn bitor(self, rhs: ShaderStageSet) -> ShaderStageSet { ShaderStageSet(self as VkFlags | rhs.0) }
-}
-impl BitOrAssign for ShaderStageSet
-{
-	fn bitor_assign(&mut self, rhs: Self) { self.0 |= rhs.0; }
-}
-impl BitOrAssign<ShaderStage> for ShaderStageSet
-{
-	fn bitor_assign(&mut self, rhs: ShaderStage) { self.0 |= rhs as _; }
-}
-impl Into<ShaderStageSet> for ShaderStage
-{
-	fn into(self) -> ShaderStageSet { ShaderStageSet(self as _) }
-}
+BitCombinationWrapper!(for ShaderStageSet(ShaderStage));
+impl Into<ShaderStageSet> for ShaderStage { fn into(self) -> ShaderStageSet { ShaderStageSet(self as _) } }
 impl Into<VkShaderStageFlags> for ShaderStageSet { fn into(self) -> VkShaderStageFlags { self.0 as _ } }
 
 #[derive(Clone, Debug, PartialEq)]

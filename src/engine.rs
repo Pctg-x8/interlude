@@ -140,10 +140,7 @@ impl<InputNames: Eq + Copy + Ord> EngineCoreExports for Engine<InputNames>
 {
 	fn graphics(&self) -> &GraphicsInterface { &self.gi }
 }
-macro_rules! FunComposite1
-{
-	($f: expr; $g: expr) => {|x| $f($g(x))}
-}
+macro_rules! FunComposite1 { ($f: expr; $g: expr) => {|x| $f($g(x))} }
 impl<InputNames: Eq + Copy + Ord> Engine<InputNames>
 {
 	pub fn new(info: EngineBuilder<InputNames>) -> EngineResult<Self>

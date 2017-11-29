@@ -11,7 +11,6 @@ use std::ptr::null;
 use std::mem::{transmute, uninitialized as reserved};
 use {ImageView, Sampler, BufferResource, EngineResult, GraphicsInterface};
 use subsystem_layer::{NativeHandleProvider, NativeResultValueHandler};
-use shading::shader_stage_flags;
 
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub enum Descriptor
@@ -26,10 +25,10 @@ impl Descriptor
 		use Descriptor::*;
 		match self
 		{
-			&Uniform(c, s) => (VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, c, shader_stage_flags(s)),
-			&Storage(c, s) => (VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, c, shader_stage_flags(s)),
-			&CombinedSampler(c, s) => (VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, c, shader_stage_flags(s)),
-			&InputAttachment(c, s) => (VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, c, shader_stage_flags(s))
+			&Uniform(c, s) => (VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, c, s.unwrap()),
+			&Storage(c, s) => (VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, c, s.unwrap()),
+			&CombinedSampler(c, s) => (VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, c, s.unwrap()),
+			&InputAttachment(c, s) => (VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, c, s.unwrap())
 		}
 	}
 	#[allow(non_snake_case)]
