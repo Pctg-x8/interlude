@@ -9,7 +9,7 @@ extern crate libc;
 #[cfg(windows)] extern crate widestring;
 #[cfg(windows)] extern crate ole32;
 extern crate nalgebra;
-extern crate freetype_sys;
+#[cfg(feature = "debugprint")] extern crate freetype_sys;
 extern crate unicode_normalization;
 extern crate ansi_term;
 #[cfg(unix)] extern crate xcb;
@@ -45,7 +45,8 @@ mod tuple_tools;
 pub enum ApplicationState { Continue, EventArrived(u32), Exited }
 
 // Extra Objects
-mod debug_info;
+#[cfg(feature = "debugprint")] mod debug_info;
+#[cfg(feature = "debugprint")] pub use debug_info::{DebugInfo, DebugLine};
 
 // --- Exported APIs --- //
 pub use error::*;
@@ -68,7 +69,6 @@ pub use shading::{
 };
 pub use framebuffer::AccessFlags;
 pub use descriptor::{ShaderStage, Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo, DescriptorSetArrayView};
-pub use debug_info::DebugLine;
 pub use input::*;
 pub use data::*;
 pub use concurrent::*;
@@ -96,7 +96,6 @@ pub use resource::{
 pub use shading::{VertexShader, TessellationControlShader, TessellationEvaluationShader, GeometryShader, FragmentShader, ShaderModule};
 pub use shading::{PipelineShaderProgram, PipelineLayout, GraphicsPipelines, GraphicsPipeline};
 pub use descriptor::{DescriptorSetLayout, DescriptorSets};
-pub use debug_info::DebugInfo;
 
 // For internal exports //
 mod rawexports
