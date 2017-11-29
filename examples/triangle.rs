@@ -1,8 +1,22 @@
 
+#[macro_use]
 extern crate interlude;
 use interlude::*;
 
 const VERTEX_FORMAT: Format = Format::Component(32, PackedPixelOrder::RGBA, FormatType::Float);
+
+macro_rules! IM
+{
+	(#Rec barrier $stage: ident, $membarriers: expr, $bbarriers: expr, $ibarriers: expr $($rest: tt)*) =>
+	{
+		.pipeline_barrier_on(PipelineStage::$stage, false, &$membarriers, &$bbarriers, &$ibarriers) IM!(#Rec $($rest)*)
+	};
+	(#Rec) => {};
+	($e: expr; { $($commands: tt)* }) =>
+	{
+		ImmediateGraphicsCommandSubmission::begin(&$e) IM!(#Rec $($commands)*)
+	}
+}
 
 fn main() { game().or_crash(); }
 #[allow(unused_variables)]
@@ -50,13 +64,15 @@ fn game() -> EngineResult<()>
 			BufferMemoryBarrier { buffer: &stg, range: 0 .. bp.total_size(), dst_access: AccessFlag::TransferRead.into(), .. Default::default() },
 			BufferMemoryBarrier { buffer: &dev, range: 0 .. bp.total_size(), dst_access: AccessFlag::TransferWrite.into(), .. Default::default() }
 		];
-		ImmediateTransferCommandSubmission::begin(&engine)?
-			.pipeline_barrier_on(PipelineStage::Transfer, false, &[], &bmbarriers, &engine.render_window().render_targets().iter()
+		ImmediateCommands!(Transfer engine;
+		{
+			pipeline_barrier_on	PipelineStage::Transfer, false, &[], &bmbarriers, &engine.render_window().render_targets().iter()
 				.map(|x| ImageMemoryBarrier::initialize_undef(x, color_subres.clone(), AccessFlag::MemoryRead.into(), ImageLayout::PresentSrc))
-				.collect::<Vec<_>>())
-			.copy_buffer(&stg, &dev, &[BufferCopyRegion(0, 0, bp.total_size())])
-			.pipeline_barrier_on(PipelineStage::Transfer, false, &[],
-				&[BufferMemoryBarrier { src_access: AccessFlag::VertexAttributeRead.into(), .. bmbarriers[1].clone() }.flip()], &[]);
+				.collect::<Vec<_>>();
+			copy_buffer			&stg, &dev, &[BufferCopyRegion(0, 0, bp.total_size())];
+			pipeline_barrier_on	PipelineStage::Transfer, false, &[],
+				&[BufferMemoryBarrier { src_access: AccessFlag::VertexAttributeRead.into(), .. bmbarriers[1].clone() }.flip()], &[];
+		});
 	}
 
 	// Forward Presenting(For Intel Graphics)
@@ -83,21 +99,26 @@ fn game() -> EngineResult<()>
 	let ordersem = QueueFence::new(&engine)?;
 	let render_completion = QueueFence::new(&engine)?;
 	let index = engine.render_window().acquire_next_target_index(&ordersem)? as usize;
-	let gc = ImmediateGraphicsCommandSubmission::begin(&engine)?
-		.pipeline_barrier_on(PipelineStage::ColorAttachmentOutput, false, &[], &[], &[
-			ImageMemoryBarrier
-			{
-				image: &engine.render_window().render_targets()[index], subresource_range: color_subres.clone(),
-				src_access: AccessFlag::MemoryRead.into(), dst_access: AccessFlag::ColorAttachmentWrite.into(),
-				src_layout: ImageLayout::PresentSrc, dst_layout: ImageLayout::ColorAttachmentOptimal, .. Default::default()
-			}
-		])
-		.begin_render_pass(&fb[index], &[AttachmentClearValue::Color(0.0, 0.0, 0.0, 1.0)], false)
-		.bind_pipeline(&ps)
-		.bind_vertex_buffers(&[(&dev, bp.offset(0))])
-		.draw(3, 1)
-		.end_render_pass()
-		.submit_opt(&[(&ordersem, &PipelineStage::ColorAttachmentOutput)], Some(&render_completion), None)?;
+	let rt_barrier = ImageMemoryBarrier
+	{
+		image: &engine.render_window().render_targets()[index], subresource_range: color_subres.clone(),
+		src_access: AccessFlag::MemoryRead.into(), dst_access: AccessFlag::ColorAttachmentWrite.into(),
+		src_layout: ImageLayout::PresentSrc, dst_layout: ImageLayout::ColorAttachmentOptimal, .. Default::default()
+	};
+	/*let gc = ImmediateCommands!(Graphics engine;
+	{
+		pipeline_barrier_on PipelineStage::ColorAttachmentOutput, false, &[], &[], &[rt_barrier];
+
+		begin_render_pass	&fb[index], &[AttachmentClearValue::Color(0.0, 0.0, 0.0, 1.0)], false;
+		bind_pipeline		&ps;
+		bind_vertex_buffers	&[(&dev, bp.offset(0))];
+		draw				3, 1;
+		end_render_pass;
+	}).submit_opt(&[(&ordersem, &PipelineStage::ColorAttachmentOutput)], Some(&render_completion), None)?;*/
+	let gc = IM!(engine;
+	{
+		barrier ColorAttachmentOutput, [], [], [rt_barrier]
+	}).submit_opt(&[(&ordersem, &PipelineStage::ColorAttachmentOutput)], Some(&render_completion), None)?;
 	engine.render_window().present(&engine, index as _, Some(&render_completion))?;
 
 	engine.process_all_messages();

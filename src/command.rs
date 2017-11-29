@@ -711,6 +711,20 @@ impl<'a> Drop for CommandBufferRef<'a>
 	fn drop(&mut self) { unsafe { vkFreeCommandBuffers((self.1).1.native(), self.1.native(), 1, &self.0) }; }
 }
 
+/// Immediate Command Submission Helper
+#[macro_export]
+macro_rules! ImmediateCommands
+{
+	(Graphics $e: expr; { $($id: ident $($arg: expr),* ;)* }) =>
+	{
+		ImmediateGraphicsCommandSubmission::begin(&$e)?$(.$id($($arg),*))*
+	};
+	(Transfer $e: expr; { $($id: ident $($arg: expr),* ;)* }) =>
+	{
+		ImmediateTransferCommandSubmission::begin(&$e)?$(.$id($($arg),*))*
+	};
+}
+
 #[derive(Clone)]
 pub struct BufferCopyRegion(pub usize, pub usize, pub usize);		// src, dst, size
 impl<'a> Into<VkBufferCopy> for &'a BufferCopyRegion
