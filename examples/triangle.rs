@@ -5,19 +5,6 @@ use interlude::*;
 
 const VERTEX_FORMAT: Format = Format::Component(32, PackedPixelOrder::RGBA, FormatType::Float);
 
-macro_rules! IM
-{
-	(#Rec barrier $stage: ident, $membarriers: expr, $bbarriers: expr, $ibarriers: expr $($rest: tt)*) =>
-	{
-		.pipeline_barrier_on(PipelineStage::$stage, false, &$membarriers, &$bbarriers, &$ibarriers) IM!(#Rec $($rest)*)
-	};
-	(#Rec) => {};
-	($e: expr; { $($commands: tt)* }) =>
-	{
-		ImmediateGraphicsCommandSubmission::begin(&$e) IM!(#Rec $($commands)*)
-	}
-}
-
 fn main() { game().or_crash(); }
 #[allow(unused_variables)]
 fn game() -> EngineResult<()>
@@ -70,7 +57,10 @@ fn game() -> EngineResult<()>
 				.map(|x| ImageMemoryBarrier::initialize_undef(x, color_subres.clone(), AccessFlag::MemoryRead.into(), ImageLayout::PresentSrc))
 				.collect::<Vec<_>>();
 			copy_buffer			&stg, &dev, &[BufferCopyRegion(0, 0, bp.total_size())];
-			pipeline_barrier_on	PipelineStage::Transfer, false, &[],
+		});
+		ImmediateCommands!(Graphics engine;
+		{
+			pipeline_barrier	PipelineStage::Transfer, PipelineStage::VertexInput, false, &[],
 				&[BufferMemoryBarrier { src_access: AccessFlag::VertexAttributeRead.into(), .. bmbarriers[1].clone() }.flip()], &[];
 		});
 	}
@@ -105,7 +95,7 @@ fn game() -> EngineResult<()>
 		src_access: AccessFlag::MemoryRead.into(), dst_access: AccessFlag::ColorAttachmentWrite.into(),
 		src_layout: ImageLayout::PresentSrc, dst_layout: ImageLayout::ColorAttachmentOptimal, .. Default::default()
 	};
-	/*let gc = ImmediateCommands!(Graphics engine;
+	let gc = ImmediateCommands!(Graphics engine;
 	{
 		pipeline_barrier_on PipelineStage::ColorAttachmentOutput, false, &[], &[], &[rt_barrier];
 
@@ -114,10 +104,6 @@ fn game() -> EngineResult<()>
 		bind_vertex_buffers	&[(&dev, bp.offset(0))];
 		draw				3, 1;
 		end_render_pass;
-	}).submit_opt(&[(&ordersem, &PipelineStage::ColorAttachmentOutput)], Some(&render_completion), None)?;*/
-	let gc = IM!(engine;
-	{
-		barrier ColorAttachmentOutput, [], [], [rt_barrier]
 	}).submit_opt(&[(&ordersem, &PipelineStage::ColorAttachmentOutput)], Some(&render_completion), None)?;
 	engine.render_window().present(&engine, index as _, Some(&render_completion))?;
 
