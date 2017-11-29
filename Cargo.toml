@@ -8,11 +8,12 @@ build = "build.rs"
 default = ["interlude-vk-funport/VK_KHR_surface", "interlude-vk-funport/VK_KHR_swapchain", "interlude-vk-funport/VK_EXT_debug_report"]
 target_xlib = ["interlude-vk-funport/VK_KHR_xlib_surface", "x11"]
 target_win32 = ["interlude-vk-funport/VK_KHR_win32_surface"]
+debugprint = ["freetype-sys"]
 
 [dependencies]
 libc = "0.2.*"
 log = "0.3.6"
-freetype-sys = "0.4.0"
+freetype-sys = { version = "0.4.0", optional = true }
 unicode-normalization = "0.1.4"
 nalgebra = "^0.12"
 ansi_term = "0.9.0"

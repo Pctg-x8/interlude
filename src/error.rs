@@ -3,13 +3,13 @@
 use std;
 use interlude_vk_defs::*;
 use std::os::raw::*;
-use freetype_sys::*;
+#[cfg(feature = "debugprint")] use freetype_sys::*;
 use std::borrow::Cow;
 
 pub enum EngineError
 {
 	DeviceError(VkResult), IOError(std::io::Error),
-	XServerError(c_int), FreeTypeError(FT_Error),
+	XServerError(c_int), #[cfg(feature = "debugprint")] FreeTypeError(FT_Error),
 	GenericError(&'static str), Win32ErrorWith(&'static str, std::io::Error),
 	NullError(std::ffi::NulError), Utf8Error(std::str::Utf8Error),
 	// Specific Errors //
@@ -22,6 +22,11 @@ impl std::convert::From<VkResult> for EngineError
 impl std::convert::From<std::io::Error> for EngineError
 {
 	fn from(ie: std::io::Error) -> EngineError { EngineError::IOError(ie) }
+}
+#[cfg(feature = "debugprint")]
+impl From<freetype_sys::FT_Error> for EngineError
+{
+	fn from(e: freetype_sys::FT_Error) -> EngineError { EngineError::FreeTypeError(e) }
 }
 impl From<std::ffi::NulError> for EngineError
 {
@@ -41,7 +46,7 @@ impl std::fmt::Debug for EngineError
 			&EngineError::IOError(ref e) => write!(formatter, "IOError: {:?}", e),
 			&EngineError::Win32ErrorWith(ref s, ref e) => write!(formatter, "{}: {:?}", s, e),
 			&EngineError::XServerError(ref c) => write!(formatter, "XServerError: {:?}", c),
-			&EngineError::FreeTypeError(ref f) => write!(formatter, "FreeTypeError: {:?}", f),
+			#[cfg(feature = "debugprint")] &EngineError::FreeTypeError(ref f) => write!(formatter, "FreeTypeError: {:?}", f),
 			&EngineError::GenericError(ref e) => write!(formatter, "GenericError: {}", e),
 			&EngineError::NullError(ref n) => write!(formatter, "NulError: {:?}", n),
 			&EngineError::Utf8Error(ref e) => write!(formatter, "Utf8Error: {:?}", e),
@@ -59,7 +64,7 @@ pub fn crash(err: EngineError) -> !
 		EngineError::IOError(_) => "Input/Output Error",
 		EngineError::Win32ErrorWith(_, _) => "Win32Error",
 		EngineError::XServerError(_) => "XServer Communication Error",
-		EngineError::FreeTypeError(_) => "FreeType Internal Error",
+		#[cfg(feature = "debugprint")] EngineError::FreeTypeError(_) => "FreeType Internal Error",
 		EngineError::NullError(_) | EngineError::Utf8Error(_) => "Internal Error",
 		EngineError::GenericError(_) | EngineError::AllocateMemoryWithEmptyResources | EngineError::InvalidFormatCombination => "Generic Error"
 	})
