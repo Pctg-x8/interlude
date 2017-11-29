@@ -18,8 +18,6 @@ static PLATFORM_SURFACE_EXTENSION_NAME: &'static str = "VK_KHR_win32_surface\x00
 #[cfg(feature = "target_xlib")]
 static PLATFORM_SURFACE_EXTENSION_NAME: &'static str = "VK_KHR_xlib_surface\x00";
 
-fn bool_to_str(v: VkBool32) -> &'static str { if v == true as VkBool32 { "true" } else { "false" } }
-
 pub struct DeviceFeatures(VkPhysicalDeviceFeatures);
 impl DeviceFeatures
 {
@@ -83,7 +81,7 @@ impl Drop for DebugReportCallback
 
 macro_rules! LogAdapterFeature
 {
-	($f: expr => $($x: ident),*) => { $(info!(target: "Interlude::DiagAdapter", "-- {}: {}", stringify!($x), bool_to_str($f.$x));)* }
+	($f: expr => $($x: ident),*) => { $(info!(target: "Interlude::DiagAdapter", "-- {}: {:?}", stringify!($x), $f.$x);)* }
 }
 
 pub struct GraphicsInterface
