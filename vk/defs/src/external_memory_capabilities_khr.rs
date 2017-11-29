@@ -4,6 +4,9 @@ pub const VK_LUID_SIZE_KHR: usize = 8;
 pub const VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_SPEC_VERSION: usize = 1;
 pub static VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME: &'static str = "VK_KHR_external_memory_capabilities";
 
+use libc::*;
+use super::*;
+
 pub type VkExternalMemoryHandleTypeFlagsKHR = VkFlags;
 pub const VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR: VkExternalMemoryHandleTypeFlagsKHR = 0x01;
 pub const VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR: VkExternalMemoryHandleTypeFlagsKHR = 0x02;
@@ -11,17 +14,17 @@ pub const VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_KMT_BIT_KHR: VkExternalMem
 pub const VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT_KHR: VkExternalMemoryHandleTypeFlagsKHR = 0x08;
 pub const VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_KMT_BIT_KHR: VkExternalMemoryHandleTypeFlagsKHR = 0x10;
 pub const VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_HEAP_BIT_KHR: VkExternalMemoryHandleTypeFlagsKHR = 0x20;
-pub cosnt VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT_KHR: VkExternalMemoryHandleTypeFlagsKHr = 0x40;
+pub const VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT_KHR: VkExternalMemoryHandleTypeFlagsKHR = 0x40;
 
 pub type VkExternalMemoryFeatureFlagsKHR = VkFlags;
 pub const VK_EXTERNAL_MEMORY_FEATURE_DEDICATED_ONLY_BIT_KHR: VkExternalMemoryFeatureFlagsKHR = 0x01;
 pub const VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT_KHR: VkExternalMemoryFeatureFlagsKHR = 0x02;
-pub const VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT_KHR: VkExternalMemoryFeatureFlagsKHr = 0x04;
+pub const VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT_KHR: VkExternalMemoryFeatureFlagsKHR = 0x04;
 
 #[repr(C)] #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VkExternalMemoryPropertiesKHR
 {
-    pub externalMemoryFeatures: VkExternalMemoryFatureFlagsKHR,
+    pub externalMemoryFeatures: VkExternalMemoryFeatureFlagsKHR,
     pub exportFromImportedHandleTypes: VkExternalMemoryHandleTypeFlagsKHR,
     pub compatibleHandleTypes: VkExternalMemoryHandleTypeFlagsKHR
 }
@@ -35,7 +38,7 @@ impl Default for VkPhysicalDeviceExternalImageFormatInfoKHR
 {
     fn default() -> Self
     {
-        VkPhysicalDeviceExternalImageFormatKHR
+        VkPhysicalDeviceExternalImageFormatInfoKHR
         {
             sType: VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO_KHR,
             .. unsafe { std::mem::zeroed() }

@@ -1,37 +1,54 @@
-// Prelude: Synchronize Primitives(Fence and QueueFence(Semaphore))
+// Interlude: Synchronize Primitives(Fence and QueueFence(Semaphore))
 
-use ginterface::GraphicsInterface;
-use EngineError;
-use vk;
-use vk::defs::*;
+use {GraphicsInterface, EngineResult};
+use interlude_vk_defs::*;
+use interlude_vk_funport::*;
+use device::Device;
+use subsystem_layer::{NativeHandleProvider, NativeResultValueHandler};
+use std::u64;
+use std::ptr::null;
+use std::rc::Rc;
+use std::mem::uninitialized as reserved;
 
-pub struct QueueFence(vk::Semaphore);
-pub struct Fence(vk::Fence);
+/// Semaphore: Synchronize primitive between queues
+pub struct QueueFence(VkSemaphore, Rc<Device>);
+/// Fence: Synchronize primitive between host and device
+pub struct Fence(VkFence, Rc<Device>);
 
 impl Fence
 {
-	pub fn new(engine: &GraphicsInterface) -> Result<Self, EngineError>
+	pub fn new(engine: &GraphicsInterface) -> EngineResult<Self>
 	{
-		vk::Fence::new(engine.device()).map(Fence).map_err(From::from)
+		let mut f = unsafe { reserved() };
+		unsafe { vkCreateFence(engine.device().native(), &Default::default(), null(), &mut f) }
+			.make_result_with(|| Fence(f, engine.device().clone()))
 	}
-	pub fn clear(&self) -> Result<(), EngineError>
+	pub fn clear(&self) -> EngineResult<()> { unsafe { vkResetFences(self.1.native(), 1, &self.0) }.into_result() }
+	pub fn wait(&self, timeout: Option<u64>) -> EngineResult<()>
 	{
-		self.0.reset().map_err(EngineError::from)
-	}
-	pub fn wait(&self) -> Result<(), EngineError>
-	{
-		self.0.wait().map_err(EngineError::from)
+		unsafe { vkWaitForFences(self.1.native(), 1, &self.0, false as _, timeout.unwrap_or(u64::MAX)) }.into_result()
 	}
 }
 impl QueueFence
 {
-	pub fn new(engine: &GraphicsInterface) -> Result<Self, EngineError>
+	pub fn new(engine: &GraphicsInterface) -> EngineResult<Self>
 	{
-		vk::Semaphore::new(engine.device()).map(QueueFence).map_err(From::from)
+		let mut sem = unsafe { reserved() };
+		unsafe { vkCreateSemaphore(engine.device().native(), &Default::default(), null(), &mut sem) }
+			.make_result_with(|| QueueFence(sem, engine.device().clone()))
 	}
 }
-
+impl Drop for Fence { fn drop(&mut self) { unsafe { vkDestroyFence(self.1.native(), self.0, null()) }; } }
+impl Drop for QueueFence { fn drop(&mut self) { unsafe { vkDestroySemaphore(self.1.native(), self.0, null()) }; } }
 unsafe impl Send for Fence {}
 unsafe impl Send for QueueFence {}
-pub fn fence_raw(f: &Fence) -> VkFence { *f.0 }
-pub fn qfence_raw(f: &QueueFence) -> VkSemaphore { *f.0 }
+impl NativeHandleProvider for Fence
+{
+	type NativeT = VkFence;
+	fn native(&self) -> VkFence { self.0 }
+}
+impl NativeHandleProvider for QueueFence
+{
+	type NativeT = VkSemaphore;
+	fn native(&self) -> VkSemaphore { self.0 }
+}

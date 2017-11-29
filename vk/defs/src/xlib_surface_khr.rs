@@ -2,7 +2,7 @@
 
 use libc::*;
 use super::*;
-use xlib::*;
+use x11::xlib::*;
 
 pub const VK_KHR_XLIB_SURFACE_SPEC_VERSION: usize = 6;
 pub static VK_KHR_XLIB_SURFACE_EXTENSION_NAME: &'static str = "VK_KHR_xlib_surface";

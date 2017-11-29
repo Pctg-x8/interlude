@@ -16,11 +16,12 @@
 ** limitations under the License.
 */
 
-#![allow(private_in_public, non_upper_case_globals, non_camel_case_types, non_snake_case)]
+#![allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
 
 extern crate libc;
 use libc::*;
 
+#[macro_export]
 macro_rules! VK_MAKE_VERSION
 {
     ($major: expr, $minor: expr, $patch: expr) => ($major << 22 | $minor << 12 | $patch)
@@ -28,6 +29,7 @@ macro_rules! VK_MAKE_VERSION
 /// Vulkan 1.0 version number
 pub const VK_API_VERSION_1_0: usize = VK_MAKE_VERSION!(1, 0, 0);
 
+#[macro_export]
 macro_rules! VK_VERSION
 {
     (MAJOR $v: expr) => ($v as usize >> 22);
@@ -74,12 +76,12 @@ pub type VkBool32 = u32;
 pub type VkDeviceSize = u64;
 pub type VkSampleMask = u32;
 
-pub type VkInstance = *mut VkInstanceT; enum VkInstanceT {}
-pub type VkPhysicalDevice = *mut VkPhysicalDeviceT; enum VkPhysicalDeviceT {}
+pub type VkInstance = *mut VkInstanceT; pub enum VkInstanceT {}
+pub type VkPhysicalDevice = *mut VkPhysicalDeviceT; pub enum VkPhysicalDeviceT {}
 pub type VkDevice = *mut VkDeviceT; pub enum VkDeviceT {}
-pub type VkQueue = *mut VkQueueT; enum VkQueueT {}
+pub type VkQueue = *mut VkQueueT; pub enum VkQueueT {}
 pub type VkSemaphore = VK_NON_DISPATCHABLE_HANDLE!(VkSemaphore);
-pub type VkCommandBuffer = *mut VkCommandBufferT; enum VkCommandBufferT {}
+pub type VkCommandBuffer = *mut VkCommandBufferT; pub enum VkCommandBufferT {}
 pub type VkFence = VK_NON_DISPATCHABLE_HANDLE!(VkFence);
 pub type VkDeviceMemory = VK_NON_DISPATCHABLE_HANDLE!(VkDeviceMemory);
 pub type VkBuffer = VK_NON_DISPATCHABLE_HANDLE!(VkBuffer);
@@ -116,10 +118,10 @@ pub const VK_MAX_MEMORY_HEAPS: usize = 16;
 pub const VK_MAX_EXTENSION_NAME_SIZE: usize = 256;
 pub const VK_MAX_DESCRIPTION_SIZE: usize = 256;
 
-pub type VkPipelineCacheHeaderVersion = usize;
+pub type VkPipelineCacheHeaderVersion = i32;
 pub const VK_PIPELINE_CACHE_HEADER_VERSION_ONE: VkPipelineCacheHeaderVersion = 1;
 
-pub type VkResult = isize;
+pub type VkResult = i32;
 pub const VK_SUCCESS: VkResult = 0;
 pub const VK_NOT_READY: VkResult = 1;
 pub const VK_TIMEOUT: VkResult = 2;
@@ -148,7 +150,7 @@ pub const VK_ERROR_INVALID_SHADER_NV: VkResult = -100_0012_000;
 pub const VK_ERROR_OUT_OF_POOL_MEMORY_KHR: VkResult = -100_0069_000;
 pub const VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR: VkResult = -100_0072_003;
 
-pub type VkStructureType = isize;
+pub type VkStructureType = i32;
 pub const VK_STRUCTURE_TYPE_APPLICATION_INFO: VkStructureType = 0;
 pub const VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO: VkStructureType = 1;
 pub const VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO: VkStructureType = 2;
@@ -329,17 +331,17 @@ pub const VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_ADVANCED_STATE_CREATE_INFO_EXT:
 pub const VK_STRUCTURE_TYPE_PIPELINE_COVERAGE_TO_COLOR_STATE_CREATE_INFO_NV: VkStructureType = 100_0149_000;
 pub const VK_STRUCTURE_TYPE_PIPELINE_COVERAGE_MODULATION_STATE_CREATE_INFO_NV: VkStructureType = 100_0152_000;
 
-pub type VkSystemAllocationScope = isize;
+pub type VkSystemAllocationScope = i32;
 pub const VK_SYSTEM_ALLOCATION_SCOPE_COMMAND: VkSystemAllocationScope = 0;
 pub const VK_SYSTEM_ALLOCATION_SCOPE_OBJECT: VkSystemAllocationScope = 1;
 pub const VK_SYSTEM_ALLOCATION_SCOPE_CACHE: VkSystemAllocationScope = 2;
 pub const VK_SYSTEM_ALLOCATION_SCOPE_DEVICE: VkSystemAllocationScope = 3;
 pub const VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE: VkSystemAllocationScope = 4;
 
-pub type VkInternalAllocationType = isize;
+pub type VkInternalAllocationType = i32;
 pub const VK_INTERNAL_ALLOCATION_TYPE_EXECUTABLE: VkInternalAllocationType = 0;
 
-pub type VkFormat = isize;
+pub type VkFormat = i32;
 pub const VK_FORMAT_UNDEFINED: VkFormat = 0;
 pub const VK_FORMAT_R4G4_UNORM_PACK8: VkFormat = 1;
 pub const VK_FORMAT_R4G4B4A4_UNORM_PACK16: VkFormat = 2;
@@ -534,32 +536,32 @@ pub const VK_FORMAT_PVRTC1_4BPP_SRGB_BLOCK_IMG: VkFormat = 1000054005;
 pub const VK_FORMAT_PVRTC2_2BPP_SRGB_BLOCK_IMG: VkFormat = 1000054006;
 pub const VK_FORMAT_PVRTC2_4BPP_SRGB_BLOCK_IMG: VkFormat = 1000054007;
 
-pub type VkImageType = isize;
+pub type VkImageType = i32;
 pub const VK_IMAGE_TYPE_1D: VkImageType = 0;
 pub const VK_IMAGE_TYPE_2D: VkImageType = 1;
 pub const VK_IMAGE_TYPE_3D: VkImageType = 2;
 
-pub type VkImageTiling = isize;
+pub type VkImageTiling = i32;
 pub const VK_IMAGE_TILING_OPTIMAL: VkImageTiling = 0;
 pub const VK_IMAGE_TILING_LINEAR: VkImageTiling = 1;
 
-pub type VkPhysicalDeviceType = isize;
+pub type VkPhysicalDeviceType = i32;
 pub const VK_PHYSICAL_DEVICE_TYPE_OTHER: VkPhysicalDeviceType = 0;
 pub const VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: VkPhysicalDeviceType = 1;
 pub const VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: VkPhysicalDeviceType = 2;
 pub const VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: VkPhysicalDeviceType = 3;
 pub const VK_PHYSICAL_DEVICE_TYPE_CPU: VkPhysicalDeviceType = 4;
 
-pub type VkQueryType = isize;
+pub type VkQueryType = i32;
 pub const VK_QUERY_TYPE_OCCLUSION: VkQueryType = 0;
 pub const VK_QUERY_TYPE_PIPELINE_STATISTICS: VkQueryType = 1;
 pub const VK_QUERY_TYPE_TIMESTAMP: VkQueryType = 2;
 
-pub type VkSharingMode = isize;
+pub type VkSharingMode = i32;
 pub const VK_SHARING_MODE_EXCLUSIVE: VkSharingMode = 0;
 pub const VK_SHARING_MODE_CONCURRENT: VkSharingMode = 1;
 
-pub type VkImageLayout = isize;
+pub type VkImageLayout = i32;
 pub const VK_IMAGE_LAYOUT_UNDEFINED: VkImageLayout = 0;
 pub const VK_IMAGE_LAYOUT_GENERAL: VkImageLayout = 1;
 pub const VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: VkImageLayout = 2;
@@ -572,7 +574,7 @@ pub const VK_IMAGE_LAYOUT_PREINITIALIZED: VkImageLayout = 8;
 pub const VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: VkImageLayout = 100_0001_002;
 pub const VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR: VkImageLayout = 100_0111_000;
 
-pub type VkImageViewType = isize;
+pub type VkImageViewType = i32;
 pub const VK_IMAGE_VIEW_TYPE_1D: VkImageViewType = 0;
 pub const VK_IMAGE_VIEW_TYPE_2D: VkImageViewType = 1;
 pub const VK_IMAGE_VIEW_TYPE_3D: VkImageViewType = 2;
@@ -581,7 +583,7 @@ pub const VK_IMAGE_VIEW_TYPE_1D_ARRAY: VkImageViewType = 4;
 pub const VK_IMAGE_VIEW_TYPE_2D_ARRAY: VkImageViewType = 5;
 pub const VK_IMAGE_VIEW_TYPE_CUBE_ARRAY: VkImageViewType = 6;
 
-pub type VkComponentSwizzle = isize;
+pub type VkComponentSwizzle = i32;
 pub const VK_COMPONENT_SWIZZLE_IDENTITY: VkComponentSwizzle = 0;
 pub const VK_COMPONENT_SWIZZLE_ZERO: VkComponentSwizzle = 1;
 pub const VK_COMPONENT_SWIZZLE_ONE: VkComponentSwizzle = 2;
@@ -590,11 +592,11 @@ pub const VK_COMPONENT_SWIZZLE_G: VkComponentSwizzle = 4;
 pub const VK_COMPONENT_SWIZZLE_B: VkComponentSwizzle = 5;
 pub const VK_COMPONENT_SWIZZLE_A: VkComponentSwizzle = 6;
 
-pub type VkVertexInputRate = isize;
+pub type VkVertexInputRate = i32;
 pub const VK_VERTEX_INPUT_RATE_VERTEX: VkVertexInputRate = 0;
 pub const VK_VERTEX_INPUT_RATE_INSTANCE: VkVertexInputRate = 1;
 
-pub type VkPrimitiveTopology = isize;
+pub type VkPrimitiveTopology = i32;
 pub const VK_PRIMITIVE_TOPOLOGY_POINT_LIST: VkPrimitiveTopology = 0;
 pub const VK_PRIMITIVE_TOPOLOGY_LINE_LIST: VkPrimitiveTopology = 1;
 pub const VK_PRIMITIVE_TOPOLOGY_LINE_STRIP: VkPrimitiveTopology = 2;
@@ -607,17 +609,17 @@ pub const VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY: VkPrimitiveTopolog
 pub const VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY: VkPrimitiveTopology = 9;
 pub const VK_PRIMITIVE_TOPOLOGY_PATCH_LIST: VkPrimitiveTopology = 10;
 
-pub type VkPolygonMode = isize;
+pub type VkPolygonMode = i32;
 pub const VK_POLYGON_MODE_FILL: VkPolygonMode = 0;
 pub const VK_POLYGON_MODE_LINE: VkPolygonMode = 1;
 pub const VK_POLYGON_MODE_POINT: VkPolygonMode = 2;
 pub const VK_POLYGON_MODE_FILL_RECTANGLE_NV: VkPolygonMode = 100_0153_000;
 
-pub type VkFrontFace = isize;
+pub type VkFrontFace = i32;
 pub const VK_FRONT_FACE_COUNTER_CLOCKWISE: VkFrontFace = 0;
 pub const VK_FRONT_FACE_CLOCKWISE: VkFrontFace = 1;
 
-pub type VkCompareOp = isize;
+pub type VkCompareOp = i32;
 pub const VK_COMPARE_OP_NEVER: VkCompareOp = 0;
 pub const VK_COMPARE_OP_LESS: VkCompareOp = 1;
 pub const VK_COMPARE_OP_EQUAL: VkCompareOp = 2;
@@ -627,7 +629,7 @@ pub const VK_COMPARE_OP_NOT_EQUAL: VkCompareOp = 5;
 pub const VK_COMPARE_OP_GREATER_OR_EQUAL: VkCompareOp = 6;
 pub const VK_COMPARE_OP_ALWAYS: VkCompareOp = 7;
 
-pub type VkStencilOp = isize;
+pub type VkStencilOp = i32;
 pub const VK_STENCIL_OP_KEEP: VkStencilOp = 0;
 pub const VK_STENCIL_OP_ZERO: VkStencilOp = 1;
 pub const VK_STENCIL_OP_REPLACE: VkStencilOp = 2;
@@ -637,7 +639,7 @@ pub const VK_STENCIL_OP_INVERT: VkStencilOp = 5;
 pub const VK_STENCIL_OP_INCREMENT_AND_WRAP: VkStencilOp = 6;
 pub const VK_STENCIL_OP_DECREMENT_AND_WRAP: VkStencilOp = 7;
 
-pub type VkLogicOp = isize;
+pub type VkLogicOp = i32;
 pub const VK_LOGIC_OP_CLEAR: VkLogicOp = 0;
 pub const VK_LOGIC_OP_AND: VkLogicOp = 1;
 pub const VK_LOGIC_OP_AND_REVERSE: VkLogicOp = 2;
@@ -655,7 +657,7 @@ pub const VK_LOGIC_OP_OR_INVERTED: VkLogicOp = 13;
 pub const VK_LOGIC_OP_NAND: VkLogicOp = 14;
 pub const VK_LOGIC_OP_SET: VkLogicOp = 15;
 
-pub type VkBlendFactor = isize;
+pub type VkBlendFactor = i32;
 pub const VK_BLEND_FACTOR_ZERO: VkBlendFactor = 0;
 pub const VK_BLEND_FACTOR_ONE: VkBlendFactor = 1;
 pub const VK_BLEND_FACTOR_SRC_COLOR: VkBlendFactor = 2;
@@ -676,7 +678,7 @@ pub const VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR: VkBlendFactor = 16;
 pub const VK_BLEND_FACTOR_SRC1_ALPHA: VkBlendFactor = 17;
 pub const VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA: VkBlendFactor = 18;
 
-pub type VkBlendOp = isize;
+pub type VkBlendOp = i32;
 pub const VK_BLEND_OP_ADD: VkBlendOp = 0;
 pub const VK_BLEND_OP_SUBTRACT: VkBlendOp = 1;
 pub const VK_BLEND_OP_REVERSE_SUBTRACT: VkBlendOp = 2;
@@ -729,7 +731,7 @@ pub const VK_BLEND_OP_RED_EXT: VkBlendOp = 100_0148_043;
 pub const VK_BLEND_OP_GREEN_EXT: VkBlendOp = 100_0148_044;
 pub const VK_BLEND_OP_BLUE_EXT: VkBlendOp = 100_0148_045;
 
-pub type VkDynamicState = isize;
+pub type VkDynamicState = i32;
 pub const VK_DYNAMIC_STATE_VIEWPORT: VkDynamicState = 0;
 pub const VK_DYNAMIC_STATE_SCISSOR: VkDynamicState = 1;
 pub const VK_DYNAMIC_STATE_LINE_WIDTH: VkDynamicState = 2;
@@ -742,23 +744,23 @@ pub const VK_DYNAMIC_STATE_STENCIL_REFERENCE: VkDynamicState = 8;
 pub const VK_DYNAMIC_STATE_VIEWPORT_W_SCALING_NV: VkDynamicState = 100_0087_000;
 pub const VK_DYNAMIC_STATE_DISCARD_RECTANGLE_EXT: VkDynamicState = 100_0099_000;
 
-pub type VkFilter = isize;
+pub type VkFilter = i32;
 pub const VK_FILTER_NEAREST: VkFilter = 0;
 pub const VK_FILTER_LINEAR: VkFilter = 1;
 pub const VK_FILTER_CUBIC_IMG: VkFilter = 100_0015_000;
 
-pub type VkSamplerMipmapMode = isize;
+pub type VkSamplerMipmapMode = i32;
 pub const VK_SAMPLER_MIPMAP_MODE_NEAREST: VkSamplerMipmapMode = 0;
 pub const VK_SAMPLER_MIPMAP_MODE_LINEAR: VkSamplerMipmapMode = 1;
 
-pub type VkSamplerAddressMode = isize;
-pub const VK_SAMPLER_ADRESS_MODE_REPEAT: VkSamplerAddressMode = 0;
+pub type VkSamplerAddressMode = i32;
+pub const VK_SAMPLER_ADDRESS_MODE_REPEAT: VkSamplerAddressMode = 0;
 pub const VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT: VkSamplerAddressMode = 1;
 pub const VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE: VkSamplerAddressMode = 2;
 pub const VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER: VkSamplerAddressMode = 3;
 pub const VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE: VkSamplerAddressMode = 4;
 
-pub type VkBorderColor = isize;
+pub type VkBorderColor = i32;
 pub const VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK: VkBorderColor = 0;
 pub const VK_BORDER_COLOR_INT_TRANSPARENT_BLACK: VkBorderColor = 1;
 pub const VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK: VkBorderColor = 2;
@@ -766,7 +768,7 @@ pub const VK_BORDER_COLOR_INT_OPAQUE_BLACK: VkBorderColor = 3;
 pub const VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE: VkBorderColor = 4;
 pub const VK_BORDER_COLOR_INT_OPAQUE_WHITE: VkBorderColor = 5;
 
-pub type VkDescriptorType = isize;
+pub type VkDescriptorType = i32;
 pub const VK_DESCRIPTOR_TYPE_SAMPLER: VkDescriptorType = 0;
 pub const VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER: VkDescriptorType = 1;
 pub const VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE: VkDescriptorType = 2;
@@ -779,32 +781,32 @@ pub const VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC: VkDescriptorType = 8;
 pub const VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC: VkDescriptorType = 9;
 pub const VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT: VkDescriptorType = 10;
 
-pub type VkAttachmentLoadOp = isize;
+pub type VkAttachmentLoadOp = i32;
 pub const VK_ATTACHMENT_LOAD_OP_LOAD: VkAttachmentLoadOp = 0;
 pub const VK_ATTACHMENT_LOAD_OP_CLEAR: VkAttachmentLoadOp = 1;
 pub const VK_ATTACHMENT_LOAD_OP_DONT_CARE: VkAttachmentLoadOp = 2;
 
-pub type VkAttachmentStoreOp = isize;
+pub type VkAttachmentStoreOp = i32;
 pub const VK_ATTACHMENT_STORE_OP_STORE: VkAttachmentStoreOp = 0;
 pub const VK_ATTACHMENT_STORE_OP_DONT_CARE: VkAttachmentStoreOp = 1;
 
-pub type VkPipelineBindPoint = isize;
+pub type VkPipelineBindPoint = i32;
 pub const VK_PIPELINE_BIND_POINT_GRAPHICS: VkPipelineBindPoint = 0;
 pub const VK_PIPELINE_BIND_POINT_COMPUTE: VkPipelineBindPoint = 1;
 
-pub type VkCommandBufferLevel = isize;
+pub type VkCommandBufferLevel = i32;
 pub const VK_COMMAND_BUFFER_LEVEL_PRIMARY: VkCommandBufferLevel = 0;
 pub const VK_COMMAND_BUFFER_LEVEL_SECONDARY: VkCommandBufferLevel = 1;
 
-pub type VkIndexType = isize;
+pub type VkIndexType = i32;
 pub const VK_INDEX_TYPE_UINT16: VkIndexType = 0;
 pub const VK_INDEX_TYPE_UINT32: VkIndexType = 1;
 
-pub type VkSubpassContents = isize;
+pub type VkSubpassContents = i32;
 pub const VK_SUBPASS_CONTENTS_INLINE: VkSubpassContents = 0;
 pub const VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS: VkSubpassContents = 1;
 
-pub type VkObjectType = isize;
+pub type VkObjectType = i32;
 pub const VK_OBJECT_TYPE_UNKNOWN: VkObjectType = 0;
 pub const VK_OBJECT_TYPE_INSTANCE: VkObjectType = 1;
 pub const VK_OBJECT_TYPE_PHYSICAL_DEVICE: VkObjectType = 2;
@@ -1586,6 +1588,17 @@ pub struct VkComponentMapping
     pub r: VkComponentSwizzle, pub g: VkComponentSwizzle,
     pub b: VkComponentSwizzle, pub a: VkComponentSwizzle
 }
+impl Default for VkComponentMapping
+{
+    fn default() -> Self
+    {
+        VkComponentMapping
+        {
+            r: VK_COMPONENT_SWIZZLE_R, g: VK_COMPONENT_SWIZZLE_G,
+            b: VK_COMPONENT_SWIZZLE_B, a: VK_COMPONENT_SWIZZLE_A
+        }
+    }
+}
 #[repr(C)] #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VkImageSubresourceRange
 {
@@ -1594,7 +1607,10 @@ pub struct VkImageSubresourceRange
 }
 impl Default for VkImageSubresourceRange
 {
-    fn default() -> Self { unsafe { std::mem::zeroed() } }
+    fn default() -> Self
+    {
+        VkImageSubresourceRange { levelCount: 1, layerCount: 1, .. unsafe { std::mem::zeroed() } }
+    }
 }
 #[repr(C)] #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VkImageViewCreateInfo
@@ -1769,7 +1785,12 @@ impl Default for VkPipelineRasterizationStateCreateInfo
 {
     fn default() -> Self
     {
-        VkPipelineRasterizationStateCreateInfo { sType: VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, .. unsafe { std::mem::zeroed() } }
+        VkPipelineRasterizationStateCreateInfo
+        {
+            sType: VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            lineWidth: 1.0,
+            .. unsafe { std::mem::zeroed() }
+        }
     }
 }
 
@@ -1863,7 +1884,7 @@ pub struct VkGraphicsPipelineCreateInfo
     pub pTessellationState: *const VkPipelineTessellationStateCreateInfo, pub pViewportState: *const VkPipelineViewportStateCreateInfo,
     pub pRasterizationState: *const VkPipelineRasterizationStateCreateInfo, pub pMultisampleState: *const VkPipelineMultisampleStateCreateInfo,
     pub pDepthStencilState: *const VkPipelineDepthStencilStateCreateInfo, pub pColorBlendState: *const VkPipelineColorBlendStateCreateInfo,
-    pub pDynamicState: *const VkPipelineDynamicStateCreateInfo, pub layout: VkPipelineLayout, pub renderPas: VkRenderPass,
+    pub pDynamicState: *const VkPipelineDynamicStateCreateInfo, pub layout: VkPipelineLayout, pub renderPass: VkRenderPass,
     pub subpass: u32, pub basePipelineHandle: VkPipeline, pub basePipelineIndex: i32
 }
 impl Default for VkGraphicsPipelineCreateInfo
@@ -1934,6 +1955,16 @@ pub struct VkDescriptorSetLayoutCreateInfo
 {
     pub sType: VkStructureType, pub pNext: *const c_void, pub flags: VkDescriptorSetLayoutCreateFlags,
     pub bindingCount: u32, pub pBindings: *const VkDescriptorSetLayoutBinding
+}
+impl Default for VkDescriptorSetLayoutCreateInfo
+{
+    fn default() -> Self
+    {
+        VkDescriptorSetLayoutCreateInfo
+        {
+            sType: VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, .. unsafe { std::mem::zeroed() }
+        }
+    }
 }
 
 #[repr(C)] #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2458,9 +2489,12 @@ pub type PFN_vkCmdExecuteCommands = extern "system" fn(commandBuffer: VkCommandB
 // Platform Extras
 #[cfg(any(
     feature = "VK_KHR_win32_surface", feature = "VK_KHR_external_memory_win32",
-    feature = "VK_KHR_external_semaphore_win32"
+    feature = "VK_KHR_external_semaphore_win32", feature = "VK_KHR_external_fence_win32",
+    feature = "VK_NV_external_memory_win32"
 ))]
 extern crate winapi;
+#[cfg(any(feature = "VK_KHR_xlib_surface", feature = "VK_EXT_acquire_xlib_display"))]
+extern crate x11;
 
 #[cfg(feature = "VK_KHR_surface")]
 mod surface_khr;
@@ -2482,8 +2516,6 @@ mod display_swapchain_khr;
 #[cfg(feature = "VK_KHR_display_swapchain")]
 pub use display_swapchain_khr::*;
 
-#[cfg(feature = "VK_KHR_xlib_surface")]
-extern crate xlib;
 #[cfg(feature = "VK_KHR_xlib_surface")]
 mod xlib_surface_khr;
 #[cfg(feature = "VK_KHR_xlib_surface")]
@@ -2522,82 +2554,367 @@ mod sampler_mirror_clamp_to_edge_khr;
 #[cfg(feature = "VK_KHR_sampler_mirror_clamp_to_edge")]
 pub use sampler_mirror_clamp_to_edge_khr::*;
 
-#[cfg(features = "VK_KHR_get_physical_device_properties2")]
+#[cfg(feature = "VK_KHR_get_physical_device_properties2")]
 mod get_physical_device_properties2_khr;
-#[cfg(features = "VK_KHR_get_physical_device_properties2")]
+#[cfg(feature = "VK_KHR_get_physical_device_properties2")]
 pub use get_physical_device_properties2_khr::*;
 
-#[cfg(features = "VK_KHR_shader_draw_parameters")]
+#[cfg(feature = "VK_KHR_shader_draw_parameters")]
 mod shader_draw_parameters_khr;
-#[cfg(features = "VK_KHR_shader_draw_parameters")]
+#[cfg(feature = "VK_KHR_shader_draw_parameters")]
 pub use shader_draw_parameters_khr::*;
 
-#[cfg(features = "VK_KHR_maintenance1")]
+#[cfg(feature = "VK_KHR_maintenance1")]
 mod maintenance1_khr;
-#[cfg(features = "VK_KHR_maintenance1")]
+#[cfg(feature = "VK_KHR_maintenance1")]
 pub use maintenance1_khr::*;
 
-#[cfg(features = "VK_KHR_external_memory_capabilities")]
+#[cfg(feature = "VK_KHR_external_memory_capabilities")]
 mod external_memory_capabilities_khr;
-#[cfg(features = "VK_KHR_external_memory_capabilities")]
+#[cfg(feature = "VK_KHR_external_memory_capabilities")]
 pub use external_memory_capabilities_khr::*;
 
-#[cfg(features = "VK_KHR_external_memory")]
+#[cfg(feature = "VK_KHR_external_memory")]
 mod external_memory_khr;
-#[cfg(features = "VK_KHR_external_memory")]
+#[cfg(feature = "VK_KHR_external_memory")]
 pub use external_memory_khr::*;
 
-#[cfg(features = "VK_KHR_external_memory_win32")]
+#[cfg(feature = "VK_KHR_external_memory_win32")]
 mod external_memory_win32_khr;
-#[cfg(features = "VK_KHR_external_memory_win32")]
+#[cfg(feature = "VK_KHR_external_memory_win32")]
 pub use external_memory_win32_khr::*;
 
-#[cfg(features = "VK_KHR_external_memory_fd")]
+#[cfg(feature = "VK_KHR_external_memory_fd")]
 mod external_memory_fd_khr;
-#[cfg(features = "VK_KHR_external_memory_fd")]
+#[cfg(feature = "VK_KHR_external_memory_fd")]
 pub use external_memory_fd_khr::*;
 
-#[cfg(features = "VK_KHR_win32_keyed_mutex")]
+#[cfg(feature = "VK_KHR_win32_keyed_mutex")]
 mod win32_keyed_mutex_khr;
-#[cfg(features = "VK_KHR_win32_keyed_mutex")]
+#[cfg(feature = "VK_KHR_win32_keyed_mutex")]
 pub use win32_keyed_mutex_khr::*;
 
-#[cfg(features = "VK_KHR_external_semaphore_capabilities")]
+#[cfg(feature = "VK_KHR_external_semaphore_capabilities")]
 mod external_semaphore_capabilities_khr;
-#[cfg(features = "VK_KHR_external_semaphore_capabilities")]
+#[cfg(feature = "VK_KHR_external_semaphore_capabilities")]
 pub use external_semaphore_capabilities_khr::*;
 
-#[cfg(features = "VK_KHR_external_semaphore")]
+#[cfg(feature = "VK_KHR_external_semaphore")]
 mod external_semaphore_khr;
-#[cfg(features = "VK_KHR_external_semaphore")]
+#[cfg(feature = "VK_KHR_external_semaphore")]
 pub use external_semaphore_khr::*;
 
 #[cfg(featuers = "VK_KHR_external_semaphore_win32")]
 mod external_semaphore_win32_khr;
-#[cfg(features = "VK_KHR_external_semaphore_win32")]
+#[cfg(feature = "VK_KHR_external_semaphore_win32")]
 pub use external_semaphore_win32_khr::*;
 
-#[cfg(features = "VK_KHR_external_semaphore_fd")]
+#[cfg(feature = "VK_KHR_external_semaphore_fd")]
 mod external_semaphore_fd_khr;
-#[cfg(features = "VK_KHR_external_semaphore_fd")]
+#[cfg(feature = "VK_KHR_external_semaphore_fd")]
 pub use external_semaphore_fd_khr::*;
 
-#[cfg(features = "VK_KHR_push_descriptor")]
+#[cfg(feature = "VK_KHR_push_descriptor")]
 mod push_descriptor_khr;
-#[cfg(features = "VK_KHR_push_descriptor")]
+#[cfg(feature = "VK_KHR_push_descriptor")]
 pub use push_descriptor_khr::*;
 
-#[cfg(features = "VK_KHR_16bit_storage")]
+#[cfg(feature = "VK_KHR_16bit_storage")]
 mod halfbit_storage_khr;
-#[cfg(features = "VK_KHR_16bit_storage")]
+#[cfg(feature = "VK_KHR_16bit_storage")]
 pub use halfbit_storage_khr::*;
 
-#[cfg(features = "VK_KHR_incremental_present")]
+#[cfg(feature = "VK_KHR_incremental_present")]
 mod incremental_present_khr;
-#[cfg(features = "VK_KHR_incremental_present")]
+#[cfg(feature = "VK_KHR_incremental_present")]
 pub use incremental_present_khr::*;
 
-#[cfg(features = "VK_KHR_descriptor_update_template")]
+#[cfg(feature = "VK_KHR_descriptor_update_template")]
 mod descriptor_update_template_khr;
-#[cfg(features = "VK_KHR_descriptor_update_template")]
+#[cfg(feature = "VK_KHR_descriptor_update_template")]
 pub use descriptor_update_template_khr::*;
+
+#[cfg(feature = "VK_KHR_shared_presentable_image")]
+mod shared_presentable_image_khr;
+#[cfg(feature = "VK_KHR_shared_presentable_image")]
+pub use shared_presentable_image_khr::*;
+
+#[cfg(feature = "VK_KHR_external_fence_capabilities")]
+mod external_fence_capabilities_khr;
+#[cfg(feature = "VK_KHR_external_fence_capabilities")]
+pub use external_fence_capabilities_khr::*;
+
+#[cfg(feature = "VK_KHR_external_fence")]
+mod external_fence_khr;
+#[cfg(feature = "VK_KHR_external_fence")]
+pub use external_fence_khr::*;
+
+#[cfg(feature = "VK_KHR_external_fence_win32")]
+mod external_fence_win32_khr;
+#[cfg(feature = "VK_KHR_external_fence_win32")]
+pub use external_fence_win32_khr::*;
+
+#[cfg(feature = "VK_KHR_external_fence_fd")]
+mod external_fence_fd_khr;
+#[cfg(feature = "VK_KHR_external_fence_fd")]
+pub use external_fence_fd_khr::*;
+
+#[cfg(feature = "VK_KHR_get_surface_capabilities2")]
+mod get_surface_capabilities2_khr;
+#[cfg(feature = "VK_KHR_get_surface_capabilities2")]
+pub use get_surface_capabilities2_khr::*;
+
+#[cfg(feature = "VK_KHR_variable_pointers")]
+mod variable_pointers_khr;
+#[cfg(feature = "VK_KHR_variable_pointers")]
+pub use variable_pointers_khr::*;
+
+#[cfg(feature = "VK_KHR_dedicated_allocation")]
+mod dedicated_allocation_khr;
+#[cfg(feature = "VK_KHR_dedicated_allocation")]
+pub use dedicated_allocation_khr::*;
+
+#[cfg(feature = "VK_KHR_storage_buffer_storage_class")]
+mod storage_buffer_storage_class_khr;
+#[cfg(feature = "VK_KHR_storage_buffer_storage_class")]
+pub use storage_buffer_storage_class_khr::*;
+
+#[cfg(feature = "VK_KHR_get_memory_requirements2")]
+mod get_memory_requirements2_khr;
+#[cfg(feature = "VK_KHR_get_memory_requirements2")]
+pub use get_memory_requirements2_khr::*;
+
+#[cfg(feature = "VK_EXT_debug_report")]
+mod debug_report_ext;
+#[cfg(feature = "VK_EXT_debug_report")]
+pub use debug_report_ext::*;
+
+#[cfg(feature = "VK_NV_glsl_shader")]
+mod glsl_shader_nv;
+#[cfg(feature = "VK_NV_glsl_shader")]
+pub use glsl_shader_nv::*;
+
+#[cfg(feature = "VK_IMG_filter_cubic")]
+mod filter_cubic_img;
+#[cfg(feature = "VK_IMG_filter_cubic")]
+pub use filter_cubic_img::*;
+
+#[cfg(feature = "VK_AMD_rasterization_order")]
+mod rasterization_order_amd;
+#[cfg(feature = "VK_AMD_rasterization_order")]
+pub use rasterization_order_amd::*;
+
+#[cfg(feature = "VK_EXT_debug_marker")]
+mod debug_marker_ext;
+#[cfg(feature = "VK_EXT_debug_marker")]
+pub use debug_marker_ext::*;
+
+#[cfg(feature = "VK_AMD_gcn_shader")]
+mod gcn_shader_amd;
+#[cfg(feature = "VK_AMD_gcn_shader")]
+pub use gcn_shader_amd::*;
+
+#[cfg(feature = "VK_NV_dedicated_allocation")]
+mod dedicated_allocation_nv;
+#[cfg(feature = "VK_NV_dedicated_allocation")]
+pub use dedicated_allocation_nv::*;
+
+#[cfg(feature = "VK_AMD_draw_indirect_count")]
+mod draw_indirect_count_amd;
+#[cfg(feature = "VK_AMD_draw_indirect_count")]
+pub use draw_indirect_count_amd::*;
+
+#[cfg(feature = "VK_AMD_negative_viewport_height")]
+mod negative_viewport_height_amd;
+#[cfg(feature = "VK_AMD_negative_viewport_height")]
+pub use negative_viewport_height_amd::*;
+
+#[cfg(feature = "VK_AMD_gpu_shader_half_float")]
+mod gpu_shader_half_float_amd;
+#[cfg(feature = "VK_AMD_gpu_shader_half_float")]
+pub use gpu_shader_half_float_amd::*;
+
+#[cfg(feature = "VK_AMD_shader_ballot")]
+mod shader_ballot_amd;
+#[cfg(feature = "VK_AMD_shader_ballot")]
+pub use shader_ballot_amd::*;
+
+#[cfg(feature = "VK_AMD_texture_gather_bias_lod")]
+mod texture_gather_bias_lod_amd;
+#[cfg(feature = "VK_AMD_texture_gather_bias_lod")]
+pub use texture_gather_bias_lod_amd::*;
+
+#[cfg(feature = "VK_KHX_multiview")]
+mod multiview_khx;
+#[cfg(feature = "VK_KHX_multiview")]
+pub use multiview_khx::*;
+
+#[cfg(feature = "VK_IMG_format_pvrtc")]
+mod format_pvrtc_img;
+#[cfg(feature = "VK_IMG_format_pvrtc")]
+pub use format_pvrtc_img::*;
+
+#[cfg(feature = "VK_NV_external_memory_capabilities")]
+mod external_memory_capabilities_nv;
+#[cfg(feature = "VK_NV_external_memory_capabilities")]
+pub use external_memory_capabilities_nv::*;
+
+#[cfg(feature = "VK_NV_external_memory")]
+mod external_memory_nv;
+#[cfg(feature = "VK_NV_external_memory")]
+pub use external_memory_nv::*;
+
+#[cfg(feature = "VK_NV_external_memory_win32")]
+mod external_memory_win32_nv;
+#[cfg(feature = "VK_NV_external_memory_win32")]
+pub use external_memory_win32_nv::*;
+
+#[cfg(feature = "VK_NV_win32_keyed_mutex")]
+mod win32_keyed_mutex_nv;
+#[cfg(feature = "VK_NV_win32_keyed_mutex")]
+pub use win32_keyed_mutex_nv::*;
+
+#[cfg(feature = "VK_KHX_device_group")]
+mod device_group_khx;
+#[cfg(feature = "VK_KHX_device_group")]
+pub use device_group_khx::*;
+
+#[cfg(feature = "VK_EXT_validation_flags")]
+mod validation_flags_ext;
+#[cfg(feature = "VK_EXT_validation_flags")]
+pub use validation_flags_ext::*;
+
+#[cfg(feature = "VK_NN_vi_surface")]
+mod vi_surface_nn;
+#[cfg(feature = "VK_NN_vi_surface")]
+pub use vi_surface_nn::*;
+
+#[cfg(feature = "VK_EXT_shader_group_ballot")]
+mod shader_group_ballot_ext;
+#[cfg(feature = "VK_EXT_shader_group_ballot")]
+pub use shader_group_ballot_ext::*;
+
+#[cfg(feature = "VK_EXT_shader_subgroup_vote")]
+mod shader_subgroup_vote_ext;
+#[cfg(feature = "VK_EXT_shader_subgroup_vote")]
+pub use shader_subgroup_vote_ext::*;
+
+#[cfg(feature = "VK_KHX_device_group_creation")]
+mod device_group_creation_khx;
+#[cfg(feature = "VK_KHX_device_group_creation")]
+pub use device_group_creation_khx::*;
+
+#[cfg(feature = "VK_NVX_device_generated_commands")]
+mod device_generated_commands_nvx;
+#[cfg(feature = "VK_NVX_device_generated_commands")]
+pub use device_generated_commands_nvx::*;
+
+#[cfg(feature = "VK_NV_clip_space_w_scaling")]
+mod clip_space_w_scaling_nv;
+#[cfg(feature = "VK_NV_clip_space_w_scaling")]
+pub use clip_space_w_scaling_nv::*;
+
+#[cfg(feature = "VK_EXT_direct_mode_display")]
+mod direct_mode_display_ext;
+#[cfg(feature = "VK_EXT_direct_mode_display")]
+pub use direct_mode_display_ext::*;
+
+#[cfg(feature = "VK_EXT_acquire_xlib_display")]
+mod acquire_xlib_display_ext;
+#[cfg(feature = "VK_EXT_acquire_xlib_display")]
+pub use acquire_xlib_display_ext::*;
+
+#[cfg(feature = "VK_EXT_display_surface_counter")]
+mod display_surface_counter_ext;
+#[cfg(feature = "VK_EXT_display_surface_counter")]
+pub use display_surface_counter_ext::*;
+
+#[cfg(feature = "VK_EXT_display_control")]
+mod display_control_ext;
+#[cfg(feature = "VK_EXT_display_control")]
+pub use display_control_ext::*;
+
+#[cfg(feature = "VK_GOOGLE_display_timing")]
+mod display_timing_google;
+#[cfg(feature = "VK_GOOGLE_display_timing")]
+pub use display_timing_google::*;
+
+#[cfg(feature = "VK_NV_sample_mask_override_coverage")]
+mod sample_mask_override_coverage_nv;
+#[cfg(feature = "VK_NV_sample_mask_override_coverage")]
+pub use sample_mask_override_coverage_nv::*;
+
+#[cfg(feature = "VK_NV_geometry_shader_passthrough")]
+mod geometry_shader_passthrough_nv;
+#[cfg(feature = "VK_NV_geometry_shader_passthrough")]
+pub use geometry_shader_passthrough_nv::*;
+
+#[cfg(feature = "VK_NV_viewport_array2")]
+mod viewport_array2_nv;
+#[cfg(feature = "VK_NV_viewport_array2")]
+pub use viewport_array2_nv::*;
+
+#[cfg(feature = "VK_NVX_multiview_per_view_attributes")]
+mod multiview_per_view_attributes_nvx;
+#[cfg(feature = "VK_NVX_multiview_per_view_attributes")]
+pub use multiview_per_view_attributes_nvx::*;
+
+#[cfg(feature = "VK_NV_viewport_swizzle")]
+mod viewport_swizzle_nv;
+#[cfg(feature = "VK_NV_viewport_swizzle")]
+pub use viewport_swizzle_nv::*;
+
+#[cfg(feature = "VK_EXT_discard_rectangles")]
+mod discard_rectangles_ext;
+#[cfg(feature = "VK_EXT_discard_rectangles")]
+pub use discard_rectangles_ext::*;
+
+#[cfg(feature = "VK_EXT_swapchain_colorspace")]
+mod swapchain_colorspace_ext;
+#[cfg(feature = "VK_EXT_swapchain_colorspace")]
+pub use swapchain_colorspace_ext::*;
+
+#[cfg(feature = "VK_EXT_hdr_metadata")]
+mod hdr_metadata_ext;
+#[cfg(feature = "VK_EXT_hdr_metadata")]
+pub use hdr_metadata_ext::*;
+
+#[cfg(feature = "VK_MVK_ios_surface")]
+mod ios_surface_mvk;
+#[cfg(feature = "VK_MVK_ios_surface")]
+pub use ios_surface_mvk::*;
+
+#[cfg(feature = "VK_MVK_macos_surface")]
+mod macos_surface_mvk;
+#[cfg(feature = "VK_MVK_macos_surface")]
+pub use macos_surface_mvk::*;
+
+#[cfg(feature = "VK_EXT_sampler_filter_minmax")]
+mod sampler_filter_minmax_ext;
+#[cfg(feature = "VK_EXT_sampler_filter_minmax")]
+pub use sampler_filter_minmax_ext::*;
+
+#[cfg(feature = "VK_AMD_gpu_shader_int16")]
+mod gpu_shader_int16_amd;
+#[cfg(feature = "VK_AMD_gpu_shader_int16")]
+pub use gpu_shader_int16_amd::*;
+
+#[cfg(feature = "VK_EXT_blend_operation_advanced")]
+mod blend_operation_advanced_ext;
+#[cfg(feature = "VK_EXT_blend_operation_advanced")]
+pub use blend_operation_advanced_ext::*;
+
+#[cfg(feature = "VK_NV_fragment_coverage_to_color")]
+mod fragment_coverage_to_color_nv;
+#[cfg(feature = "VK_NV_fragment_coverage_to_color")]
+pub use fragment_coverage_to_color_nv::*;
+
+#[cfg(feature = "VK_NV_framebuffer_mixed_samples")]
+mod framebuffer_mixed_samples_nv;
+#[cfg(feature = "VK_NV_framebuffer_mixed_samples")]
+pub use framebuffer_mixed_samples_nv::*;
+
+#[cfg(feature = "VK_NV_fill_rectangle")]
+mod fill_rectangle_nv;
+#[cfg(feature = "VK_NV_fill_rectangle")]
+pub use fill_rectangle_nv::*;

@@ -3,7 +3,7 @@
 /*
  * Original code: Copyright (c) 1999-2002 Vojtech Pavlik
  *                Copyright (c) 2005 Hans de Goede <hdegoede@redhat.com>
- * This file: Copyright (c) 2016 S.Percentage
+ * This file: Copyright (c) 2016-2017 S.Percentage
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by

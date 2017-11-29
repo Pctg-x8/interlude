@@ -12,11 +12,13 @@ extern crate nalgebra;
 #[cfg(feature = "debugprint")] extern crate freetype_sys;
 extern crate unicode_normalization;
 extern crate ansi_term;
-#[cfg(unix)] extern crate xcb;
 extern crate mio;
+#[cfg(feature = "target_xlib")] extern crate x11;
+#[macro_use] extern crate interlude_vk_defs;
+extern crate interlude_vk_funport;
 
-#[macro_use] mod vk;
 // Interlude
+mod subsystem_layer;
 mod error;
 mod engine;
 mod ginterface;
@@ -32,7 +34,7 @@ mod input;
 mod data;
 mod internal_traits;
 mod concurrent;
-mod tuple_tools;
+mod wsi;
 
 // platform dependents
 #[cfg(unix)] mod linux;
@@ -47,6 +49,13 @@ pub enum ApplicationState { Continue, EventArrived(u32), Exited }
 // Extra Objects
 #[cfg(feature = "debugprint")] mod debug_info;
 #[cfg(feature = "debugprint")] pub use debug_info::{DebugInfo, DebugLine};
+// mod debug_info;
+
+// Enum Flags //
+pub use framebuffer::{AccessFlag, AccessFlags};
+pub use shading::{ShaderStage, ShaderStageSet};
+pub use shading::{PipelineStageFlag, PipelineStage, PipelineStages};
+pub use resource::{ImageAspect, ImageAspectSet};
 
 // --- Exported APIs --- //
 pub use error::*;
@@ -59,8 +68,8 @@ pub use command::{
 };
 pub use resource::{
 	ImageSubresourceRange, ImageSubresourceLayers, BufferContent, BufferOffsets,
-	ImageDescriptor1, ImageDescriptor2, ImageDescriptor3, ImagePreallocator,
-	SamplerState, ComponentSwizzle, ComponentMapping, Filter
+	ImageDescriptor1, ImageDescriptor2, ImageDescriptor3,
+	SamplerState, ComponentSwizzle, ComponentMapping, Filter, ImageLayout
 };
 pub use shading::{
 	ConstantEntry, VertexBinding, VertexAttribute, PushConstantDesc,
@@ -69,30 +78,31 @@ pub use shading::{
 };
 pub use framebuffer::AccessFlags;
 pub use descriptor::{ShaderStage, Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo, DescriptorSetArrayView};
+// pub use debug_info::DebugLine;
 pub use input::*;
-pub use data::*;
+pub use data::{Viewport, Offset2, Offset3, Size2, Size3, Rect2};
+pub use data::{Offset2F, Offset3F, Size2F, Size3F, Rect2F};
+pub use data::{Position, PosUV, CVector4, CVector2, CMatrix4};
+pub use data::{Format, FormatType, PackedPixelOrder, CompressionAlgorithm};
 pub use concurrent::*;
 pub use render_surface::*;
 // Transient or Stateful APIs //
-pub use command::{GraphicsCommandRecorder, TransferCommandRecorder};
-// Re-exporting defs by enclosing into ffi module
-pub mod ffi { pub use vk::defs::*; }
+pub use command::{GraphicsCommandRecorder, TransferCommandRecorder, BundleCommandRecorder};
+pub use command::{ImmediateGraphicsCommandSubmission, ImmediateTransferCommandSubmission, ImmediateSubmissionCommands};
 
 // traits
 pub use engine::{AssetProvider, AssetPath, CommandSubmitter};
-pub use command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder};
-pub use resource::{Resource, ImageView, BufferResource, ImageResource};
+pub use command::{PrimaryCommandBuffers, SecondaryCommandBuffers, DrawingCommandRecorder, QueueSyncOperationCommandRecorder};
+pub use command::{PrimaryGraphicsCommandRecorder, PrimaryTransferCommandRecorder, ClosableCommandRecorder, CommandInjection};
+pub use resource::{ImageView, BufferResource, ImageResource, StagingResource};
 pub use shading::Shader;
 // exported objects
 pub use engine::Engine;
 pub use synchronize::{QueueFence, Fence};
 pub use framebuffer::{RenderPass, Framebuffer};
 pub use command::{GraphicsCommandBuffers, BundledCommandBuffers, TransferCommandBuffers, TransientTransferCommandBuffers, TransientGraphicsCommandBuffers};
-pub use resource::{
-	Buffer, Image1D, Image2D, Image3D, LinearImage2D, DeviceBuffer, StagingBuffer,
-	DeviceImage, StagingImage, MemoryMappedRange, ImageView1D, ImageView2D, ImageView3D,
-	Sampler, BufferPreallocator
-};
+pub use resource::{Image1D, Image2D, Image3D, LinearImage, DeviceBuffer, StagingBuffer, DeviceImages, StagingImages};
+pub use resource::{ImageView1D, ImageView2D, ImageView3D, Sampler, BufferPreallocator, ImagePreallocator, MappedRange};
 pub use shading::{VertexShader, TessellationControlShader, TessellationEvaluationShader, GeometryShader, FragmentShader, ShaderModule};
 pub use shading::{PipelineShaderProgram, PipelineLayout, GraphicsPipelines, GraphicsPipeline};
 pub use descriptor::{DescriptorSetLayout, DescriptorSets};
@@ -105,16 +115,7 @@ mod rawexports
 }
 
 pub type EngineResult<T> = Result<T, EngineError>;
-// Result<_, EngineError> as Unrecoverable(Crashes immediately)
-#[macro_export]
-macro_rules! Unrecoverable
-{
-	($e: expr) => {match $e
-	{
-		Err(e) => $crate::crash(e),
-		Ok(o) => o
-	}}
-}
+/// Result<_, EngineError> as Unrecoverable(Crashes immediately)
 pub trait UnrecoverableExt<T> { fn or_crash(self) -> T; }
 impl<T> UnrecoverableExt<T> for EngineResult<T>
 {
@@ -123,3 +124,7 @@ impl<T> UnrecoverableExt<T> for EngineResult<T>
 		match self { Err(e) => self::crash(e), Ok(o) => o }
 	}
 }
+
+/// Linking xlib
+#[cfg(feature = "target_xlib")]
+#[link(name = "X11")] extern {}

@@ -34,7 +34,7 @@ impl Default for VkMemoryFdPropertiesKHR
 {
     fn default() -> Self
     {
-        VkmemoryFdPropertiesKHR { sType: VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR, .. unsafe { std::mem:zeroed() } }
+        VkMemoryFdPropertiesKHR { sType: VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR, .. unsafe { std::mem::zeroed() } }
     }
 }
 
@@ -56,5 +56,5 @@ impl Default for VkMemoryGetFdInfoKHR
     }
 }
 
-pub type PFN_vkGetMemoryFdKHR = extern "system" fn(device: VkDevice, pGetFdInfo: *const VkmemoryGetFdInfoKHR, pFd: *mut c_int) -> VkResult;
-pub type PFN_vkGetMemoryFdPropetiesKHR = extern "system" fn(device: VkDevice, handleType: VkExternalMemoryHandleTypeFlagsKHR, fd: c_int, pMemoryFdProperties: *mut VkMemoryPropertiesKHR) -> VkResult;
+pub type PFN_vkGetMemoryFdKHR = extern "system" fn(device: VkDevice, pGetFdInfo: *const VkMemoryGetFdInfoKHR, pFd: *mut c_int) -> VkResult;
+pub type PFN_vkGetMemoryFdPropetiesKHR = extern "system" fn(device: VkDevice, handleType: VkExternalMemoryHandleTypeFlagsKHR, fd: c_int, pMemoryFdProperties: *mut VkMemoryFdPropertiesKHR) -> VkResult;
