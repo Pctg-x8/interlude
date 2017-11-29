@@ -91,7 +91,7 @@ fn scan_vkresult(r: VkResult) -> Cow<'static, str>
 		VK_ERROR_INCOMPATIBLE_DRIVER => "Incompatible Driver".into(),
 		VK_ERROR_TOO_MANY_OBJECTS => "Too many Objects".into(),
 		VK_ERROR_FORMAT_NOT_SUPPORTED => "Format not Supported".into(),
-		VK_ERROR_FRAGMENT_POOL => "Fragment Pool".into(),
+		VK_ERROR_FRAGMENT_POOL => "Fragment Pool".into(),	
 		VK_ERROR_SURFACE_LOST_KHR => "Surface Lost".into(),
 		VK_ERROR_NATIVE_WINDOW_IN_USE_KHR => "Native Window in use".into(),
 		VK_SUBOPTIMAL_KHR => "Suboptimal".into(),

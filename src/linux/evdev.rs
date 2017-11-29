@@ -38,17 +38,13 @@ const _IOC_WRITE: u32 = 1;
 const _IOC_READ: u32 = 2;
 macro_rules! _IOR
 {
-	($g: expr, $n: expr, $t: ty) =>
-	{
-		_IOC!(_IOC_READ, $g, $n, std::mem::size_of::<$t>() as u32)
-	}
+	($g: expr, $n: expr, $t: ty) => { _IOR!($g, $n, size std::mem::size_of::<$t>() as u32) };
+	($g: expr, $n: expr, size $t: expr) => { _IOC!(_IOC_READ, $g, $n, $t); }
 }
 macro_rules! _IOW
 {
-	($g: expr, $n: expr, $t: ty) =>
-	{
-		_IOC!(_IOC_WRITE, $g, $n, std::mem::size_of::<$t>() as u32)
-	}
+	($g: expr, $n: expr, $t: ty) => { _IOC!(_IOC_WRITE, $g, $n, size std::mem::size_of::<$t>() as u32) };
+	($g: expr, $n: expr, size $t: expr) => { _IOC!(_IOC_WRITE, $g, $n, $t) }
 }
 
 const BUS_PCI: u16 = 0x01;
@@ -98,35 +94,19 @@ struct input_id
 {
 	bustype: u16, vendor: u16, product: u16, version: u16
 }
+const INPUT_ID_SIZE: usize = 16 * 4 / 8;
 #[repr(C)]
 struct input_absinfo
 {
 	value: i32, minimum: i32, maximum: i32, fuzz: i32, flat: i32, resolution: i32
 }
-macro_rules! EVIOCGVERSION
-{
-	() => { _IOR!('E', 0x01, libc::c_int) }
-}
-macro_rules! EVIOCGID
-{
-	() => { _IOR!('E', 0x02, input_id) }
-}
-macro_rules! EVIOCGNAME
-{
-	($len: expr) => { _IOC!(_IOC_READ, 'E', 0x06, $len) }
-}
-macro_rules! EVIOCGBIT
-{
-	($ev: expr, $len: expr) => { _IOC!(_IOC_READ, 'E', 0x20 + $ev, $len) }
-}
-macro_rules! EVIOCGABS
-{
-	($axis: expr) => { _IOR!('E', 0x40 + $axis, input_absinfo) }
-}
-macro_rules! EVIOCGRAB
-{
-	() => { _IOW!('E', 0x90, libc::c_int) }
-}
+const INPUT_ABSINFO_SIZE: usize = 32 * 6 / 8;
+const EVIOCGVERSION: u64 = _IOR!('E', 0x01, /*libc::c_int*/ size 4);
+const EVIOCGID: u64 = _IOR!('E', 0x02, size INPUT_ID_SIZE);
+#[allow(non_snake_case)] fn EVIOCGNAME(len: u32) -> u64 { _IOC!(_IOC_READ, 'E', 0x06, len) }
+#[allow(non_snake_case)] fn EVIOCGBIT(ev: u32, len: u32) -> u64 { _IOC!(_IOC_READ, 'E', 0x20 + ev, len) }
+#[allow(non_snake_case)] fn EVIOCGABS(axis: u32) -> u64 { _IOR!('E', 0x40 + axis, size INPUT_ABSINFO_SIZE) }
+const EVIOCGRAB: u64 = _IOW!('E', 0x90, /*libc::c_int*/ size 4);
 
 // safety wrappers //
 #[derive(Debug, Clone)]
@@ -275,14 +255,14 @@ impl EventDeviceParams
 		let evdev_id = unsafe
 		{
 			let mut ret: input_id = std::mem::uninitialized();
-			let iores = libc::ioctl(fd, EVIOCGID!(), &mut ret);
+			let iores = libc::ioctl(fd, EVIOCGID, &mut ret);
 			if iores == -1 { panic!("Failed to perform ioctl: {:?}", std::io::Error::last_os_error()); }
 			ret
 		};
 		let evdev_name = unsafe
 		{
 			let mut ret: [u8; 256] = std::mem::uninitialized();
-			let iores = libc::ioctl(fd, EVIOCGNAME!(256), ret.as_mut_ptr());
+			let iores = libc::ioctl(fd, EVIOCGNAME(256), ret.as_mut_ptr());
 			if iores == -1 { panic!("Failed to perform ioctl: {:?}", std::io::Error::last_os_error()); }
 			Vec::from(&ret[..(iores - 1) as usize])
 		};
@@ -290,7 +270,7 @@ impl EventDeviceParams
 		fn perform_event_ioctl(fd: std::os::unix::io::RawFd, e: Event, len_bits: usize) -> Vec<u8>
 		{
 			let mut ret = vec![0u8; (len_bits as f32 / 8.0f32).ceil() as usize];
-			let iores = unsafe { libc::ioctl(fd, EVIOCGBIT!(e as u64, ret.len()), ret.as_mut_ptr()) };
+			let iores = unsafe { libc::ioctl(fd, EVIOCGBIT(e as _, ret.len() as _), ret.as_mut_ptr()) };
 			if iores == -1 { warn!(target: "Prelude::evdev", "Failed to perform ioctl or unsupported(Event::{:?}: {:?})", e, std::io::Error::last_os_error()) };
 			ret
 		}
@@ -313,7 +293,7 @@ impl EventDeviceParams
 					let info = unsafe
 					{
 						let mut ret: input_absinfo = std::mem::uninitialized();
-						let iores = libc::ioctl(fd, EVIOCGABS!(n * 8 + o), &mut ret);
+						let iores = libc::ioctl(fd, EVIOCGABS((n * 8 + o) as _), &mut ret);
 						if iores == -1 { warn!(target: "Prelude::evdev", "Failed to perform ioctl: {:?}", std::io::Error::last_os_error()); }
 						ret
 					};
@@ -404,7 +384,7 @@ impl EventDevice
 	pub fn grab_device(&self) -> EngineResult<()>
 	{
 		let grab_flag: libc::c_int = 1;
-		let iores = unsafe { libc::ioctl(self.as_raw_fd(), EVIOCGRAB!(), &grab_flag) };
+		let iores = unsafe { libc::ioctl(self.as_raw_fd(), EVIOCGRAB, &grab_flag) };
 		if iores == -1 { Err(EngineError::GenericError("Failed to grabbing event device")) } else { Ok(()) }
 	}
 	pub fn wait_event(&mut self) -> EngineResult<DeviceEvent>

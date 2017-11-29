@@ -76,8 +76,7 @@ pub use shading::{
 	PrimitiveTopology, ViewportWithScissorRect, RasterizerState, AttachmentBlendState,
 	GraphicsPipelineBuilder
 };
-pub use framebuffer::AccessFlags;
-pub use descriptor::{ShaderStage, Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo, DescriptorSetArrayView};
+pub use descriptor::{Descriptor, BufferInfo, ImageInfo, DescriptorSetWriteInfo, DescriptorSetArrayView};
 // pub use debug_info::DebugLine;
 pub use input::*;
 pub use data::{Viewport, Offset2, Offset3, Size2, Size3, Rect2};
@@ -111,7 +110,6 @@ pub use descriptor::{DescriptorSetLayout, DescriptorSets};
 mod rawexports
 {
 	pub use internal_traits::InternalExports;
-	pub use synchronize::{fence_raw, qfence_raw};
 }
 
 pub type EngineResult<T> = Result<T, EngineError>;

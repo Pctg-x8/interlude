@@ -19,8 +19,7 @@ const T_SERVER: Token = Token(usize::MAX - 1);
 /// Server connection + Window ID + Closing Message ID
 pub struct NativeWindowWithServer
 {
-	display: *mut Display, window: Window, close_id: Atom,
-	fixed_size: Option<Size2>
+	display: *mut Display, window: Window, close_id: Atom, fixed_size: Option<Size2>
 }
 impl NativeWindowWithServer
 {
