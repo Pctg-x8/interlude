@@ -69,7 +69,7 @@ impl Device
 }
 impl Drop for Device
 {
-	fn drop(&mut self) { unsafe { vkDestroyDevice(self.internal, null()) }; }
+	fn drop(&mut self) { info!(target: "Interlude", "Destroying Device..."); unsafe { vkDestroyDevice(self.internal, null()) }; }
 }
 impl NativeHandleProvider for Device
 {
