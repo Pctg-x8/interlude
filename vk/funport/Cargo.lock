@@ -1,15 +1,3 @@
-[root]
-name = "interlude-vk-funport"
-version = "1.0.55"
-dependencies = [
- "interlude-vk-defs 1.0.55",
- "libc 0.2.29 (registry+https://github.com/rust-lang/crates.io-index)",
- "wayland-client 0.9.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "x11 2.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "xcb 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
 [[package]]
 name = "android_ffi"
 version = "0.1.0"
@@ -56,6 +44,18 @@ name = "interlude-vk-defs"
 version = "1.0.55"
 dependencies = [
  "android_ffi 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.29 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wayland-client 0.9.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "x11 2.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "xcb 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "interlude-vk-funport"
+version = "1.0.55"
+dependencies = [
+ "interlude-vk-defs 1.0.55",
  "libc 0.2.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "wayland-client 0.9.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",

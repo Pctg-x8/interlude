@@ -16,7 +16,8 @@ extern crate wayland_client;
 ))]
 extern crate winapi;
 
-#[link(name = "vulkan")]
+#[cfg_attr(windows, link(name = "vulkan-1"))]
+#[cfg_attr(not(windows), link(name = "vulkan"))]
 extern "system"
 {
     pub fn vkCreateInstance(pCreateInfo: *const VkInstanceCreateInfo, pAllocator: *const VkAllocationCallbacks, pInstance: *mut VkInstance) -> VkResult;
