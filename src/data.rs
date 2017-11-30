@@ -349,7 +349,7 @@ pub fn format(f: &Format) -> EngineResult<VkFormat>
 			ASTCPixelPack::_10x10 => Ok(VK_FORMAT_ASTC_10x10_SRGB_BLOCK),
 			ASTCPixelPack::_12x10 => Ok(VK_FORMAT_ASTC_12x10_SRGB_BLOCK),
 			ASTCPixelPack::_12x12 => Ok(VK_FORMAT_ASTC_12x12_SRGB_BLOCK)
-		}
+		},
 		_ => Err(EngineError::InvalidFormatCombination)
 	}
 }
