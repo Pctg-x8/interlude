@@ -21,9 +21,9 @@ pub struct NativeWindowWithServer
 {
 	display: *mut Display, window: Window, close_id: Atom, fixed_size: Option<Size2>
 }
-impl NativeWindowWithServer
+impl super::NativeWindowBase for NativeWindowWithServer
 {
-	pub fn new(size: &Size2, caption: &str, resizable: bool) -> EngineResult<Self>
+	fn new(size: &Size2, caption: &str, resizable: bool) -> EngineResult<Self>
 	{
 		let &Size2(w, h) = size;
 		let display = unsafe { XOpenDisplay(null()) };
@@ -41,20 +41,20 @@ impl NativeWindowWithServer
 			display, window, close_id, fixed_size: if resizable { Some(size.clone()) } else { None }
 		})
 	}
-	pub fn show(&self) { unsafe { XMapWindow(self.display, self.window) }; }
-	pub fn flush(&self) { unsafe { XFlush(self.display) }; }
-	pub fn make_vk_surface(&self, instance: &NativeInstance) -> EngineResult<VkSurfaceKHR>
+	fn show(&self) { unsafe { XMapWindow(self.display, self.window) }; }
+	fn flush(&self) { unsafe { XFlush(self.display) }; }
+	n make_vk_surface(&self, instance: &NativeInstance) -> EngineResult<VkSurfaceKHR>
 	{
 		let cinfo = VkXlibSurfaceCreateInfoKHR { pdy: self.display, window: self.window, .. Default::default() };
 		let mut surface = unsafe { reserved() };
 		unsafe { vkCreateXlibSurfaceKHR(instance.native(), &cinfo, null(), &mut surface) }.make_result(surface)
 	}
-	pub fn can_vk_present(&self, adapter: VkPhysicalDevice, queue_family_index: u32) -> bool
+	fn can_vk_present(&self, adapter: VkPhysicalDevice, queue_family_index: u32) -> bool
 	{
 		unsafe { vkGetPhysicalDeviceXlibPresentationSupportKHR(adapter, queue_family_index, self.display, self.window) == true as VkBool32 }
 	}
 
-	pub fn process_events_and_messages(&self, events: &[&Event]) -> ApplicationState
+	fn process_events_and_messages(&self, events: &[&Event]) -> ApplicationState
 	{
 		let polling = Poll::new().expect("Failed to create polling instance");
 		polling.register(&unix::EventedFd(unsafe { &XConnectionNumber(self.display) }), T_SERVER, Ready::readable(), PollOpt::level())
@@ -70,7 +70,7 @@ impl NativeWindowWithServer
 			Token(v) => ApplicationState::EventArrived(v as _)
 		}).unwrap_or(ApplicationState::Exited)
 	}
-	pub fn process_messages(&self) -> ApplicationState
+	fn process_messages(&self) -> ApplicationState
 	{
 		while unsafe { XPending(self.display) } > 0
 		{
@@ -85,7 +85,6 @@ impl NativeWindowWithServer
 		}
 		ApplicationState::Continue
 	}
-	pub fn process_all_messages(&self) { while self.process_messages() == ApplicationState::Continue {} }
 }
 impl Drop for NativeWindowWithServer
 {
