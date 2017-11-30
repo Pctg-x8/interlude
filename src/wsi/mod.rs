@@ -28,3 +28,7 @@ pub trait NativeWindowBase: Sized
 
 #[cfg(feature = "target_xlib")]  pub mod target_xlib;
 #[cfg(feature = "target_win32")] pub mod target_win32;
+
+// Platform dependent selection
+#[cfg(feature = "target_xlib")]  pub use self::target_xlib::NativeWindowWithServer as PlatformWindowType;
+#[cfg(feature = "target_win32")] pub use self::target_win32::NativeWindow as PlatformWindowType;

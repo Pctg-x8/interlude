@@ -12,17 +12,7 @@ use std::cmp::max;
 use std::{u32, u64};
 use subsystem_layer::{NativeInstance, NativeHandleProvider, NativeResultValueHandler};
 use device::Device;
-
-// Platform dependent selection
-#[cfg(windows)] pub use win32::NativeWindow as PlatformWindowType;
-#[cfg(feature = "target_xlib")] pub use wsi::target_xlib::NativeWindowWithServer as PlatformWindowType;
-
-pub fn make_render_window(g: &GraphicsInterface, size: &Size2, caption: &str, resizable: bool) -> EngineResult<RenderWindow>
-{
-	let under = PlatformWindowType::new(size, caption, resizable)?;
-	if under.can_vk_present(g.device().adapter(), g.device().graphics_qf_index) { RenderWindow::new(under, g, size) }
-	else { Err(EngineError::GenericError("Vulkan Presentation is not supported by platform.")) }
-}
+use wsi::{NativeWindowBase, PlatformWindowType};
 
 pub struct WindowRenderTargetView(VkImage, VkImageView, VkFormat);
 impl ImageResource for WindowRenderTargetView
@@ -72,9 +62,14 @@ impl<'a> SupportedSurface<'a>
 }
 impl RenderWindow
 {
-	fn new(under: PlatformWindowType, g: &GraphicsInterface, size: &Size2) -> Result<Self, EngineError>
+	pub(crate) fn new(g: &GraphicsInterface, size: &Size2, caption: &str, resizable: bool) -> Result<Self, EngineError>
 	{
-		let surface = under.make_vk_surface(g.apicontext())?;
+		let underlying = PlatformWindowType::new(size, caption, resizable)?;
+		if !underlying.can_vk_present(g.device().adapter(), g.device().graphics_qf_index)
+		{
+			return Err(EngineError::GenericError("Vulkan Presentation is not supported by this platform"));
+		}
+		let surface = underlying.make_vk_surface(g.apicontext())?;
 		let surface_ref = SupportedSurface::ensure(surface, g)?;
 		let surface_caps = surface_ref.caps()?;
 
@@ -116,7 +111,7 @@ impl RenderWindow
 
 		Ok(RenderWindow
 		{
-			underlying: under, swapchain, surface, parent: g.device().clone(), apiroot: g.apicontext().clone(),
+			underlying, swapchain, surface, parent: g.device().clone(), apiroot: g.apicontext().clone(),
 			render_targets: back_views, format: format.format, extent: extent.as_ref().clone(), has_vsync: present_mode == VK_PRESENT_MODE_FIFO_KHR
 		})
 	}

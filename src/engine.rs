@@ -3,14 +3,13 @@
 use interlude_vk_defs::*;
 use interlude_vk_funport::vkQueueSubmit;
 use subsystem_layer::{NativeResultValueHandler, NativeHandleProvider};
-use render_surface::make_render_window;
 use ginterface::DeviceFeatures;
+use wsi::NativeWindowBase;
 use {
 	log, EngineResult, Fence, QueueFence, GraphicsCommandBuffersView, TransferCommandBuffersView, GraphicsInterface,
 	RenderPass, AttachmentDesc, PassDesc, VertexAttribute, VertexBinding, PosUV, VertexShader, ApplicationState, Event,
 	RenderWindow, Size2, PipelineStageFlag, Format, PackedPixelOrder, FormatType
 };
-use ansi_term::*;
 use std::sync::{Arc, RwLock};
 use std::path::{Path, PathBuf};
 use std::borrow::Cow;
@@ -24,6 +23,7 @@ use std::env;
 use std::marker::PhantomData;
 
 #[cfg(unix)] use linux::NativeInput as Input;
+#[cfg(windows)] use win32::NativeInput as Input;
 
 struct EngineLogger;
 impl log::Log for EngineLogger
@@ -34,6 +34,8 @@ impl log::Log for EngineLogger
 	}
 	fn log(&self, record: &log::LogRecord)
 	{
+		use ansi_term::*;
+
 		if self.enabled(record.metadata())
 		{
 			println!("{}", match record.level()
@@ -149,7 +151,7 @@ impl<InputNames: Eq + Copy + Ord> Engine<InputNames>
 
 		let EngineBuilder { app_name, app_version, extra_features, size, caption, resizable, asset_base, .. } = info;
 		let gi = GraphicsInterface::new(app_name, app_version, &extra_features)?;
-		let window = make_render_window(&gi, &size, caption, resizable).map(Rc::new)?;
+		let window = RenderWindow::new(&gi, &size, caption, resizable).map(Rc::new)?;
 		let input_system = Input::new().map(FunComposite1!(Arc::new; RwLock::new))?;
 
 		window.show(); window.flush();
