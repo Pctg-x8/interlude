@@ -43,7 +43,7 @@ impl super::NativeWindowBase for NativeWindowWithServer
 	}
 	fn show(&self) { unsafe { XMapWindow(self.display, self.window) }; }
 	fn flush(&self) { unsafe { XFlush(self.display) }; }
-	n make_vk_surface(&self, instance: &NativeInstance) -> EngineResult<VkSurfaceKHR>
+	fn make_vk_surface(&self, instance: &NativeInstance) -> EngineResult<VkSurfaceKHR>
 	{
 		let cinfo = VkXlibSurfaceCreateInfoKHR { pdy: self.display, window: self.window, .. Default::default() };
 		let mut surface = unsafe { reserved() };

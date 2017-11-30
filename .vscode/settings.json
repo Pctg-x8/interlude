@@ -3,6 +3,6 @@
 	"rust.actionOnSave": "check",
 	"rust.mode": "legacy",
 	"rust.checkArgs": [
-		"--features", "target_win32"
+		"--features", "target_xlib"
 	]
 }
