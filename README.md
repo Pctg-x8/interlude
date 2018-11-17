@@ -1,7 +1,7 @@
 Interlude (Multimedia Framework)
 ---
 
-** Work in Progress with Game **  
+** ~Work in Progress~Stopped(=> [Pctg-x8/peridot](https://github.com/Pctg-x8/peridot)) with Game **  
 
 In-house Game Engine used in "HardGrad -> Extent" ([Pctg-x8/hardgrad_extent](https://github.com/Pctg-x8/hardgrad_extent))
 
